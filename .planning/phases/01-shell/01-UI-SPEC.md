@@ -46,6 +46,7 @@ Declared values (must be multiples of 4):
 |-------|-------|-------|
 | xs | 4px | Icon gaps, inline padding, card internal micro-spacing |
 | sm | 8px | Compact element spacing, sidebar item padding |
+| card-gap | 12px | Command card grid gap |
 | md | 16px | Default element spacing, card padding, button padding |
 | lg | 24px | Section padding, sidebar section breaks |
 | xl | 32px | Main area section gaps, sidebar outer padding |
@@ -64,7 +65,7 @@ Exceptions: none (44px icon-only touch targets not needed in Phase 1; buttons us
 | Main area | flex-1 (remaining space) | D-05 |
 | Sidebar-border separator | 1px border-r | RESEARCH.md layout pattern |
 | Card border-radius | 12px (rounded-xl) | Modern card aesthetic |
-| Card gap | 12px (gap-3 in grid) | Compact grid density |
+| Card gap | 12px (card-gap token) | Compact grid density |
 
 ---
 
@@ -73,9 +74,9 @@ Exceptions: none (44px icon-only touch targets not needed in Phase 1; buttons us
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Body | 14px | 400 (regular) | 1.5 | General text, descriptions, toast messages |
-| Label | 13px | 500 (medium) | 1.4 | Sidebar project name, card labels, button text |
+| Label | 12px | 400 (regular) | 1.4 | Sidebar project name, card labels, button text |
 | Heading | 18px | 600 (semibold) | 1.3 | Section titles, empty state heading |
-| Display | 24px | 700 (bold) | 1.2 | Not used in Phase 1 (reserved for future phases) |
+| Display | 24px | 600 (semibold) | 1.2 | Not used in Phase 1 (reserved for future phases) |
 
 ### Font Stack
 
@@ -234,7 +235,7 @@ npx shadcn@latest add button sonner scroll-area
 | Property | Value |
 |----------|-------|
 | Columns | 2 (grid-cols-2) |
-| Gap | 12px (gap-3) |
+| Gap | 12px (card-gap token) |
 | Card height | auto (content-based, min ~80px) |
 | Card padding | 16px (p-4) |
 | Card border-radius | 12px (rounded-xl) |
