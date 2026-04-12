@@ -7,7 +7,7 @@
 
 ### 项目管理
 
-- [ ] **PROJ-01**: 用户可通过文件夹选择器添加本地项目路径
+- [x] **PROJ-01**: 用户可通过文件夹选择器添加本地项目路径
 - [ ] **PROJ-02**: 项目列表显示在左侧侧边栏，显示项目名称
 - [ ] **PROJ-03**: 点击侧边栏项目可选中，选中状态有清晰视觉反馈
 - [ ] **PROJ-04**: 用户可删除已添加的项目
@@ -72,7 +72,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROJ-01 | Phase 1 | Pending |
+| PROJ-01 | Phase 1 | Complete |
 | PROJ-02 | Phase 2 | Pending |
 | PROJ-03 | Phase 2 | Pending |
 | PROJ-04 | Phase 2 | Pending |
