@@ -34,11 +34,11 @@
 ### UI/UX（核心重点）
 
 - [ ] **UI-01**: 现代圆角矩形卡片设计，整体视觉美观紧凑
-- [ ] **UI-02**: 深色主题支持，作为默认主题
+- [x] **UI-02**: 深色主题支持，作为默认主题
 - [ ] **UI-03**: 键盘导航支持（上下切换项目、Enter 选中、快捷键触发指令）
-- [ ] **UI-04**: 侧边栏与主区域布局紧凑，无多余空白，信息密度高
+- [x] **UI-04**: 侧边栏与主区域布局紧凑，无多余空白，信息密度高
 - [ ] **UI-05**: 所有交互元素有 hover/active/selected 状态的微动效反馈
-- [ ] **UI-06**: 窗口可调整大小，布局自适应
+- [x] **UI-06**: 窗口可调整大小，布局自适应
 - [ ] **UI-07**: 添加/编辑指令时使用模态弹窗，操作流畅不打断主流程
 
 ## v2 Requirements
@@ -90,11 +90,11 @@
 | DATA-02 | Phase 4 | Pending |
 | DATA-03 | Phase 2 | Pending |
 | UI-01 | Phase 3 | Pending |
-| UI-02 | Phase 1 | Pending |
+| UI-02 | Phase 1 | Complete |
 | UI-03 | Phase 5 | Pending |
-| UI-04 | Phase 1 | Pending |
+| UI-04 | Phase 1 | Complete |
 | UI-05 | Phase 3 | Pending |
-| UI-06 | Phase 1 | Pending |
+| UI-06 | Phase 1 | Complete |
 | UI-07 | Phase 4 | Pending |
 
 **Coverage:**
