@@ -1,10 +1,11 @@
 ---
 phase: 1
 slug: 01-shell
-status: draft
+status: approved
 shadcn_initialized: false
 preset: new-york (zinc, CSS variables)
 created: 2026-04-12
+reviewed_at: 2026-04-12
 ---
 
 # Phase 1 — UI Design Contract
