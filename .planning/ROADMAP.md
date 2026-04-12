@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. 应用以深色主题启动，视觉美观，窗口可调整大小且布局自适应
   2. 用户可通过文件夹选择器选择本地项目路径
   3. 点击按钮后在系统默认终端（Windows Terminal / cmd）中打开并执行 Shell 命令
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 01-01: Tauri + React + Tailwind CSS + shadcn/ui 脚手架搭建与深色主题配置
@@ -110,7 +110,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 应用脚手架与 Shell 命令核心 | 0/3 | Not started | - |
+| 1. 应用脚手架与 Shell 命令核心 | 0/3 | Planning complete | - |
 | 2. 项目侧边栏与持久化 | 0/3 | Not started | - |
 | 3. 指令卡片与核心交互 | 0/4 | Not started | - |
 | 4. 自定义指令与项目级覆盖 | 0/4 | Not started | - |
