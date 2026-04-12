@@ -1,1 +1,1 @@
-// Shell commands module - will be implemented in Plan 02
+pub mod shell;
