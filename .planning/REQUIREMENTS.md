@@ -19,7 +19,7 @@
 - [ ] **CMD-01**: 内置全局默认指令卡片：打包项目、启动项目、启动 Claude、Git Pull
 - [ ] **CMD-02**: 指令以卡片网格形式排列在右侧主区域，紧凑美观
 - [ ] **CMD-03**: 必须先选中左侧项目，右侧指令卡片才可点击执行
-- [ ] **CMD-04**: 点击指令卡片后在系统默认终端中打开并执行对应 Shell 命令
+- [x] **CMD-04**: 点击指令卡片后在系统默认终端中打开并执行对应 Shell 命令
 - [ ] **CMD-05**: 用户可添加自定义全局指令（名称 + Shell 命令）
 - [ ] **CMD-06**: 用户可编辑和删除自定义指令
 - [ ] **CMD-07**: 每个项目可拥有独立的指令集覆盖全局默认指令
@@ -81,7 +81,7 @@
 | CMD-01 | Phase 3 | Pending |
 | CMD-02 | Phase 3 | Pending |
 | CMD-03 | Phase 3 | Pending |
-| CMD-04 | Phase 1 | Pending |
+| CMD-04 | Phase 1 | Complete |
 | CMD-05 | Phase 4 | Pending |
 | CMD-06 | Phase 4 | Pending |
 | CMD-07 | Phase 4 | Pending |

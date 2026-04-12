@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01: Tauri + React + Tailwind CSS + shadcn/ui 脚手架搭建与深色主题配置
-- [ ] 01-02: Tauri 权限配置与 Rust 命令执行核心实现
+- [x] 01-02: Tauri 权限配置与 Rust 命令执行核心实现
 - [ ] 01-03: 文件夹选择器与 Shell 命令执行集成验证
 
 ### Phase 2: 项目侧边栏与持久化

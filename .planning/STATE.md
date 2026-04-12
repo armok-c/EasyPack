@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-04-12T08:34:37.257Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-04-12T08:48:55.652Z"
 last_activity: 2026-04-12
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 ## Current Position
 
 Phase: 01 (shell) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-12
 
@@ -53,6 +53,7 @@ Progress: [..........] 0%
 
 *Updated after each plan completion*
 | Phase 01 P01 | 29min | 2 tasks | 16 files |
+| Phase 01 P02 | 6min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Recent decisions affecting current work:
 - [Roadmap]: tauri-plugin-store 配合 autoSave 用于数据持久化
 - [Phase 01]: Used @vitejs/plugin-react@4.7.0 instead of 6.x (6.x requires Vite 8 peer dep)
 - [Phase 01]: System font stack for zero-latency in Tauri WebView, no custom fonts
+- [Phase 01]: generate_handler! 使用 commands::shell::execute_command 完整路径（pub use 重导出导致 Tauri 宏符号查找失败）
+- [Phase 01]: 命令构建逻辑提取为独立 build_full_command 函数，便于单元测试而不触发终端窗口
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-12T08:34:37.254Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-04-12T08:48:55.650Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
