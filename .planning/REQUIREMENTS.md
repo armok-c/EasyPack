@@ -27,9 +27,9 @@
 
 ### 数据持久化
 
-- [ ] **DATA-01**: 项目列表保存到本地，重启应用后恢复
+- [x] **DATA-01**: 项目列表保存到本地，重启应用后恢复
 - [ ] **DATA-02**: 自定义指令（全局 + 项目级）保存到本地，重启应用后恢复
-- [ ] **DATA-03**: 项目排序和图标/颜色设置持久化保存
+- [x] **DATA-03**: 项目排序和图标/颜色设置持久化保存
 
 ### UI/UX（核心重点）
 
@@ -86,9 +86,9 @@
 | CMD-06 | Phase 4 | Pending |
 | CMD-07 | Phase 4 | Pending |
 | CMD-08 | Phase 3 | Pending |
-| DATA-01 | Phase 2 | Pending |
+| DATA-01 | Phase 2 | Complete |
 | DATA-02 | Phase 4 | Pending |
-| DATA-03 | Phase 2 | Pending |
+| DATA-03 | Phase 2 | Complete |
 | UI-01 | Phase 3 | Pending |
 | UI-02 | Phase 1 | Complete |
 | UI-03 | Phase 5 | Pending |

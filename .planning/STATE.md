@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Phase 2 context gathered
-last_updated: "2026-04-12T10:49:06.958Z"
+status: executing
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-04-12T15:53:55.248Z"
 last_activity: 2026-04-12
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** 选中项目 -> 一键在终端执行指令，无需手动切换目录和输入命令
-**Current focus:** Phase 01 — shell
+**Current focus:** Phase 02 — sidebar-persistence
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 02 (sidebar-persistence) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-04-12
 
 Progress: [..........] 0%
@@ -55,6 +55,7 @@ Progress: [..........] 0%
 | Phase 01 P01 | 29min | 2 tasks | 16 files |
 | Phase 01 P02 | 6min | 2 tasks | 3 files |
 | Phase 01 P03 | 8min | 1 tasks | 6 files |
+| Phase 02 P01 | 12min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Recent decisions affecting current work:
 - [Phase 01]: 使用 Tailwind 标准间距值 (p-6, gap-3) 替代 UI-SPEC 自定义 token (p-lg, gap-card-gap)
 - [Phase 01]: invoke 调用使用 camelCase 参数名 (projectPath, shellCommand)，匹配 Tauri 2 snake_case 自动转换
 - [Phase 01]: 路径分隔符用 /[\/]/ 正则兼容 Windows 反斜杠和 Unix 正斜杠
+- [Phase 02]: Store 错误处理使用 console.warn 降级，不显示用户 toast
+- [Phase 02]: 项目 ID 使用路径规范化（lowercase + forward slashes）而非 UUID
+- [Phase 02]: npm 替代 pnpm（pnpm 未在 PATH 中可用）
 
 ### Pending Todos
 
@@ -86,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-12T10:49:06.956Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-sidebar-persistence/02-CONTEXT.md
+Last session: 2026-04-12T15:53:55.246Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None

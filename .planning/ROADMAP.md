@@ -47,7 +47,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: tauri-plugin-store 安装与 useProject hook 多项目重构
+- [x] 02-01: tauri-plugin-store 安装与 useProject hook 多项目重构
 - [ ] 02-02: Sidebar 多项目 UI 重构与全流程集成验证
 
 ### Phase 3: 指令卡片与核心交互
