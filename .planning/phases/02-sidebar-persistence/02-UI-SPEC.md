@@ -1,10 +1,11 @@
 ---
 phase: 2
 slug: 02-sidebar-persistence
-status: draft
+status: approved
 shadcn_initialized: true
 preset: "new-york (zinc, CSS variables)"
 created: 2026-04-12
+reviewed_at: 2026-04-12
 ---
 
 # Phase 2 — UI Design Contract
