@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "WebSearch",
+      "Bash(npx @tauri-apps/cli@latest --version)",
+      "Bash(git remote:*)",
+      "Skill(gsd:plan-phase)",
+      "Skill(gsd:ui-phase)",
+      "Bash(find:*)",
+      "Bash(cat \"E:/GitLib/EasyPack/.planning/phases/02-sidebar-persistence/\"*-VERIFICATION.md)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npx vite:*)",
+      "Bash(cargo check:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
