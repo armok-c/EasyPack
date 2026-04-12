@@ -1,55 +1,164 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 
-export interface Project {
-  name: string;   // 文件夹名称 (per D-14)
-  path: string;   // 完整路径
+export interface ProjectItem {
+  id: string;       // normalized path as ID (lowercase, forward slashes)
+  name: string;     // folder name (per D-03)
+  path: string;     // original full path (preserves original casing)
+  addedAt: number;  // Date.now() timestamp
+}
+
+// Backward-compatible type alias (remove after Plan 02 migration)
+export type Project = ProjectItem;
+
+const STORE_PATH = "easypack-store.json";
+const PROJECTS_KEY = "projects";
+const SELECTED_KEY = "selectedProjectId";
+
+function generateProjectId(path: string): string {
+  return path
+    .split(/[\\/]/)
+    .filter(Boolean)
+    .join("/")
+    .toLowerCase();
 }
 
 export function useProject() {
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [store, setStore] = useState<Store | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // per D-15, D-16: 选择文件夹后立即选中
-  // per D-14: 只显示文件夹名
-  // per D-17: 替换当前项目
-  async function selectFolder() {
+  // Derived state: current project from projects + selectedId
+  const currentProject = selectedId
+    ? projects.find((p) => p.id === selectedId) ?? null
+    : null;
+
+  // Initialize: load store and restore persisted data
+  useEffect(() => {
+    let mounted = true;
+    async function init() {
+      try {
+        const s = await load(STORE_PATH, { autoSave: 100 });
+        if (!mounted) return;
+        const savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
+        const savedSelectedId = await s.get<string>(SELECTED_KEY);
+        if (savedProjects) setProjects(savedProjects);
+        if (savedSelectedId) setSelectedId(savedSelectedId);
+        setStore(s);
+      } catch (error) {
+        console.warn("Store 加载失败，使用内存模式:", error);
+        // Graceful degradation: app works without persistence
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    init();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Add project (per D-02 append to bottom, D-04 duplicate check, D-05 auto-select)
+  const addProject = useCallback(
+    async (path: string, name: string) => {
+      const id = generateProjectId(path);
+      if (projects.some((p) => p.id === id)) {
+        toast.error("项目已存在");
+        return;
+      }
+      const newItem: ProjectItem = { id, name, path, addedAt: Date.now() };
+      const updated = [...projects, newItem];
+      setProjects(updated);
+      setSelectedId(id);
+      await store?.set(PROJECTS_KEY, updated);
+      await store?.set(SELECTED_KEY, id);
+    },
+    [projects, store]
+  );
+
+  // Remove project (per D-10 auto-select nearest, D-11 empty state for last item)
+  const removeProject = useCallback(
+    async (id: string) => {
+      const idx = projects.findIndex((p) => p.id === id);
+      if (idx === -1) return;
+      const updated = projects.filter((p) => p.id !== id);
+      setProjects(updated);
+
+      // D-10: auto-select nearest neighbor
+      let newSelectedId: string | null = null;
+      if (updated.length > 0 && id === selectedId) {
+        newSelectedId = updated[Math.min(idx, updated.length - 1)].id;
+      } else if (id !== selectedId) {
+        newSelectedId = selectedId;
+      }
+      setSelectedId(newSelectedId);
+      await store?.set(PROJECTS_KEY, updated);
+      await store?.set(SELECTED_KEY, newSelectedId);
+    },
+    [projects, selectedId, store]
+  );
+
+  // Select project
+  const selectProject = useCallback(
+    async (id: string) => {
+      setSelectedId(id);
+      await store?.set(SELECTED_KEY, id);
+    },
+    [store]
+  );
+
+  // Folder picker (inherits Phase 1 logic, calls addProject internally)
+  const selectFolder = useCallback(async () => {
     try {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: "选择项目文件夹",  // per UI-SPEC Copywriting
+        title: "选择项目文件夹",
       });
-
       if (typeof selected === "string") {
-        // 从路径中提取文件夹名称 (per D-14)
         const name = selected.split(/[\\/]/).filter(Boolean).pop() || selected;
-        setCurrentProject({ name, path: selected });
+        await addProject(selected, name);
       }
-      // per UI-SPEC: 文件夹选择取消时不需要 toast
     } catch (error) {
       console.error("文件夹选择失败:", error);
     }
-  }
+  }, [addProject]);
 
-  // per D-10: toast 提示 1-2 秒
-  // per D-11: 自动 cd 到项目目录
-  async function executeCommand(shellCommand: string) {
-    if (!currentProject) return;
+  // Execute command (inherits Phase 1 logic, uses derived currentProject)
+  const executeCommand = useCallback(
+    async (shellCommand: string) => {
+      if (!currentProject) return;
+      try {
+        await invoke("execute_command", {
+          projectPath: currentProject.path,
+          shellCommand,
+        });
+        toast.success(`已执行: ${shellCommand}`);
+      } catch (error) {
+        toast.error(
+          `命令执行失败：${error}。请检查项目路径和命令是否正确。`
+        );
+      }
+    },
+    [currentProject]
+  );
 
-    try {
-      await invoke("execute_command", {
-        projectPath: currentProject.path,
-        shellCommand,
-      });
-      // per UI-SPEC Copywriting: "已执行: {command}"
-      toast.success(`已执行: ${shellCommand}`);
-    } catch (error) {
-      // per UI-SPEC Copywriting: "命令执行失败：{具体错误}。请检查项目路径和命令是否正确。"
-      toast.error(`命令执行失败：${error}。请检查项目路径和命令是否正确。`);
-    }
-  }
+  return {
+    // Legacy interface (backward compatible until Plan 02 migration)
+    currentProject, // ProjectItem | null (compatible with old Project | null)
+    selectFolder, // () => Promise<void>
+    executeCommand, // (shellCommand: string) => Promise<void>
 
-  return { currentProject, selectFolder, executeCommand };
+    // New multi-project interface
+    projects, // ProjectItem[]
+    selectedId, // string | null
+    loading, // boolean
+    addProject, // (path: string, name: string) => Promise<void>
+    removeProject, // (id: string) => Promise<void>
+    selectProject, // (id: string) => Promise<void>
+  };
 }
