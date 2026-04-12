@@ -1,10 +1,10 @@
 import { FolderOpen } from "lucide-react";
 import { CommandCard } from "@/components/CommandCard";
 import { PRESET_COMMANDS } from "@/lib/presets";
-import type { Project } from "@/hooks/useProject";
+import type { ProjectItem } from "@/hooks/useProject";
 
 interface MainAreaProps {
-  currentProject: Project | null;
+  currentProject: ProjectItem | null;
   onExecute: (command: string) => void;
 }
 
