@@ -1,13 +1,24 @@
-import { Plus, FolderOpen } from "lucide-react";
+import { Plus, FolderOpen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Project } from "@/hooks/useProject";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import type { ProjectItem } from "@/hooks/useProject";
 
 interface SidebarProps {
-  currentProject: Project | null;
+  projects: ProjectItem[];
+  selectedId: string | null;
   onAddProject: () => void;
+  onSelectProject: (id: string) => void;
+  onRemoveProject: (id: string) => void;
 }
 
-export function Sidebar({ currentProject, onAddProject }: SidebarProps) {
+export function Sidebar({
+  projects,
+  selectedId,
+  onAddProject,
+  onSelectProject,
+  onRemoveProject,
+}: SidebarProps) {
   return (
     <aside className="w-[240px] flex-shrink-0 border-r border-white/10 bg-black/40 backdrop-blur-sm flex flex-col">
       {/* App 标题 (per UI-SPEC: 16px semibold) */}
@@ -30,15 +41,48 @@ export function Sidebar({ currentProject, onAddProject }: SidebarProps) {
 
       {/* 项目列表 / 空状态 (per D-21, UI-SPEC Copywriting) */}
       <div className="flex-1 px-4 py-2">
-        {currentProject ? (
-          <div className="px-2 py-2 rounded-lg bg-white/5 border border-white/10">
-            <span className="text-xs text-foreground">{currentProject.name}</span>
-          </div>
+        {projects.length > 0 ? (
+          <ScrollArea className="h-full">
+            <div className="flex flex-col gap-1">
+              {projects.map((project) => (
+                <div
+                  key={project.id}
+                  onClick={() => onSelectProject(project.id)}
+                  className={cn(
+                    "group relative flex items-center px-2 py-2 rounded-lg border cursor-pointer",
+                    "transition-all duration-150",
+                    selectedId === project.id
+                      ? "bg-white/10 border-white/20"
+                      : "bg-white/5 border-white/10 hover:bg-white/[0.08]"
+                  )}
+                >
+                  {/* D-03: 只显示文件夹名，过长时 truncate */}
+                  <span className="text-xs text-foreground truncate flex-1">
+                    {project.name}
+                  </span>
+
+                  {/* D-09: 悬停时显示 X 删除按钮 */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveProject(project.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 rounded hover:bg-white/10 transition-opacity duration-150"
+                    aria-label={`删除项目 ${project.name}`}
+                  >
+                    <X className="size-3 text-muted-foreground" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <FolderOpen className="size-8 text-muted-foreground mb-2" />
             <p className="text-xs text-muted-foreground">还没有项目</p>
-            <p className="text-xs text-muted-foreground mt-1">点击上方按钮添加第一个项目</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              点击上方按钮添加第一个项目
+            </p>
           </div>
         )}
       </div>
