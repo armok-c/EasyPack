@@ -34,13 +34,14 @@ export function MainArea({ currentProject, onExecute }: MainAreaProps) {
         <p className="text-xs text-muted-foreground mt-1">{currentProject.path}</p>
       </div>
 
-      {/* per UI-SPEC Grid: 2 cols, 12px gap */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* per UI-SPEC Grid: auto-fill adaptive, min 2 cols at 600px */}
+      <div className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3">
         {PRESET_COMMANDS.map((cmd) => (
           <CommandCard
             key={cmd.command}
             name={cmd.name}
             icon={cmd.icon}
+            command={cmd.command}
             onClick={() => onExecute(cmd.command)}
           />
         ))}
