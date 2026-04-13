@@ -42,7 +42,7 @@ export function useProject() {
     let mounted = true;
     async function init() {
       try {
-        const s = await load(STORE_PATH, { autoSave: 100 });
+        const s = await load(STORE_PATH, { autoSave: 100, defaults: {} });
         if (!mounted) return;
         const savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
         const savedSelectedId = await s.get<string>(SELECTED_KEY);

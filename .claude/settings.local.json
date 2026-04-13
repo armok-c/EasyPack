@@ -13,7 +13,14 @@
       "Bash(npx vite:*)",
       "Bash(cargo check:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm -v)",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Skill(gsd-plan-phase)"
     ]
   }
 }
