@@ -16,14 +16,14 @@
 
 ### 指令系统
 
-- [ ] **CMD-01**: 内置全局默认指令卡片：打包项目、启动项目、启动 Claude、Git Pull
-- [ ] **CMD-02**: 指令以卡片网格形式排列在右侧主区域，紧凑美观
-- [ ] **CMD-03**: 必须先选中左侧项目，右侧指令卡片才可点击执行
+- [x] **CMD-01**: 内置全局默认指令卡片：打包项目、启动项目、启动 Claude、Git Pull
+- [x] **CMD-02**: 指令以卡片网格形式排列在右侧主区域，紧凑美观
+- [x] **CMD-03**: 必须先选中左侧项目，右侧指令卡片才可点击执行
 - [x] **CMD-04**: 点击指令卡片后在系统默认终端中打开并执行对应 Shell 命令
 - [ ] **CMD-05**: 用户可添加自定义全局指令（名称 + Shell 命令）
 - [ ] **CMD-06**: 用户可编辑和删除自定义指令
 - [ ] **CMD-07**: 每个项目可拥有独立的指令集覆盖全局默认指令
-- [ ] **CMD-08**: 未选中项目时指令卡片显示为禁用/灰显状态，给出提示
+- [x] **CMD-08**: 未选中项目时指令卡片显示为禁用/灰显状态，给出提示
 
 ### 数据持久化
 
@@ -33,11 +33,11 @@
 
 ### UI/UX（核心重点）
 
-- [ ] **UI-01**: 现代圆角矩形卡片设计，整体视觉美观紧凑
+- [x] **UI-01**: 现代圆角矩形卡片设计，整体视觉美观紧凑
 - [x] **UI-02**: 深色主题支持，作为默认主题
 - [ ] **UI-03**: 键盘导航支持（上下切换项目、Enter 选中、快捷键触发指令）
 - [x] **UI-04**: 侧边栏与主区域布局紧凑，无多余空白，信息密度高
-- [ ] **UI-05**: 所有交互元素有 hover/active/selected 状态的微动效反馈
+- [x] **UI-05**: 所有交互元素有 hover/active/selected 状态的微动效反馈
 - [x] **UI-06**: 窗口可调整大小，布局自适应
 - [ ] **UI-07**: 添加/编辑指令时使用模态弹窗，操作流畅不打断主流程
 
@@ -78,22 +78,22 @@
 | PROJ-04 | Phase 2 | Complete |
 | PROJ-05 | Phase 5 | Pending |
 | PROJ-06 | Phase 5 | Pending |
-| CMD-01 | Phase 3 | Pending |
-| CMD-02 | Phase 3 | Pending |
-| CMD-03 | Phase 3 | Pending |
+| CMD-01 | Phase 3 | Complete |
+| CMD-02 | Phase 3 | Complete |
+| CMD-03 | Phase 3 | Complete |
 | CMD-04 | Phase 1 | Complete |
 | CMD-05 | Phase 4 | Pending |
 | CMD-06 | Phase 4 | Pending |
 | CMD-07 | Phase 4 | Pending |
-| CMD-08 | Phase 3 | Pending |
+| CMD-08 | Phase 3 | Complete |
 | DATA-01 | Phase 2 | Complete |
 | DATA-02 | Phase 4 | Pending |
 | DATA-03 | Phase 2 | Complete |
-| UI-01 | Phase 3 | Pending |
+| UI-01 | Phase 3 | Complete |
 | UI-02 | Phase 1 | Complete |
 | UI-03 | Phase 5 | Pending |
 | UI-04 | Phase 1 | Complete |
-| UI-05 | Phase 3 | Pending |
+| UI-05 | Phase 3 | Complete |
 | UI-06 | Phase 1 | Complete |
 | UI-07 | Phase 4 | Pending |
 
