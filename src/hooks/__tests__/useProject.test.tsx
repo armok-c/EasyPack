@@ -37,12 +37,24 @@ vi.mock("sonner", () => ({
 }));
 
 describe("useProject - command CRUD", () => {
+  const testProjectForCrud = {
+    id: "test/crud-project",
+    name: "crud-project",
+    path: "C:\\test\\crud-project",
+    addedAt: 1000,
+  };
+
   beforeEach(() => {
     vi.useFakeTimers();
-    // Default: no persisted data
-    mockStore.get.mockResolvedValue(undefined);
+    // Default: a selected project so commands are visible in global mode
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([testProjectForCrud]);
+      if (key === "selectedProjectId") return Promise.resolve(testProjectForCrud.id);
+      return Promise.resolve(undefined);
+    });
     mockStore.set.mockResolvedValue(undefined);
     mockStore.delete.mockResolvedValue(undefined);
+    mockStore.keys.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -178,6 +190,8 @@ describe("useProject - command CRUD", () => {
       },
     ];
     mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([testProjectForCrud]);
+      if (key === "selectedProjectId") return Promise.resolve(testProjectForCrud.id);
       if (key === "customCommands") return Promise.resolve(persisted);
       return Promise.resolve(undefined);
     });
@@ -345,6 +359,7 @@ describe("useProject - project-level command override", () => {
         ]);
       return Promise.resolve(undefined);
     });
+    mockStore.keys.mockResolvedValue(["projectCommands:test/project-a"]);
 
     const { result } = renderHook(() => useProject());
     await act(async () => {
@@ -501,6 +516,7 @@ describe("useProject - project-level command override", () => {
         ]);
       return Promise.resolve(undefined);
     });
+    mockStore.keys.mockResolvedValue(["projectCommands:test/project-a"]);
 
     const { result } = renderHook(() => useProject());
     await act(async () => {

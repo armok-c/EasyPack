@@ -41,17 +41,39 @@ export function useProject() {
   const [loading, setLoading] = useState(true);
   const [customCommands, setCustomCommands] = useState<CommandItem[]>([]);
 
+  // Phase 4 Plan 03: project-level command override
+  const [commandMode, setCommandMode] = useState<"global" | "project">("global");
+  const [projectCommandsMap, setProjectCommandsMap] = useState<Record<string, CommandItem[]>>({});
+  const [editMode, setEditMode] = useState(false);
+
   // Derived state: current project from projects + selectedId
   const currentProject = selectedId
     ? projects.find((p) => p.id === selectedId) ?? null
     : null;
 
-  // Merged command list: presets + custom commands, sorted by addedAt
+  // Merged command list: project-level override or global presets + custom, sorted by addedAt
   const commands = useMemo(() => {
+    if (!selectedId) return [];
+    const projectCmds = projectCommandsMap[selectedId];
+    if (projectCmds && projectCmds.length > 0) {
+      // Project-level mode (per D-07: complete replacement)
+      return [...projectCmds].sort((a, b) => a.addedAt - b.addedAt);
+    }
+    // Global mode: presets + global custom commands
     return [...getPresetAsCommandItems(), ...customCommands].sort(
       (a, b) => a.addedAt - b.addedAt
     );
-  }, [customCommands]);
+  }, [selectedId, customCommands, projectCommandsMap]);
+
+  // Auto-update commandMode when selectedId or projectCommandsMap changes
+  useEffect(() => {
+    if (!selectedId) {
+      setCommandMode("global");
+      return;
+    }
+    const projectCmds = projectCommandsMap[selectedId];
+    setCommandMode(projectCmds && projectCmds.length > 0 ? "project" : "global");
+  }, [selectedId, projectCommandsMap]);
 
   // Initialize: load store and restore persisted data
   useEffect(() => {
@@ -66,6 +88,21 @@ export function useProject() {
         if (savedProjects) setProjects(savedProjects);
         if (savedSelectedId) setSelectedId(savedSelectedId);
         if (savedCommands) setCustomCommands(savedCommands);
+
+        // Restore project-level command data from store
+        const allKeys = await (s as unknown as { keys: () => Promise<string[]> }).keys();
+        const projectCmdEntries = await Promise.all(
+          allKeys
+            .filter((k) => k.startsWith("projectCommands:"))
+            .map(async (k) => {
+              const projectId = k.replace("projectCommands:", "");
+              const cmds = await s.get<CommandItem[]>(k);
+              return [projectId, cmds ?? []] as const;
+            })
+        );
+        const map = Object.fromEntries(projectCmdEntries);
+        if (Object.keys(map).length > 0) setProjectCommandsMap(map);
+
         setStore(s);
       } catch (error) {
         console.warn("Store 加载失败，使用内存模式:", error);
@@ -122,10 +159,11 @@ export function useProject() {
     [projects, selectedId, store]
   );
 
-  // Select project
+  // Select project (also exits edit mode on project switch)
   const selectProject = useCallback(
     async (id: string) => {
       setSelectedId(id);
+      setEditMode(false);
       await store?.set(SELECTED_KEY, id);
     },
     [store]
@@ -169,57 +207,141 @@ export function useProject() {
 
   // --- Command CRUD operations ---
 
-  // Add custom command
+  // Add custom command (supports both global and project-level modes)
   const addCommand = useCallback(
     async (name: string, command: string, icon?: string) => {
-      const newItem: CommandItem = {
-        id: crypto.randomUUID(),
-        name,
-        command,
-        icon: icon ?? DEFAULT_ICON,
-        type: "custom",
-        scope: "global",
-        addedAt: Date.now(),
-      };
-      const updated = [...customCommands, newItem];
-      setCustomCommands(updated);
-      await store?.set(CUSTOM_COMMANDS_KEY, updated);
-      toast.success(`已添加指令: ${name}`);
+      if (commandMode === "project" && selectedId) {
+        // Project-level mode: add to projectCommandsMap
+        const newItem: CommandItem = {
+          id: crypto.randomUUID(),
+          name,
+          command,
+          icon: icon ?? DEFAULT_ICON,
+          type: "custom",
+          scope: "project",
+          addedAt: Date.now(),
+        };
+        const current = projectCommandsMap[selectedId] ?? [];
+        const updated = [...current, newItem];
+        setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
+        await store?.set(projectCommandsKey(selectedId), updated);
+        toast.success(`已添加指令: ${name}`);
+      } else {
+        // Global mode: add to customCommands
+        const newItem: CommandItem = {
+          id: crypto.randomUUID(),
+          name,
+          command,
+          icon: icon ?? DEFAULT_ICON,
+          type: "custom",
+          scope: "global",
+          addedAt: Date.now(),
+        };
+        const updated = [...customCommands, newItem];
+        setCustomCommands(updated);
+        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        toast.success(`已添加指令: ${name}`);
+      }
     },
-    [customCommands, store]
+    [commandMode, selectedId, projectCommandsMap, customCommands, store]
   );
 
-  // Update custom command
+  // Update command (supports both global and project-level modes)
   const updateCommand = useCallback(
     async (id: string, data: { name: string; command: string; icon: string }) => {
-      const idx = customCommands.findIndex((c) => c.id === id);
-      if (idx === -1) return;
-      const updatedItem: CommandItem = {
-        ...customCommands[idx],
-        ...data,
-      };
-      const updated = customCommands.map((c) =>
-        c.id === id ? updatedItem : c
-      );
-      setCustomCommands(updated);
-      await store?.set(CUSTOM_COMMANDS_KEY, updated);
-      toast.success(`已保存指令: ${data.name}`);
+      if (commandMode === "project" && selectedId) {
+        // Project-level mode
+        const projectCmds = projectCommandsMap[selectedId] ?? [];
+        const idx = projectCmds.findIndex((c) => c.id === id);
+        if (idx === -1) return;
+        const updatedItem: CommandItem = { ...projectCmds[idx], ...data };
+        const updated = projectCmds.map((c) => (c.id === id ? updatedItem : c));
+        setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
+        await store?.set(projectCommandsKey(selectedId), updated);
+        toast.success(`已保存指令: ${data.name}`);
+      } else {
+        // Global mode
+        const idx = customCommands.findIndex((c) => c.id === id);
+        if (idx === -1) return;
+        const updatedItem: CommandItem = { ...customCommands[idx], ...data };
+        const updated = customCommands.map((c) =>
+          c.id === id ? updatedItem : c
+        );
+        setCustomCommands(updated);
+        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        toast.success(`已保存指令: ${data.name}`);
+      }
     },
-    [customCommands, store]
+    [commandMode, selectedId, projectCommandsMap, customCommands, store]
   );
 
-  // Delete custom command
+  // Delete command (supports both modes + auto-revert per D-10)
   const deleteCommand = useCallback(
     async (id: string) => {
-      const target = customCommands.find((c) => c.id === id);
-      if (!target) return;
-      const updated = customCommands.filter((c) => c.id !== id);
-      setCustomCommands(updated);
-      await store?.set(CUSTOM_COMMANDS_KEY, updated);
-      toast.success(`已删除指令: ${target.name}`);
+      if (commandMode === "project" && selectedId) {
+        // Project-level mode
+        const projectCmds = projectCommandsMap[selectedId] ?? [];
+        const target = projectCmds.find((c) => c.id === id);
+        if (!target) return;
+        const updated = projectCmds.filter((c) => c.id !== id);
+
+        if (updated.length === 0) {
+          // D-10: auto-revert to global mode when last command deleted
+          setProjectCommandsMap((prev) => {
+            const next = { ...prev };
+            delete next[selectedId];
+            return next;
+          });
+          await store?.delete(projectCommandsKey(selectedId));
+        } else {
+          setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
+          await store?.set(projectCommandsKey(selectedId), updated);
+        }
+        toast.success(`已删除指令: ${target.name}`);
+      } else {
+        // Global mode
+        const target = customCommands.find((c) => c.id === id);
+        if (!target) return;
+        const updated = customCommands.filter((c) => c.id !== id);
+        setCustomCommands(updated);
+        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        toast.success(`已删除指令: ${target.name}`);
+      }
     },
-    [customCommands, store]
+    [commandMode, selectedId, projectCommandsMap, customCommands, store]
   );
+
+  // --- Project-level command set management ---
+
+  // Enable project-level commands: create set with 4 preset copies (per D-08, D-22)
+  const enableProjectCommands = useCallback(async () => {
+    if (!selectedId) return;
+    const presets = getPresetAsCommandItems();
+    // Copy presets as project-level with new IDs and scope='project'
+    const projectCmds: CommandItem[] = presets.map((p, idx) => ({
+      ...p,
+      id: crypto.randomUUID(),
+      scope: "project" as const,
+      addedAt: idx,
+    }));
+    setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: projectCmds }));
+    await store?.set(projectCommandsKey(selectedId), projectCmds);
+    setEditMode(true); // per D-22: auto-enter edit mode
+    toast.success("已创建项目指令集，请配置指令");
+  }, [selectedId, store]);
+
+  // Disable project-level commands: remove set and revert to global
+  const disableProjectCommands = useCallback(async () => {
+    if (!selectedId) return;
+    setProjectCommandsMap((prev) => {
+      const next = { ...prev };
+      delete next[selectedId];
+      return next;
+    });
+    await store?.delete(projectCommandsKey(selectedId));
+    setCommandMode("global");
+    toast.success("已切换到全局指令");
+  }, [selectedId, store]);
 
   return {
     // Legacy interface (backward compatible until Plan 02 migration)
@@ -240,5 +362,12 @@ export function useProject() {
     addCommand, // (name: string, command: string, icon?: string) => Promise<void>
     updateCommand, // (id: string, data: { name: string; command: string; icon: string }) => Promise<void>
     deleteCommand, // (id: string) => Promise<void>
+
+    // Phase 4 Plan 03: project-level command override
+    commandMode, // 'global' | 'project'
+    editMode, // boolean
+    setEditMode, // (editMode: boolean) => void
+    enableProjectCommands, // () => Promise<void>
+    disableProjectCommands, // () => Promise<void>
   };
 }
