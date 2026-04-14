@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
+import type { CommandItem } from "@/lib/types";
+import { getPresetAsCommandItems } from "@/lib/presets";
+import { DEFAULT_ICON } from "@/lib/icons";
 
 export interface ProjectItem {
   id: string;       // normalized path as ID (lowercase, forward slashes)
@@ -17,6 +20,11 @@ export type Project = ProjectItem;
 const STORE_PATH = "easypack-store.json";
 const PROJECTS_KEY = "projects";
 const SELECTED_KEY = "selectedProjectId";
+const CUSTOM_COMMANDS_KEY = "customCommands";
+
+function projectCommandsKey(projectId: string): string {
+  return `projectCommands:${projectId}`;
+}
 
 function generateProjectId(path: string): string {
   return path
@@ -31,11 +39,19 @@ export function useProject() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
+  const [customCommands, setCustomCommands] = useState<CommandItem[]>([]);
 
   // Derived state: current project from projects + selectedId
   const currentProject = selectedId
     ? projects.find((p) => p.id === selectedId) ?? null
     : null;
+
+  // Merged command list: presets + custom commands, sorted by addedAt
+  const commands = useMemo(() => {
+    return [...getPresetAsCommandItems(), ...customCommands].sort(
+      (a, b) => a.addedAt - b.addedAt
+    );
+  }, [customCommands]);
 
   // Initialize: load store and restore persisted data
   useEffect(() => {
@@ -46,8 +62,10 @@ export function useProject() {
         if (!mounted) return;
         const savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
         const savedSelectedId = await s.get<string>(SELECTED_KEY);
+        const savedCommands = await s.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
         if (savedProjects) setProjects(savedProjects);
         if (savedSelectedId) setSelectedId(savedSelectedId);
+        if (savedCommands) setCustomCommands(savedCommands);
         setStore(s);
       } catch (error) {
         console.warn("Store 加载失败，使用内存模式:", error);
@@ -98,6 +116,8 @@ export function useProject() {
       setSelectedId(newSelectedId);
       await store?.set(PROJECTS_KEY, updated);
       await store?.set(SELECTED_KEY, newSelectedId);
+      // Clean up project-level command data
+      await store?.delete(projectCommandsKey(id));
     },
     [projects, selectedId, store]
   );
@@ -147,6 +167,60 @@ export function useProject() {
     [currentProject]
   );
 
+  // --- Command CRUD operations ---
+
+  // Add custom command
+  const addCommand = useCallback(
+    async (name: string, command: string, icon?: string) => {
+      const newItem: CommandItem = {
+        id: crypto.randomUUID(),
+        name,
+        command,
+        icon: icon ?? DEFAULT_ICON,
+        type: "custom",
+        scope: "global",
+        addedAt: Date.now(),
+      };
+      const updated = [...customCommands, newItem];
+      setCustomCommands(updated);
+      await store?.set(CUSTOM_COMMANDS_KEY, updated);
+      toast.success(`已添加指令: ${name}`);
+    },
+    [customCommands, store]
+  );
+
+  // Update custom command
+  const updateCommand = useCallback(
+    async (id: string, data: { name: string; command: string; icon: string }) => {
+      const idx = customCommands.findIndex((c) => c.id === id);
+      if (idx === -1) return;
+      const updatedItem: CommandItem = {
+        ...customCommands[idx],
+        ...data,
+      };
+      const updated = customCommands.map((c) =>
+        c.id === id ? updatedItem : c
+      );
+      setCustomCommands(updated);
+      await store?.set(CUSTOM_COMMANDS_KEY, updated);
+      toast.success(`已保存指令: ${data.name}`);
+    },
+    [customCommands, store]
+  );
+
+  // Delete custom command
+  const deleteCommand = useCallback(
+    async (id: string) => {
+      const target = customCommands.find((c) => c.id === id);
+      if (!target) return;
+      const updated = customCommands.filter((c) => c.id !== id);
+      setCustomCommands(updated);
+      await store?.set(CUSTOM_COMMANDS_KEY, updated);
+      toast.success(`已删除指令: ${target.name}`);
+    },
+    [customCommands, store]
+  );
+
   return {
     // Legacy interface (backward compatible until Plan 02 migration)
     currentProject, // ProjectItem | null (compatible with old Project | null)
@@ -160,5 +234,11 @@ export function useProject() {
     addProject, // (path: string, name: string) => Promise<void>
     removeProject, // (id: string) => Promise<void>
     selectProject, // (id: string) => Promise<void>
+
+    // Command CRUD interface
+    commands, // CommandItem[]
+    addCommand, // (name: string, command: string, icon?: string) => Promise<void>
+    updateCommand, // (id: string, data: { name: string; command: string; icon: string }) => Promise<void>
+    deleteCommand, // (id: string) => Promise<void>
   };
 }
