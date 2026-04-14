@@ -79,7 +79,7 @@ Plans:
 Plans:
 - [x] 04-01: 基础设施 — shadcn 组件安装 + CommandItem 类型 + CommandDialog 弹窗
 - [x] 04-02: 交互层 — CommandCard 编辑模式扩展 + useProject 指令 CRUD 与持久化
-- [ ] 04-03: 项目级覆盖 — 项目级指令集机制 + MainArea 编辑模式 UI 集成
+- [x] 04-03: 项目级覆盖 — 项目级指令集机制 + MainArea 编辑模式 UI 集成
 
 ### Phase 5: 项目个性化与键盘增强
 **Goal**: 用户可以个性化项目外观（图标、颜色、排序）并通过键盘高效完成所有核心操作
