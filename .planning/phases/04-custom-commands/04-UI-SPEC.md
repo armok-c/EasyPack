@@ -1,10 +1,11 @@
 ---
 phase: 4
 slug: 04-custom-commands
-status: draft
+status: approved
 shadcn_initialized: true
 preset: new-york (zinc, CSS variables)
 created: 2026-04-14
+reviewed_at: 2026-04-14
 ---
 
 # Phase 4 — UI Design Contract
