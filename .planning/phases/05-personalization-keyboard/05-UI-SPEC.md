@@ -77,20 +77,21 @@ Exceptions: 3px color bar (not multiple of 4, but accepted as D-02 locked decisi
 
 ## Typography
 
-Inherited from Phase 1 UI-SPEC. No changes.
+Inherited from Phase 1 UI-SPEC. Display 24px omitted — not used in Phase 5.
+
+Active font sizes: 4 (10px, 12px, 14px, 18px). Active weights: 2 (400, 600).
 
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Body | 14px | 400 (regular) | 1.5 | General text, descriptions, toast messages |
 | Label | 12px | 400 (regular) | 1.4 | Sidebar project name, card labels, button text |
 | Heading | 18px | 600 (semibold) | 1.3 | Section titles, dialog titles |
-| Display | 24px | 600 (semibold) | 1.2 | Not used in Phase 5 |
+| Keyboard shortcut badge (数字 1-9) | 10px | 600 (semibold) | 1.0 | Small overlay on card corner, subtle indicator |
 
 ### Phase 5 Specific Typography
 
 | Element | Size | Weight | Source |
 |---------|------|--------|--------|
-| Keyboard shortcut badge (数字 1-9) | 10px | 600 (semibold) | Small overlay on card corner, subtle indicator |
 | Settings dialog section label | 12px (Label component) | 400 | "图标" / "颜色" section labels in ProjectSettingsDialog |
 | Settings dialog title | 18px (text-lg) | 600 (semibold) | "设置图标和颜色" — matches CommandDialog title pattern |
 
@@ -160,7 +161,7 @@ All UI copy in simplified Chinese. Technical terms keep English.
 | Settings dialog icon section label | "图标" | Concise label |
 | Settings dialog color section label | "颜色" | Concise label |
 | Settings dialog preview label | "预览" | Matches CommandDialog pattern |
-| Settings dialog save button | "保存" | Matches CommandDialog |
+| Settings dialog save button | "保存设置" | Specific verb + noun, clearer than bare "保存" |
 | Settings dialog cancel button | "取消" | Matches CommandDialog |
 | Toast: style saved | "已更新项目样式" | Success feedback |
 | Keyboard hint (card badge) | "1" through "9" | D-13: numeric shortcut indicator |
@@ -223,7 +224,7 @@ User right-clicks project row
   -> Dialog shows: icon grid (10 icons, 5 cols) + color swatches (8 dots, 4 cols) + preview area
   -> User selects icon and/or color
   -> Preview area updates live (icon + color bar combination)
-  -> User clicks "保存" -> callback fires with { icon, color }
+  -> User clicks "保存设置" -> callback fires with { icon, color }
   -> Toast: "已更新项目样式"
   -> User clicks "取消" or clicks outside -> dialog closes, no change
 ```
@@ -249,7 +250,7 @@ User right-clicks project row
 |  | [icon] 项目名称             |         |
 |  +-----------------------------+         |
 +------------------------------------------+
-|              [取消]  [保存]               |
+|              [取消]  [保存设置]           |
 +------------------------------------------+
 ```
 
