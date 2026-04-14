@@ -13,6 +13,98 @@ describe("CommandCard", () => {
     vi.useRealTimers();
   });
 
+  // --- Phase 4: Edit mode & custom marker tests ---
+
+  describe("custom command visual marker", () => {
+    it("applies left blue border when isCustom=true", () => {
+      render(<CommandCard name="自定义" icon={Package} isCustom />);
+      const button = screen.getByRole("button");
+      expect(button.className).toContain("border-l-blue-400/50");
+    });
+
+    it("does not apply left blue border when isCustom is not set", () => {
+      render(<CommandCard name="预设" icon={Package} />);
+      const button = screen.getByRole("button");
+      expect(button.className).not.toContain("border-l-blue-400/50");
+    });
+  });
+
+  describe("edit mode delete button", () => {
+    it("shows delete button when editMode=true and isCustom=true", () => {
+      render(
+        <CommandCard name="自定义" icon={Package} isCustom editMode />
+      );
+      const deleteBtn = screen.getByLabelText("删除指令: 自定义");
+      expect(deleteBtn).toBeInTheDocument();
+    });
+
+    it("does not show delete button when editMode=true but isCustom=false", () => {
+      render(
+        <CommandCard name="预设" icon={Package} editMode />
+      );
+      expect(screen.queryByLabelText(/删除指令/)).not.toBeInTheDocument();
+    });
+
+    it("calls onDelete and does not trigger onClick when delete button clicked", () => {
+      const onDelete = vi.fn();
+      const onClick = vi.fn();
+      render(
+        <CommandCard
+          name="自定义"
+          icon={Package}
+          isCustom
+          editMode
+          onDelete={onDelete}
+          onClick={onClick}
+        />
+      );
+      const deleteBtn = screen.getByLabelText("删除指令: 自定义");
+      fireEvent.click(deleteBtn);
+      expect(onDelete).toHaveBeenCalledTimes(1);
+      // onClick should NOT be called since delete stops propagation
+      expect(onClick).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("edit mode click behavior", () => {
+    it("calls onEdit instead of triggering flash when editMode=true and isCustom=true", () => {
+      const onEdit = vi.fn();
+      const onClick = vi.fn();
+      render(
+        <CommandCard
+          name="自定义"
+          icon={Package}
+          isCustom
+          editMode
+          onEdit={onEdit}
+          onClick={onClick}
+        />
+      );
+      const button = screen.getByRole("button");
+      fireEvent.click(button);
+      expect(onEdit).toHaveBeenCalledTimes(1);
+      // Should NOT trigger flash/execute
+      expect(button.className).not.toContain("animate-card-flash");
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when editMode=true and isCustom=false (preset)", () => {
+      const onClick = vi.fn();
+      render(
+        <CommandCard
+          name="预设"
+          icon={Package}
+          editMode
+          onClick={onClick}
+        />
+      );
+      const button = screen.getByRole("button");
+      fireEvent.click(button);
+      expect(onClick).not.toHaveBeenCalled();
+      expect(button.className).not.toContain("animate-card-flash");
+    });
+  });
+
   it("renders card with name and icon", () => {
     render(<CommandCard name="打包项目" icon={Package} />);
     expect(screen.getByLabelText("打包项目")).toBeInTheDocument();

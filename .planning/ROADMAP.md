@@ -73,12 +73,14 @@ Plans:
   2. 用户可编辑和删除已有的自定义指令
   3. 用户可为特定项目设置独立指令集，覆盖全局默认指令
   4. 自定义指令（全局和项目级）在重启应用后完整恢复
-**Plans**: 3 plans
+**Plans**: TBD
+**UI hint**: yes
 
 Plans:
-- [ ] 04-01: 基础设施 — shadcn 组件安装 + CommandItem 类型 + CommandDialog 弹窗
-- [ ] 04-02: 交互层 — CommandCard 编辑模式扩展 + useProject 指令 CRUD 与持久化
-- [ ] 04-03: 项目级覆盖 — 项目级指令集机制 + MainArea 编辑模式 UI 集成
+- [ ] 04-01: 模态弹窗组件与添加自定义指令交互
+- [ ] 04-02: 自定义指令编辑与删除功能
+- [ ] 04-03: 项目级指令集覆盖机制
+- [ ] 04-04: 自定义指令数据持久化
 
 ### Phase 5: 项目个性化与键盘增强
 **Goal**: 用户可以个性化项目外观（图标、颜色、排序）并通过键盘高效完成所有核心操作
@@ -106,5 +108,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. 应用脚手架与 Shell 命令核心 | 0/3 | Planning complete | - |
 | 2. 项目侧边栏与持久化 | 2/2 | Complete   | 2026-04-12 |
 | 3. 指令卡片与核心交互 | 0/1 | Planning complete | - |
-| 4. 自定义指令与项目级覆盖 | 0/3 | Planning complete | - |
+| 4. 自定义指令与项目级覆盖 | 0/4 | Not started | - |
 | 5. 项目个性化与键盘增强 | 0/3 | Not started | - |
