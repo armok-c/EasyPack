@@ -1,7 +1,7 @@
 ---
 phase: 5
 slug: 05-personalization-keyboard
-status: draft
+status: approved
 shadcn_initialized: true
 preset: new-york (zinc, CSS variables)
 created: 2026-04-15
