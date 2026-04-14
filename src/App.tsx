@@ -13,6 +13,16 @@ function App() {
     selectProject,
     removeProject,
     executeCommand,
+    // Phase 4: command management
+    commands,
+    commandMode,
+    editMode,
+    setEditMode,
+    addCommand,
+    updateCommand,
+    deleteCommand,
+    enableProjectCommands,
+    disableProjectCommands,
   } = useProject();
 
   return (
@@ -24,7 +34,19 @@ function App() {
         onSelectProject={selectProject}
         onRemoveProject={removeProject}
       />
-      <MainArea currentProject={currentProject} onExecute={executeCommand} />
+      <MainArea
+        currentProject={currentProject}
+        onExecute={executeCommand}
+        commands={commands}
+        commandMode={commandMode}
+        editMode={editMode}
+        setEditMode={setEditMode}
+        addCommand={addCommand}
+        updateCommand={updateCommand}
+        deleteCommand={deleteCommand}
+        enableProjectCommands={enableProjectCommands}
+        disableProjectCommands={disableProjectCommands}
+      />
       <Toaster richColors position="bottom-right" duration={1500} />
     </div>
   );
