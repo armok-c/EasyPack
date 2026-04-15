@@ -1,7 +1,9 @@
+import { useState, useCallback } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/Sidebar";
 import { MainArea } from "@/components/MainArea";
 import { useProject } from "@/hooks/useProject";
+import { useKeyboard } from "@/hooks/useKeyboard";
 import "./index.css";
 
 function App() {
@@ -29,6 +31,20 @@ function App() {
     reorderProjects,
   } = useProject();
 
+  // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
+  const [activeZone, setActiveZone] = useState<"sidebar" | "main">("sidebar");
+  const handleZoneSwitch = useCallback(() => {
+    setActiveZone((prev) => (prev === "sidebar" ? "main" : "sidebar"));
+  }, []);
+
+  // Phase 5 Plan 03: global number key shortcuts (per D-13)
+  useKeyboard({
+    commands,
+    currentProject,
+    onExecute: executeCommand,
+    editMode,
+  });
+
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar
@@ -39,6 +55,8 @@ function App() {
         onRemoveProject={removeProject}
         onUpdateStyle={updateProjectStyle}
         onReorderProjects={reorderProjects}
+        activeZone={activeZone}
+        onZoneSwitch={handleZoneSwitch}
       />
       <MainArea
         currentProject={currentProject}
@@ -52,6 +70,8 @@ function App() {
         deleteCommand={deleteCommand}
         enableProjectCommands={enableProjectCommands}
         disableProjectCommands={disableProjectCommands}
+        activeZone={activeZone}
+        onZoneSwitch={handleZoneSwitch}
       />
       <Toaster richColors position="bottom-right" duration={1500} />
     </div>

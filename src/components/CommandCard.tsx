@@ -15,6 +15,9 @@ interface CommandCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   commandId?: string;
+  // Phase 5 Plan 03: keyboard navigation
+  tabIndex?: number;
+  shortcutNumber?: number;
 }
 
 export function CommandCard({
@@ -27,6 +30,8 @@ export function CommandCard({
   editMode = false,
   onEdit,
   onDelete,
+  tabIndex = 0,
+  shortcutNumber,
 }: CommandCardProps) {
   const [flashing, setFlashing] = useState(false);
 
@@ -62,6 +67,7 @@ export function CommandCard({
     <button
       onClick={handleClick}
       disabled={disabled}
+      tabIndex={tabIndex}
       title={disabled ? undefined : command}
       className={cn(
         "relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl",
@@ -102,6 +108,15 @@ export function CommandCard({
         >
           <X className="size-3" />
         </div>
+      )}
+      {/* Phase 5 Plan 03: keyboard shortcut badge (per UI-SPEC) */}
+      {shortcutNumber != null && !disabled && !editMode && (
+        <span
+          className="absolute top-1 left-1 text-[10px] font-semibold text-muted-foreground/40 pointer-events-none"
+          aria-hidden="true"
+        >
+          {shortcutNumber}
+        </span>
       )}
       <Icon className={cn("size-6", flashing && "animate-spin")} />
       <span>{name}</span>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { FolderOpen, Settings, Plus } from "lucide-react";
 import { CommandCard } from "@/components/CommandCard";
 import { CommandDialog } from "@/components/CommandDialog";
@@ -20,7 +20,14 @@ interface MainAreaProps {
   deleteCommand: (id: string) => Promise<void>;
   enableProjectCommands: () => Promise<void>;
   disableProjectCommands: () => Promise<void>;
+  // Phase 5 Plan 03: keyboard navigation zone management
+  activeZone: "sidebar" | "main";
+  onZoneSwitch: () => void;
 }
+
+// Approximate grid column count for arrow key navigation.
+// Uses a simplified approach: assume 4 columns as typical for the auto-fill grid.
+const ESTIMATED_GRID_COLS = 4;
 
 export function MainArea({
   currentProject,
@@ -34,9 +41,14 @@ export function MainArea({
   deleteCommand,
   enableProjectCommands,
   disableProjectCommands,
+  activeZone,
+  onZoneSwitch,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
+  // Phase 5 Plan 03: card focus state (-1 = no focus)
+  const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
+  const gridRef = useRef<HTMLDivElement | null>(null);
 
   const handleEdit = useCallback((cmd: CommandItem) => {
     setEditingCommand(cmd);
@@ -62,6 +74,74 @@ export function MainArea({
     }
     setDialogOpen(open);
   }, []);
+
+  // Auto-focus first card when main zone becomes active
+  useEffect(() => {
+    if (activeZone === "main" && commands.length > 0 && focusedCardIndex === -1) {
+      setFocusedCardIndex(0);
+    }
+    if (activeZone !== "main") {
+      setFocusedCardIndex(-1);
+    }
+  }, [activeZone, commands.length, focusedCardIndex]);
+
+  // Focus the card element when focusedCardIndex changes (via DOM query)
+  useEffect(() => {
+    if (activeZone === "main" && focusedCardIndex >= 0 && gridRef.current) {
+      const buttons = gridRef.current.querySelectorAll<HTMLButtonElement>(
+        ':scope > button:not([class*="border-dashed"])'
+      );
+      buttons[focusedCardIndex]?.focus();
+    }
+  }, [activeZone, focusedCardIndex]);
+
+  // Card keyboard navigation handler
+  const handleGridKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (focusedCardIndex < 0 || commands.length === 0) return;
+
+      switch (e.key) {
+        case "ArrowRight": {
+          e.preventDefault();
+          const next = Math.min(focusedCardIndex + 1, commands.length - 1);
+          setFocusedCardIndex(next);
+          break;
+        }
+        case "ArrowLeft": {
+          e.preventDefault();
+          const prev = Math.max(focusedCardIndex - 1, 0);
+          setFocusedCardIndex(prev);
+          break;
+        }
+        case "ArrowDown": {
+          e.preventDefault();
+          const below = Math.min(focusedCardIndex + ESTIMATED_GRID_COLS, commands.length - 1);
+          setFocusedCardIndex(below);
+          break;
+        }
+        case "ArrowUp": {
+          e.preventDefault();
+          const above = Math.max(focusedCardIndex - ESTIMATED_GRID_COLS, 0);
+          setFocusedCardIndex(above);
+          break;
+        }
+        case "Enter": {
+          e.preventDefault();
+          const cmd = commands[focusedCardIndex];
+          if (cmd) {
+            onExecute(cmd.command);
+          }
+          break;
+        }
+        case "Tab": {
+          e.preventDefault();
+          onZoneSwitch();
+          break;
+        }
+      }
+    },
+    [focusedCardIndex, commands, onExecute, onZoneSwitch]
+  );
 
   if (!currentProject) {
     // per D-19: first launch guide page
@@ -125,12 +205,17 @@ export function MainArea({
       </div>
 
       {/* Command cards grid (per UI-SPEC Grid: auto-fill adaptive) */}
-      <div className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3">
-        {commands.map((cmd) => {
+      <div
+        ref={gridRef}
+        className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3"
+        onKeyDown={handleGridKeyDown}
+      >
+        {commands.map((cmd, index) => {
           const isCustom = cmd.type === "custom";
           // canEdit: edit mode + (custom command OR project-scope command)
           // Per D-11: project-level presets can be deleted/edited
           const canEdit = editMode && (isCustom || cmd.scope === "project");
+          const isCardFocused = activeZone === "main" && index === focusedCardIndex;
 
           return (
             <CommandCard
@@ -144,6 +229,8 @@ export function MainArea({
               onDelete={() => deleteCommand(cmd.id)}
               commandId={cmd.id}
               onClick={() => onExecute(cmd.command)}
+              tabIndex={isCardFocused ? 0 : -1}
+              shortcutNumber={!isCustom && !canEdit && index < 9 ? index + 1 : undefined}
             />
           );
         })}

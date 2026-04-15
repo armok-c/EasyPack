@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Plus, FolderOpen, X, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,6 +23,9 @@ interface SidebarProps {
   onRemoveProject: (id: string) => void;
   onUpdateStyle: (projectId: string, style: { icon: string; color: string }) => void;
   onReorderProjects: (reordered: ProjectItem[]) => void;
+  // Phase 5 Plan 03: keyboard navigation zone management
+  activeZone: "sidebar" | "main";
+  onZoneSwitch: () => void;
 }
 
 // Sortable project item extracted as independent component for @dnd-kit useSortable
@@ -32,12 +35,18 @@ function SortableProjectItem({
   onSelect,
   onRemove,
   onContextMenu,
+  isFocused,
+  onKeyDown,
+  itemRef,
 }: {
   project: ProjectItem;
   isSelected: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onContextMenu: (id: string) => void;
+  isFocused: boolean;
+  onKeyDown: (e: React.KeyboardEvent) => void;
+  itemRef: (el: HTMLDivElement | null) => void;
 }) {
   const { ref, handleRef, isDragging } = useSortable({ id: project.id });
 
@@ -46,10 +55,14 @@ function SortableProjectItem({
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
+            ref={itemRef}
+            tabIndex={isFocused ? 0 : -1}
             onClick={() => onSelect(project.id)}
+            onKeyDown={onKeyDown}
             className={cn(
               "group relative flex items-center px-2 py-2 rounded-lg border cursor-pointer",
               "transition-all duration-150 overflow-hidden",
+              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               isSelected
                 ? "bg-white/10 border-white/20"
                 : "bg-white/5 border-white/10 hover:bg-white/[0.08]"
@@ -89,6 +102,7 @@ function SortableProjectItem({
                 e.stopPropagation();
                 onRemove(project.id);
               }}
+              tabIndex={-1}
               className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 rounded hover:bg-white/10 transition-opacity duration-150"
               aria-label={`删除项目 ${project.name}`}
             >
@@ -114,8 +128,73 @@ export function Sidebar({
   onRemoveProject,
   onUpdateStyle,
   onReorderProjects,
+  activeZone,
+  onZoneSwitch,
 }: SidebarProps) {
   const [settingsProjectId, setSettingsProjectId] = useState<string | null>(null);
+
+  // Phase 5 Plan 03: roving tabindex keyboard navigation
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Reset focusedIndex when projects change
+  useEffect(() => {
+    if (projects.length > 0 && focusedIndex >= projects.length) {
+      setFocusedIndex(projects.length - 1);
+    }
+  }, [projects.length, focusedIndex]);
+
+  // Auto-focus first item when sidebar becomes active zone (per D-16)
+  useEffect(() => {
+    if (
+      activeZone === "sidebar" &&
+      projects.length > 0 &&
+      itemRefs.current[focusedIndex]
+    ) {
+      itemRefs.current[focusedIndex]?.focus();
+    }
+  }, [activeZone, projects.length, focusedIndex]);
+
+  // Handle keyboard navigation for project items
+  const handleItemKeyDown = useCallback(
+    (e: React.KeyboardEvent, index: number) => {
+      switch (e.key) {
+        case "ArrowDown": {
+          e.preventDefault();
+          const next = (index + 1) % projects.length;
+          setFocusedIndex(next);
+          itemRefs.current[next]?.focus();
+          break;
+        }
+        case "ArrowUp": {
+          e.preventDefault();
+          const prev = (index - 1 + projects.length) % projects.length;
+          setFocusedIndex(prev);
+          itemRefs.current[prev]?.focus();
+          break;
+        }
+        case "Enter": {
+          e.preventDefault();
+          onSelectProject(projects[index].id);
+          break;
+        }
+        case "Tab": {
+          e.preventDefault();
+          onZoneSwitch();
+          break;
+        }
+      }
+    },
+    [projects, onSelectProject, onZoneSwitch]
+  );
+
+  // Ref callback to store element references
+  const setItemRef = useCallback(
+    (index: number) => (el: HTMLDivElement | null) => {
+      itemRefs.current[index] = el;
+    },
+    []
+  );
 
   // Handle drag end: splice array to new order (per D-10, D-11)
   const handleDragEnd = useCallback(
@@ -162,7 +241,7 @@ export function Sidebar({
           <ScrollArea className="h-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
               <div className="flex flex-col gap-1">
-                {projects.map((project) => (
+                {projects.map((project, index) => (
                   <SortableProjectItem
                     key={project.id}
                     project={project}
@@ -170,6 +249,9 @@ export function Sidebar({
                     onSelect={onSelectProject}
                     onRemove={onRemoveProject}
                     onContextMenu={setSettingsProjectId}
+                    isFocused={activeZone === "sidebar" && index === focusedIndex}
+                    onKeyDown={(e) => handleItemKeyDown(e, index)}
+                    itemRef={setItemRef(index)}
                   />
                 ))}
               </div>
