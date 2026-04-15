@@ -1,3 +1,4 @@
+use std::os::windows::process::CommandExt;
 use std::process::Command as StdCommand;
 
 /// 构建完整的 Shell 命令字符串
@@ -14,18 +15,19 @@ pub fn build_full_command(project_path: &str, shell_command: &str) -> String {
 pub async fn execute_command(project_path: String, shell_command: String) -> Result<(), String> {
     let full_command = build_full_command(&project_path, &shell_command);
 
-    // 优先尝试 Windows Terminal (per D-07)
+    // 优先尝试 Windows Terminal (per D-07, D-01: raw_arg 绕过 MSVC 转义)
+    let escaped_command = full_command.replace('"', "\"\"");
     let wt_result = StdCommand::new("wt")
-        .args(["new-tab", "cmd", "/K", &full_command])
+        .raw_arg(format!("new-tab cmd /K \"{}\"", escaped_command))
         .spawn();
 
     if wt_result.is_ok() {
         return Ok(());
     }
 
-    // 回退到 cmd.exe: /C 执行 start 命令打开新窗口 (per D-07 回退, D-08 独立窗口)
+    // 回退到 cmd.exe: /C 执行 start 命令打开新窗口 (per D-07 回退, D-08 独立窗口, D-01: raw_arg)
     StdCommand::new("cmd")
-        .args(["/C", "start", "cmd", "/K", &full_command])
+        .raw_arg(format!("/C start cmd /K \"{}\"", escaped_command))
         .spawn()
         .map_err(|e| format!("Failed to execute command: {}", e))?;
 
@@ -65,5 +67,19 @@ mod tests {
             assert!(result.starts_with("cd /d \""));
             assert!(result.contains(cmd));
         }
+    }
+
+    #[test]
+    fn test_raw_arg_escaping() {
+        // 验证含空格路径的引号转义 (per D-01)
+        let full_cmd = build_full_command("D:\\My Projects\\app", "npm run dev");
+        let escaped = full_cmd.replace('"', "\"\"");
+        // full_cmd = cd /d "D:\My Projects\app" && npm run dev
+        // escaped = cd /d ""D:\My Projects\app"" && npm run dev
+        assert!(
+            escaped.contains("\"\"D:\\My Projects\\app\"\""),
+            "Expected doubled-quote escaping for path with spaces, got: {}",
+            escaped
+        );
     }
 }
