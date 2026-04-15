@@ -31,6 +31,7 @@ interface SidebarProps {
 // Sortable project item extracted as independent component for @dnd-kit useSortable
 function SortableProjectItem({
   project,
+  index,
   isSelected,
   onSelect,
   onRemove,
@@ -40,6 +41,7 @@ function SortableProjectItem({
   itemRef,
 }: {
   project: ProjectItem;
+  index: number;
   isSelected: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
@@ -48,7 +50,7 @@ function SortableProjectItem({
   onKeyDown: (e: React.KeyboardEvent) => void;
   itemRef: (el: HTMLDivElement | null) => void;
 }) {
-  const { ref, handleRef, isDragging } = useSortable({ id: project.id });
+  const { ref, handleRef, isDragging } = useSortable({ id: project.id, index });
 
   return (
     <div ref={ref} className={isDragging ? "opacity-50" : ""}>
@@ -245,6 +247,7 @@ export function Sidebar({
                   <SortableProjectItem
                     key={project.id}
                     project={project}
+                    index={index}
                     isSelected={selectedId === project.id}
                     onSelect={onSelectProject}
                     onRemove={onRemoveProject}

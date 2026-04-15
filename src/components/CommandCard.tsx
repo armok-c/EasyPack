@@ -112,7 +112,7 @@ export function CommandCard({
       {/* Phase 5 Plan 03: keyboard shortcut badge (per UI-SPEC) */}
       {shortcutNumber != null && !disabled && !editMode && (
         <span
-          className="absolute top-1 left-1 text-[10px] font-semibold text-muted-foreground/40 pointer-events-none"
+          className="absolute top-1 left-1 text-[10px] font-semibold text-muted-foreground/70 pointer-events-none"
           aria-hidden="true"
         >
           {shortcutNumber}
