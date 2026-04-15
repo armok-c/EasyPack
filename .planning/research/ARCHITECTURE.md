@@ -1,349 +1,701 @@
-# Architecture Patterns
+# Architecture Patterns -- v1.1 Integration Research
 
-**Domain:** Tauri 2.x Windows Desktop Project Launcher
-**Researched:** 2026-04-10
+**Domain:** EasyPack v1.1 -- Tauri 2 + React 19 Windows Desktop Project Launcher
+**Researched:** 2026-04-15
+**Focus:** Integration of 7 new features into existing v1.0 architecture
 
-## Recommended Architecture
+## Current Architecture Summary (v1.0 Baseline)
 
-EasyPack 采用经典的 Tauri 2.x 分层架构：Rust 后端负责系统级操作（Shell 命令执行、进程管理），Web 前端负责 UI 渲染和用户交互，通过 Tauri 的 `invoke` 命令系统进行桥接通信。
+EasyPack 采用 Tauri 2.x 经典分层架构。Rust 后端 (`src-tauri/src/`) 负责系统级操作，React 前端 (`src/`) 负责 UI 渲染和状态管理，通过 `invoke()` / `#[tauri::command]` 桥接。
 
 ```
 +----------------------------------------------------------+
 |                    Tauri Application                       |
 |                                                           |
 |  +---------------------+     +-------------------------+  |
-|  |   Web Frontend      |     |   Rust Backend           |  |
-|  |   (Svelte/Solid)    |     |   (src-tauri/)           |  |
+|  |   React Frontend    |     |   Rust Backend           |  |
+|  |   (src/)            |     |   (src-tauri/src/)       |  |
 |  |                     |     |                         |  |
-|  |  +---------------+  |     |  +-------------------+  |  |
-|  |  | UI Components |  |     |  | Command Handlers  |  |  |
-|  |  |  - Sidebar    |  |     |  |  - execute_shell  |  |  |
-|  |  |  - CardGrid   |  | invoke  |  - validate_path  |  |  |
-|  |  |  - Dialogs     |--------->|  - manage_data    |  |  |
-|  |  +---------------+  |     |  +-------------------+  |  |
-|  |        |            |     |          |              |  |
-|  |  +---------------+  |     |  +-------------------+  |  |
-|  |  | State Layer   |  |     |  | Shell Plugin      |  |  |
-|  |  |  - projects   |  |     |  |  - cmd.exe spawn  |  |  |
-|  |  |  - commands   |  |     |  |  - wt.exe spawn   |  |  |
-|  |  +---------------+  |     |  +-------------------+  |  |
-|  |        |            |     |          |              |  |
-|  |  +---------------+  |     |  +-------------------+  |  |
-|  |  | Store Plugin  |<-------->|  | Store Plugin     |  |  |
-|  |  |  (JSON persist)|  |     |  |  (Rust side)     |  |  |
-|  |  +---------------+  |     |  +-------------------+  |  |
+|  |  App.tsx            |     |  lib.rs (builder)       |  |
+|  |    |-- Sidebar      |     |  commands/mod.rs         |  |
+|  |    |-- MainArea     |     |  commands/shell.rs       |  |
+|  |         |-- CommandCard   |    - execute_command     |  |
+|  |         |-- CommandDialog |    - build_full_command  |  |
+|  |                     |     |                         |  |
+|  |  hooks/useProject.ts|     |                         |  |
+|  |    (state + store)  |     |                         |  |
+|  |  hooks/useKeyboard.ts|    |                         |  |
+|  |  lib/types.ts       |     |                         |  |
+|  |  lib/presets.ts     |     |                         |  |
+|  |  lib/icons.ts       |     |                         |  |
+|  +---------------------+     +-------------------------+  |
+|          |          ^                  |                   |
+|          | invoke() |                  | spawn()           |
+|          v          |                  v                   |
+|  +---------------------+     +-------------------------+  |
+|  |  tauri-plugin-store  |     |  Windows System Shell    |  |
+|  |  (JSON persistence)  |     |  cmd.exe / wt.exe        |  |
 |  +---------------------+     +-------------------------+  |
 +----------------------------------------------------------+
-                    |
-                    v
-        +-----------------------+
-        |  Windows System Shell |
-        |  cmd.exe / wt.exe     |
-        +-----------------------+
 ```
 
-### Component Boundaries
+### Existing Component Boundaries
 
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| **UI Layer** (Svelte/Solid) | 渲染侧边栏、卡片网格、对话框；处理用户点击和输入 | State Layer (读写), Rust Backend (通过 invoke) |
-| **State Layer** (前端 Store) | 管理前端响应式状态：当前选中项目、指令列表、UI 状态 | UI Layer (提供响应式数据), Store Plugin (持久化) |
-| **Command Handlers** (Rust) | 处理来自前端的 invoke 调用：路径验证、命令构建与执行 | 前端 (通过 invoke), Shell Plugin (进程创建) |
-| **Shell Plugin** (tauri-plugin-shell) | 在外部终端中 spawn 进程执行 Shell 命令 | Command Handlers (被调用), Windows System Shell |
-| **Store Plugin** (tauri-plugin-store) | 持久化项目列表和自定义指令到本地 JSON 文件 | State Layer (前端读写), Command Handlers (Rust 侧读取) |
-| **Capabilities Config** | 定义安全权限：哪些 Shell 命令允许执行 | Shell Plugin (权限控制) |
+| Component | File(s) | Responsibility |
+|-----------|---------|---------------|
+| `App.tsx` | `src/App.tsx` | Root layout: flex row (Sidebar + MainArea), zone management |
+| `Sidebar` | `src/components/Sidebar.tsx` | Project list, add/remove, drag reorder, context menu settings |
+| `MainArea` | `src/components/MainArea.tsx` | Project info, command grid, mode switch, edit mode, keyboard nav |
+| `CommandCard` | `src/components/CommandCard.tsx` | Single command button with flash feedback |
+| `CommandDialog` | `src/components/CommandDialog.tsx` | Add/edit custom command modal |
+| `ProjectSettingsDialog` | `src/components/ProjectSettingsDialog.tsx` | Icon + color picker modal |
+| `useProject` hook | `src/hooks/useProject.ts` | All state: projects, commands, CRUD, store sync, execute |
+| `useKeyboard` hook | `src/hooks/useKeyboard.ts` | Global number key shortcuts (1-9) |
+| `execute_command` | `src-tauri/src/commands/shell.rs` | Build cmd string, spawn wt.exe/cmd.exe |
+| `lib.rs` | `src-tauri/src/lib.rs` | Tauri builder, plugin registration, command handler registration |
 
-### Data Flow
-
-#### 主数据流：执行命令
-
-```
-User clicks card button
-    |
-    v
-UI Component captures click event
-    |
-    v
-invoke('execute_command', { projectPath, command })
-    |
-    v
-Rust Command Handler:
-  1. 验证 projectPath 存在且为有效目录
-  2. 构建完整 Shell 命令字符串（cd + target command）
-  3. 使用 std::process::Command::new("cmd")
-     .args(["/k", "cd /d {path} && {command}"])
-     .spawn()
-    |
-    v
-Windows cmd.exe / Windows Terminal 打开
-用户在终端中看到命令执行结果
-```
-
-#### 持久化数据流
-
-```
-App Start
-    |
-    v
-Store Plugin loads projects.json / commands.json
-    |
-    v
-前端 State Layer 初始化响应式状态
-    |
-    v
-UI Components 从 State Layer 读取数据渲染
-
-User adds project / command:
-    |
-    v
-UI 调用 Store Plugin 的 set() + save()
-    |
-    v
-Store Plugin 写入 JSON 文件到 AppData 目录
-    |
-    v
-前端 State Layer 同步更新
-    |
-    v
-UI 自动重新渲染
-```
-
-### 核心数据模型
+### Existing Data Models
 
 ```typescript
-// 项目
-interface Project {
-  id: string;          // UUID
-  name: string;        // 显示名称
-  path: string;        // 本地目录绝对路径
-  commands?: Command[]; // 项目专属指令（可选）
+// src/lib/types.ts
+interface CommandItem {
+  id: string;          // crypto.randomUUID() or "preset-{idx}"
+  name: string;        // Display name
+  command: string;     // Shell command string
+  icon: string;        // Lucide icon name string
+  type: "preset" | "custom";
+  scope: "global" | "project";
+  addedAt: number;     // Timestamp for ordering
 }
 
-// 指令
-interface Command {
-  id: string;          // UUID
-  name: string;        // 显示名称（如 "打包项目"）
-  shellCommand: string; // Shell 命令（如 "npm run build"）
-  icon?: string;       // 图标标识（可选）
-  isGlobal: boolean;   // 是否为全局默认指令
-}
-
-// 持久化结构
-interface AppStore {
-  projects: Project[];
-  globalCommands: Command[];  // 全局默认指令
-  selectedProjectId: string | null;
+// src/hooks/useProject.ts
+interface ProjectItem {
+  id: string;          // Normalized path (lowercase, forward slashes)
+  name: string;        // Folder name
+  path: string;        // Original full path (preserves casing)
+  addedAt: number;     // Date.now()
+  icon?: string;       // Lucide icon name
+  color?: string;      // CSS hex color
 }
 ```
 
-## Patterns to Follow
+### Store Structure (easypack-store.json)
 
-### Pattern 1: Tauri Command 系统封装
+```
+projects: ProjectItem[]                     // All projects
+selectedProjectId: string | null            // Currently selected
+customCommands: CommandItem[]               // Global custom commands
+projectCommands:{normalizedId}: CommandItem[] // Per-project overrides
+```
 
-**What:** 所有前端到 Rust 的通信通过 `#[tauri::command]` 注解函数 + `invoke()` 调用完成，不使用直接文件系统访问或绕过 Tauri 安全模型的方式。
+## v1.1 Feature Integration Analysis
 
-**When:** 每次前端需要执行系统级操作（Shell 命令、路径验证、文件操作）时。
+### Feature 1: Fix Command Execution (0x80070002)
 
-**Example:**
+**Problem:** Error `0x80070002` = `ERROR_FILE_NOT_FOUND`. Current `build_full_command` produces `cd /d "{path}" && {cmd}`, but when passed through `wt.exe` -> `cmd.exe` chain, the quoting gets mangled.
+
+**Root cause analysis:**
+
+The current flow is:
 ```rust
-// src-tauri/src/commands/shell.rs
-#[tauri::command]
-pub async fn execute_command(project_path: String, shell_command: String) -> Result<(), String> {
-    let full_command = format!("cd /d \"{}\" && {}", project_path, shell_command);
+// 1. Build: cd /d "D:\Projects\EasyPack" && npm run build
+let full_command = format!("cd /d \"{}\" && {}", project_path, shell_command);
 
-    std::process::Command::new("cmd")
-        .args(["/k", &full_command])
+// 2a. Windows Terminal path:
+StdCommand::new("wt")
+    .args(["new-tab", "cmd", "/K", &full_command])
+    .spawn();
+
+// 2b. cmd.exe fallback:
+StdCommand::new("cmd")
+    .args(["/C", "start", "cmd", "/K", &full_command])
+    .spawn();
+```
+
+The `full_command` string contains double quotes. When `.args()` passes it to `wt.exe` or `cmd.exe`, the quote nesting breaks because `args()` on Windows does not escape inner quotes for shell-level passing. The path `"D:\Projects\EasyPack"` gets its quotes stripped or mangled by the argument parser.
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Rust | `commands/shell.rs` | **MODIFY** `execute_command` and `build_full_command` |
+| No frontend changes | -- | -- |
+
+**Architecture approach:** Instead of embedding the `cd /d` command as a string argument, use the process working directory directly:
+
+```rust
+// Fix: Use .current_dir() instead of cd /d command string
+// This avoids all quoting issues entirely
+let project_path_ref = std::path::Path::new(&project_path);
+if !project_path_ref.exists() {
+    return Err(format!("Project path does not exist: {}", project_path));
+}
+
+// Windows Terminal
+let wt_result = StdCommand::new("wt")
+    .args(["new-tab", "cmd", "/K", &shell_command])
+    .current_dir(project_path_ref)
+    .spawn();
+
+// Fallback: cmd.exe
+StdCommand::new("cmd")
+    .args(["/C", "start", "cmd", "/K", &shell_command])
+    .current_dir(project_path_ref)
+    .spawn()
+    .map_err(|e| format!("Failed to execute command: {}", e))?;
+```
+
+Key insight: `.current_dir()` sets the working directory at the OS process level, completely bypassing the `cd /d` quoting problem. The `shell_command` alone (e.g., `npm run build`) is passed as the argument, which never needs inner quoting.
+
+**build_full_command** becomes unused for execution (kept for display/tooltip only).
+
+### Feature 2: Frameless Window + Custom Title Bar
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Config | `src-tauri/tauri.conf.json` | **MODIFY** add `decorations: false` |
+| Config | `src-tauri/capabilities/default.json` | **MODIFY** add window permissions |
+| React | New: `src/components/TitleBar.tsx` | **NEW** component |
+| React | `src/App.tsx` | **MODIFY** add TitleBar to layout |
+| CSS | `src/index.css` | **MODIFY** add titlebar styles |
+
+**Architecture approach:** Per [Tauri v2 Window Customization docs](https://v2.tauri.app/learn/window-customization/):
+
+1. Set `decorations: false` in tauri.conf.json window config
+2. Add permissions: `core:window:allow-start-dragging`, `core:window:allow-minimize`, `core:window:allow-close`, `core:window:allow-toggle-maximize`
+3. Create a `TitleBar.tsx` React component with `data-tauri-drag-region` attribute
+4. Use `getCurrentWindow()` from `@tauri-apps/api/window` for minimize/maximize/close
+
+**Layout change in App.tsx:**
+```
+Before: <div class="flex h-screen"> [Sidebar | MainArea]
+After:  <div class="flex flex-col h-screen">
+          <TitleBar />           <-- NEW: fixed height ~30px
+          <div class="flex flex-1"> [Sidebar | MainArea]
+```
+
+**TitleBar component design:**
+- Left: App name "EasyPack" (draggable region)
+- Right: Minimize, Maximize, Close buttons (using SVG icons, consistent with dark theme)
+- Height: 30px fixed
+- Background: matches app dark theme gradient
+- Double-click on drag region = toggle maximize
+
+**Edge case:** The existing Sidebar has its own title area (`<h1>EasyPack</h1>` in the `p-6 border-b` div). After adding the custom TitleBar, the sidebar title should be removed or merged into the TitleBar to avoid duplication.
+
+### Feature 3: Project Icon Auto-Detection
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Rust | New: `src-tauri/src/commands/project.rs` | **NEW** command module |
+| Rust | `src-tauri/src/commands/mod.rs` | **MODIFY** add `pub mod project` |
+| Rust | `src-tauri/src/lib.rs` | **MODIFY** register new commands |
+| Rust | `src-tauri/Cargo.toml` | **MODIFY** add `serde_json` (already present) |
+| React | `src/hooks/useProject.ts` | **MODIFY** call detect on project add |
+| React | `src/components/ProjectSettingsDialog.tsx` | **MODIFY** show detected icon + allow custom path |
+
+**Architecture approach:** Add Rust commands that scan a project directory for marker files:
+
+```rust
+// New Tauri command
+#[tauri::command]
+pub async fn detect_project_info(path: String) -> Result<ProjectInfo, String> {
+    // Returns: { detected_icon: Option<String>, project_type: Option<String> }
+}
+
+#[derive(Serialize)]
+pub struct ProjectInfo {
+    pub detected_icon: Option<String>,  // Lucide icon name
+    pub project_type: Option<String>,   // "node", "rust", "python", etc.
+}
+```
+
+**Detection strategy (no external crate needed):**
+```
+Priority scan in project directory:
+1. package.json exists -> "node" project, icon = "Package"
+   - If scripts.build contains "react" or "vite" -> icon = "Code"
+   - If scripts.start contains "next" -> icon = "Globe"
+2. Cargo.toml exists -> "rust" project, icon = "Terminal"
+3. requirements.txt or pyproject.toml or setup.py -> "python", icon = "Server"
+4. go.mod -> "go", icon = "Code"
+5. .git directory exists -> at least a git repo, icon = "GitBranch"
+6. No match -> no icon change (keep default)
+```
+
+This uses only `std::fs::metadata` and `std::fs::read_to_string` (already available via `serde_json`). No new crate dependency needed.
+
+**Frontend integration:** In `useProject.ts`, after `addProject()` is called, invoke `detect_project_info` and auto-set the icon if a match is found. User can override via ProjectSettingsDialog.
+
+**Data model change:** Add optional field to `ProjectItem`:
+```typescript
+interface ProjectItem {
+  // ... existing fields ...
+  detectedType?: string;  // "node" | "rust" | "python" | "go" | "git" | undefined
+}
+```
+
+This field is informational only -- it does not affect behavior but helps the ProjectSettingsDialog show "Detected: Node.js project" context.
+
+### Feature 4: Modal Auto-Sizing
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| React | `src/components/ui/dialog.tsx` | **MODIFY** DialogContent sizing |
+| React | `src/components/CommandDialog.tsx` | **MODIFY** pass responsive size |
+| React | `src/components/ProjectSettingsDialog.tsx` | **MODIFY** pass responsive size |
+
+**Architecture approach:** The current `DialogContent` uses `sm:max-w-lg` which is static. The fix requires:
+
+1. Add `max-h-[calc(100vh-4rem)]` and `overflow-y-auto` to DialogContent to prevent overflow
+2. Use CSS `min-height` constraints per dialog type
+3. Consider using a `useWindowSize` or `useResizeObserver` hook to adapt `max-height` dynamically
+
+**Key CSS change in dialog.tsx:**
+```typescript
+// Add to DialogContent className:
+"max-h-[calc(100vh-4rem)] overflow-y-auto"
+```
+
+This is a CSS-only fix. No Rust changes. No new data model.
+
+### Feature 5: Command Tab Switch to Button Style + Open Folder Button
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| React | `src/components/MainArea.tsx` | **MODIFY** mode switch UI |
+
+**Architecture approach:** Pure frontend UI change. Replace the text link ("使用项目自定义指令" / "使用全局指令") with styled button elements, and add an "Open Folder" button on the same row.
+
+Current layout (text links):
+```
+当前项目: EasyPack                        [Settings gear]
+D:\Projects\EasyPack
+全局指令 · 使用项目自定义指令  <-- text links
+```
+
+New layout (button row):
+```
+当前项目: EasyPack                        [Settings gear]
+D:\Projects\EasyPack
+[全局指令] [项目指令]     [打开文件夹]    <-- buttons + open folder
+```
+
+The "Open Folder" button calls a new Rust command:
+```rust
+#[tauri::command]
+pub async fn open_folder(path: String) -> Result<(), String> {
+    // Use Windows explorer.exe to open the folder
+    StdCommand::new("explorer")
+        .arg(&path)
         .spawn()
         .map_err(|e| e.to_string())?;
-
     Ok(())
 }
 ```
 
-```typescript
-// 前端调用
-import { invoke } from '@tauri-apps/api/core';
+This needs to be registered in `lib.rs` invoke_handler.
 
-async function runCommand(projectPath: string, command: string) {
-    await invoke('execute_command', { projectPath, shellCommand: command });
+### Feature 6: Folder Size + Git Branch Display
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Rust | `src-tauri/src/commands/project.rs` | **ADD** two new commands |
+| Rust | `src-tauri/src/lib.rs` | **MODIFY** register new commands |
+| React | New: `src/hooks/useProjectInfo.ts` | **NEW** hook for fetching project metadata |
+| React | `src/components/MainArea.tsx` | **MODIFY** display info bar above command grid |
+
+**Architecture approach:**
+
+Two new Rust commands:
+
+```rust
+#[tauri::command]
+pub async fn get_folder_size(path: String) -> Result<u64, String> {
+    // Walk directory, sum file sizes
+    // Use std::fs (no external crate needed for basic walk)
+    // Or add walkdir crate for robust directory traversal
+}
+
+#[tauri::command]
+pub async fn get_git_branch(path: String) -> Result<Option<String>, String> {
+    // Run: git rev-parse --abbrev-ref HEAD
+    // If .git directory doesn't exist, return None
+    let output = StdCommand::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(Some(branch))
+    } else {
+        Ok(None)  // Not a git repo
+    }
 }
 ```
 
-### Pattern 2: 前端响应式状态 + Store Plugin 持久化
+**Folder size calculation options:**
+- Option A: Add `walkdir` crate dependency -- robust, handles symlinks, permission errors
+- Option B: Pure `std::fs` recursion -- no new dependency but fragile with deep trees / permission issues
+- **Recommendation:** Use `walkdir` crate. It handles edge cases (symlinks, permission denied) that pure `std::fs` does not. Only ~50 lines of integration code.
 
-**What:** 前端使用框架内置的响应式 Store 管理运行时状态，通过 `@tauri-apps/plugin-store` 将数据持久化到 JSON 文件。两层分离：响应式层负责 UI 更新，持久化层负责数据保存。
-
-**When:** 所有需要跨会话持久保存的数据（项目列表、自定义指令）。
-
-**Example:**
+**New frontend hook:** `useProjectInfo.ts`
 ```typescript
-// 使用 Store Plugin 进行持久化
-import { LazyStore } from '@tauri-apps/plugin-store';
+interface ProjectInfoData {
+  folderSize: number | null;     // bytes
+  gitBranch: string | null;      // branch name
+  loading: boolean;
+}
 
-const store = new LazyStore('easypack-data.json');
-
-// 读取
-const projects = await store.get<Project[]>('projects') ?? [];
-
-// 写入
-await store.set('projects', updatedProjects);
-// autoSave 默认启用，100ms debounce 后自动写入磁盘
+function useProjectInfo(projectPath: string | null): ProjectInfoData
 ```
 
-### Pattern 3: Windows 外部终端启动
+This hook calls the Rust commands when `projectPath` changes. Uses `useEffect` with debouncing to avoid hammering the filesystem during rapid project switches.
 
-**What:** 使用 `std::process::Command` 启动 `cmd.exe /k` 在新终端窗口中执行命令。`/k` 参数保持终端窗口打开，`cd /d` 参数支持跨驱动器切换目录。
+**Display in MainArea:** Add an info bar between project header and command grid:
+```
+当前项目: EasyPack                        [Settings gear]
+D:\Projects\EasyPack
+文件夹: 234 MB | 分支: main              [全局] [项目] [打开文件夹]
+[command grid...]
+```
 
-**When:** 用户点击指令卡片执行命令时。
+**Performance consideration:** Folder size calculation is expensive for large projects (node_modules etc). Consider:
+- Run on project selection with a debounce (500ms)
+- Cache results per project (invalidate on project re-select)
+- Skip hidden directories (node_modules, .git, target) to speed up calculation
+- Consider making folder size calculation optional or lazy (expand/collapse)
 
-**Example:**
+### Feature 7: Preset Command System
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| React | `src/lib/presets.ts` | **MAJOR REWRITE** expand to categorized library |
+| React | `src/lib/types.ts` | **MODIFY** add preset category types |
+| React | `src/components/MainArea.tsx` | **MODIFY** dual dropdown UI in edit mode |
+| React | New: `src/components/PresetSelector.tsx` | **NEW** dual dropdown component |
+| React | `src/hooks/useProject.ts` | **MODIFY** preset → command conversion logic |
+
+**Architecture approach:**
+
+Current preset system is hardcoded as 4 items in `PRESET_COMMANDS`. The new system requires:
+
+1. **Categorized preset library** in `presets.ts`:
+```typescript
+interface PresetCategory {
+  id: string;          // "python", "git", "rust", "npm"
+  label: string;       // "Python / pip"
+  icon: string;        // Lucide icon name
+  commands: PresetCommand[];
+}
+
+interface PresetCommand {
+  id: string;          // "pip-install", "cargo-build"
+  name: string;        // "Install Dependencies"
+  command: string;     // "pip install ."
+  icon: string;        // Lucide icon name
+}
+
+// Default visible presets (v1.0 compat):
+// Only "git pull" and "claude" remain as always-visible
+// Everything else is in the categorized library
+```
+
+2. **Dual dropdown UI:** Two dropdowns in the command grid area (visible in edit mode):
+   - Dropdown 1: Category selector (Python/pip, Git, Rust, npm, ...)
+   - Dropdown 2: Command selector (filtered by selected category)
+   - "Add" button to add selected preset to the current scope
+
+3. **Scope selector:** Each added preset can be added to global or project-level scope.
+
+4. **Data model change:** The `CommandItem` type stays the same -- presets added to a project are stored as `type: "preset"` with the appropriate `scope`.
+
+**Default preset change:** Per CMD-11 requirement, the default grid only shows `git pull` and `claude`. Other presets (`npm run build`, `npm run dev`) move to the categorized library.
+
+**PresetSelector component:**
+```typescript
+interface PresetSelectorProps {
+  onAddPreset: (preset: PresetCommand, scope: "global" | "project") => void;
+  scope: "global" | "project";
+  categories: PresetCategory[];
+}
+```
+
+This component renders as a compact row of two `<select>` elements (or shadcn Select components) plus an "Add" button, only visible in edit mode.
+
+## New/Modified Files Summary
+
+### New Files
+
+| File | Purpose | Dependencies |
+|------|---------|-------------|
+| `src/components/TitleBar.tsx` | Custom frameless window title bar | `@tauri-apps/api/window` |
+| `src/components/PresetSelector.tsx` | Dual dropdown for preset command selection | `src/lib/presets.ts` |
+| `src/hooks/useProjectInfo.ts` | Fetch folder size + git branch from Rust | `@tauri-apps/api/core` |
+| `src-tauri/src/commands/project.rs` | Project info commands (detect, size, git, open) | `walkdir` (new crate) |
+
+### Modified Files
+
+| File | Changes | Affected Features |
+|------|---------|-------------------|
+| `src-tauri/tauri.conf.json` | `decorations: false` | Frameless window |
+| `src-tauri/capabilities/default.json` | Add window permissions | Frameless window |
+| `src-tauri/Cargo.toml` | Add `walkdir` dependency | Folder size |
+| `src-tauri/src/lib.rs` | Register new commands | All Rust-side features |
+| `src-tauri/src/commands/mod.rs` | Add `pub mod project` | Project info |
+| `src-tauri/src/commands/shell.rs` | Fix command execution (use `.current_dir()`) | Bug fix |
+| `src/App.tsx` | Add TitleBar, adjust layout | Frameless window |
+| `src/components/MainArea.tsx` | Info bar, button mode switch, open folder, preset selector | Features 5, 6, 7 |
+| `src/components/Sidebar.tsx` | Remove duplicate title if merged to TitleBar | Frameless window |
+| `src/components/ProjectSettingsDialog.tsx` | Show detected icon/type, custom icon path | Icon detection |
+| `src/components/ui/dialog.tsx` | Add max-height, overflow | Modal auto-sizing |
+| `src/hooks/useProject.ts` | Call detect on add, preset system changes | Icon detection, presets |
+| `src/lib/presets.ts` | Expand to categorized library, change defaults | Preset system |
+| `src/lib/types.ts` | Add PresetCategory, PresetCommand types | Preset system |
+| `src/index.css` | TitleBar styles | Frameless window |
+
+## Suggested Build Order
+
+Based on dependency analysis -- features that other features depend on should be built first:
+
+```
+Phase 1: Bug Fix (BLOCKS EVERYTHING)
+  Feature 1: Fix command execution error
+  |-- WHY FIRST: Core functionality broken, all testing depends on it
+  |-- Risk: LOW (isolated change in shell.rs)
+  |-- No dependencies on other features
+
+Phase 2: Window Shell (INDEPENDENT)
+  Feature 2: Frameless window + custom title bar
+  |-- WHY EARLY: Layout restructure affects all subsequent UI work
+  |-- Risk: MEDIUM (layout changes touch App.tsx, Sidebar.tsx)
+  |-- Must be done before other UI features that depend on layout
+
+Phase 3: Rust Backend Expansion (PARALLEL SAFE)
+  Feature 3: Project icon auto-detection (Rust command)
+  Feature 6: Folder size + Git branch (Rust commands)
+  Feature 5 (partial): Open folder command (Rust command)
+  |-- WHY PARALLEL: All are new Rust commands with no frontend coupling
+  |-- Risk: LOW (additive changes, no existing code modification)
+  |-- New file: src-tauri/src/commands/project.rs
+
+Phase 4: Frontend Integration (SEQUENTIAL)
+  Feature 4: Modal auto-sizing
+  |-- WHY FIRST in frontend: Fixes UX bug in dialogs used by later features
+  |-- Risk: LOW (CSS change in dialog.tsx)
+
+  Feature 3 (frontend): Icon detection UI integration
+  Feature 5 (UI): Button mode switch + open folder button
+  Feature 6 (frontend): Info bar display
+  |-- Risk: MEDIUM (MainArea.tsx gets multiple changes)
+  |-- NOTE: These all modify MainArea.tsx, so they should be sequential
+
+Phase 5: Preset System (LAST)
+  Feature 7: Preset command system
+  |-- WHY LAST: Depends on stable MainArea layout + dialog behavior
+  |-- Risk: MEDIUM (largest change surface: new types, new component, preset rewrite)
+  |-- Changes presets.ts, types.ts, MainArea.tsx, new PresetSelector.tsx
+```
+
+**Dependency graph:**
+```
+Feature 1 (bug fix)
+    |
+    v
+Feature 2 (frameless window)
+    |
+    +-------------------+
+    |                   |
+    v                   v
+Feature 3 (Rust)    Feature 6 (Rust)    Feature 5 partial (Rust)
+    |                   |                   |
+    +-------------------+-------------------+
+                        |
+                        v
+              Feature 4 (modal sizing)
+                        |
+                        v
+              Feature 3 (UI) + Feature 5 (UI) + Feature 6 (UI)
+                        |
+                        v
+              Feature 7 (preset system)
+```
+
+## Rust Command Registration Change
+
+Current `lib.rs`:
 ```rust
-// 方案 A: 使用 cmd.exe（最广泛兼容）
-Command::new("cmd")
-    .args(["/k", &format!("cd /d \"{}\" && {}", path, cmd)])
-    .spawn()?;
-
-// 方案 B: 优先使用 Windows Terminal（如果已安装）
-// wt.exe 默认从用户 profile 启动目录开始
-Command::new("wt")
-    .args(["cmd", "/k", &format!("cd /d \"{}\" && {}", path, cmd)])
-    .spawn()?;
+.invoke_handler(tauri::generate_handler![
+    commands::shell::execute_command,
+])
 ```
 
-### Pattern 4: 安全 Capability 配置
+After all features:
+```rust
+.invoke_handler(tauri::generate_handler![
+    commands::shell::execute_command,
+    commands::project::detect_project_info,
+    commands::project::get_folder_size,
+    commands::project::get_git_branch,
+    commands::project::open_folder,
+])
+```
 
-**What:** 在 `src-tauri/capabilities/default.json` 中显式声明允许的 Shell 命令范围，遵循最小权限原则。由于用户可以自定义指令（动态命令），需要使用通配验证器。
+New module `commands/project.rs` houses all project-related system commands. This follows the existing pattern of `commands/shell.rs` for shell-related commands.
 
-**When:** 配置 Shell 插件权限时。
+## New Crate Dependency
 
-**Example:**
+| Crate | Version | Purpose | Why |
+|-------|---------|---------|-----|
+| `walkdir` | 2.x | Robust directory traversal for folder size | Handles symlinks, permission errors, deep recursion. Pure `std::fs` would be fragile for large project directories with `node_modules`, `target/`, etc. |
+
+No other new dependencies needed. All other features use existing crates (`serde`, `serde_json`, `std::process::Command`) or frontend-only changes.
+
+## Capabilities/Permissions Change
+
+Current `capabilities/default.json`:
 ```json
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "main-capability",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default", "store:default"]
+}
+```
+
+After frameless window feature:
+```json
+{
   "permissions": [
     "core:default",
-    "store:default",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        {
-          "name": "cmd",
-          "cmd": "cmd",
-          "args": true
-        }
-      ]
-    }
+    "core:window:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-close",
+    "core:window:allow-toggle-maximize",
+    "dialog:default",
+    "store:default"
   ]
 }
 ```
 
+No additional shell or FS permissions needed because the new Rust commands use `std::process::Command` and `std::fs` directly (not through Tauri plugins), and the Tauri commands are registered via `invoke_handler` which bypasses the capability system.
+
+## Patterns to Follow
+
+### Pattern 1: Tauri Command Module Organization
+
+**What:** Group related Rust commands into separate module files under `commands/`.
+
+**When:** Adding new system-level operations.
+
+**Example:**
+```
+src-tauri/src/commands/
+  mod.rs          -- pub mod shell; pub mod project;
+  shell.rs        -- execute_command, build_full_command
+  project.rs      -- detect_project_info, get_folder_size, get_git_branch, open_folder
+```
+
+### Pattern 2: Frontend Data-Fetching Hook
+
+**What:** Encapsulate Rust invoke calls in dedicated hooks that manage loading/error state.
+
+**When:** Fetching data from Rust backend that is not part of the core store-managed state.
+
+**Example:**
+```typescript
+// useProjectInfo.ts
+function useProjectInfo(projectPath: string | null) {
+  const [info, setInfo] = useState({ folderSize: null, gitBranch: null, loading: false });
+
+  useEffect(() => {
+    if (!projectPath) return;
+    setInfo(prev => ({ ...prev, loading: true }));
+    Promise.all([
+      invoke<number>("get_folder_size", { path: projectPath }),
+      invoke<string | null>("get_git_branch", { path: projectPath }),
+    ]).then(([size, branch]) => {
+      setInfo({ folderSize: size, gitBranch: branch, loading: false });
+    });
+  }, [projectPath]);
+
+  return info;
+}
+```
+
+### Pattern 3: current_dir() Over cd /d
+
+**What:** Always use `std::process::Command::current_dir()` instead of embedding `cd /d` in command strings.
+
+**When:** Spawning any process that needs to run in a specific directory.
+
+**Why:** Avoids all Windows path quoting issues with spaces, CJK characters, and special characters. The OS sets the working directory before the process starts, so no shell escaping is needed.
+
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: 在前端直接执行 Shell 命令
+### Anti-Pattern 1: Calculating Folder Size Synchronously on UI Thread
 
-**What:** 通过 `@tauri-apps/plugin-shell` 的 JavaScript API 直接在前端调用 `Command.create()` 执行命令。
+**What:** Running folder size calculation in the main Tauri event loop.
 
-**Why bad:** 绕过了 Rust 后端的验证层，无法对路径和命令进行安全检查。前端代码暴露在 WebView 中，更容易被注入攻击。混合了关注点，导致前端逻辑变复杂。
+**Why bad:** Large directories (node_modules) can take seconds to traverse, freezing the UI.
 
-**Instead:** 所有 Shell 执行请求通过 `invoke()` 发送到 Rust 后端，在 Rust 侧进行路径验证和命令构建后再执行。
+**Instead:** Use `#[tauri::command] async fn` which runs on a separate thread. Add a timeout to prevent hanging on network drives or broken symlinks.
 
-### Anti-Pattern 2: 使用 Store Plugin 存储大量二进制数据
+### Anti-Pattern 2: Polling Folder Size / Git Branch
 
-**What:** 在 Store 的 JSON 文件中存储大块数据（如 Base64 编码的图标、长日志）。
+**What:** Using `setInterval` to periodically re-fetch folder size and git branch.
 
-**Why bad:** Store Plugin 底层是 JSON 文件，每次修改会重写整个文件。大量数据会导致读写性能下降。
+**Why bad:** Wastes filesystem I/O. These values change slowly (folder size) or only on git operations (branch).
 
-**Instead:** 只存储结构化元数据（项目信息、指令配置）。图标使用系统图标或轻量级 SVG 标识符。日志不需要持久化。
+**Instead:** Fetch once on project selection. Provide a manual refresh button if needed.
 
-### Anti-Pattern 3: 使用内嵌终端模拟器
+### Anti-Pattern 3: Adding Heavy Rust Crate Dependencies for Simple Detection
 
-**What:** 在 WebView 中用 xterm.js 等库实现终端模拟器，捕获 stdout/stderr 显示在 UI 中。
+**What:** Using `project-detect` or similar crates for project type detection.
 
-**Why bad:** 大幅增加实现复杂度（需要处理 PTY、ANSI 转义码、输入输出流、窗口大小调整）。用户体验不如专用终端工具（Windows Terminal 支持 tab、分屏、主题等）。违反项目范围定义。
+**Why bad:** Over-engineering. EasyPack only needs to check if a few files exist (package.json, Cargo.toml, etc.), which is trivially done with `std::fs::metadata`.
 
-**Instead:** 在外部系统终端（cmd.exe / Windows Terminal）中执行命令，让用户使用已有的终端工具。
+**Instead:** Direct `std::fs::metadata(path).is_ok()` checks for known marker files.
 
-### Anti-Pattern 4: Rust 后端管理前端 UI 状态
+### Anti-Pattern 4: Mixing Preset Data with User Data in Store
 
-**What:** 把所有状态（包括 UI 选中状态、展开/折叠状态）都通过 Tauri 的 `State<Mutex<T>>` 在 Rust 侧管理。
+**What:** Storing the full categorized preset library in the Store JSON file.
 
-**Why bad:** 每次状态更新都需要跨 IPC 通信，增加延迟。前端框架（Svelte/Solid）已经有优秀的响应式系统来管理 UI 状态。
+**Why bad:** Presets are static data defined in code. Storing them duplicates data and makes updates harder.
 
-**Instead:** Rust 只管理系统级状态（如果需要），前端 UI 状态完全在前端框架内管理。持久化数据通过 Store Plugin 直接从前端读写。
-
-## Build Order (Component Dependencies)
-
-组件构建顺序基于依赖关系：
-
-```
-1. 项目脚手架 & 基础配置
-   |-- Tauri 2.x 项目初始化
-   |-- 前端框架选择 & 配置（Svelte/Solid）
-   |-- 插件安装（shell, store）
-   |-- Capability 权限配置
-   |
-   v
-2. 持久化层（Store Plugin 集成）
-   |-- 定义数据模型（Project, Command）
-   |-- 实现 CRUD 操作（load/save/get/set）
-   |-- 验证数据读写可靠性
-   |
-   v
-3. Rust 后端命令系统
-   |-- execute_command（核心：在外部终端执行命令）
-   |-- validate_path（验证项目路径有效性）
-   |-- 单元测试
-   |
-   v
-4. 前端状态管理层
-   |-- 响应式 Store（projects, commands, selectedProject）
-   |-- 与 Store Plugin 的同步逻辑
-   |
-   v
-5. UI 组件层
-   |-- Sidebar 组件（项目列表、添加/删除）
-   |-- CardGrid 组件（指令卡片网格）
-   |-- CommandCard 组件（单个指令按钮）
-   |-- Dialog 组件（添加项目、添加自定义指令）
-   |
-   v
-6. 集成 & 完善
-   |-- 全局默认指令预设
-   |-- 项目专属指令覆盖
-   |-- 错误处理 & 用户反馈
-   |-- UI 打磨（动画、响应式布局）
-```
-
-**构建顺序说明：**
-- **层 1 是所有后续层的基础**：没有项目脚手架和权限配置，后续开发无法进行
-- **层 2 不依赖层 3**：Store Plugin 可以从前端直接使用，不需要 Rust 后端参与
-- **层 3 不依赖层 2**：命令执行系统独立于数据持久化
-- **层 4 依赖层 2**：状态管理需要能读写持久化数据
-- **层 5 依赖层 3 和层 4**：UI 需要调用命令和读取状态
-- **层 6 依赖所有前置层**：集成完善需要全部组件就位
+**Instead:** Only store user-added commands (custom + selected presets converted to CommandItem). The preset library is hardcoded in `presets.ts` and always reflects the latest version.
 
 ## Scalability Considerations
 
-| Concern | At 10 projects | At 100 projects | At 1000+ projects |
-|---------|---------------|-----------------|-------------------|
-| Store 文件读写 | JSON 全量读写，无感知 | JSON 全量读写，仍可接受（数据量仍小） | 考虑分片存储或 SQLite（但个人工具不太可能到这个量级） |
-| UI 渲染 | 侧边栏直接渲染全部项目 | 考虑虚拟滚动或搜索过滤 | 必须虚拟滚动 + 搜索 + 分组 |
-| Shell 命令启动 | 每次一个终端窗口 | 无影响 | 无影响（每次点击独立终端进程） |
-| 内存占用 | WebView 基础 ~30-40MB | 增长极小（纯文本数据） | 增长仍小（除非图标等资源） |
-
-对于 EasyPack 这类个人开发者工具，实际使用规模通常在 5-50 个项目之间，上述架构完全可以应对，无需过早优化。
+| Concern | Current (5-50 projects) | Growth (100+ projects) | Mitigation |
+|---------|------------------------|------------------------|------------|
+| Folder size calculation | Instant per project | Could be slow with many large projects | Cache results, lazy load, skip hidden dirs |
+| Git branch detection | Fast (git rev-parse) | Fast (no scalability concern) | N/A |
+| Preset library size | ~20 presets across 5 categories | Could grow to 50+ | Virtualize dropdown, search filter |
+| Frameless window perf | No impact | No impact | N/A |
+| Store JSON size | <100KB | Still manageable | If needed, split per-project data into separate keys (already done for projectCommands) |
 
 ## Sources
 
-- [Tauri v2 Architecture](https://v2.tauri.app/concept/architecture/) -- 官方架构概述 (HIGH confidence)
-- [Tauri v2 Project Structure](https://v2.tauri.app/start/project-structure/) -- 项目结构文档 (HIGH confidence)
-- [Calling Rust from the Frontend](https://v2.tauri.app/develop/calling-rust/) -- Command 系统文档 (HIGH confidence)
-- [Shell Plugin](https://v2.tauri.app/plugin/shell/) -- Shell 插件 API 与权限配置 (HIGH confidence)
-- [Store Plugin](https://v2.tauri.app/plugin/store/) -- 持久化存储 API (HIGH confidence)
-- [State Management](https://v2.tauri.app/develop/state-management/) -- Tauri 状态管理文档 (HIGH confidence)
-- [StackOverflow: Open terminal with default command](https://stackoverflow.com/questions/74872011/can-tauri-open-the-terminal-with-a-default-command) -- cmd.exe /k 模式验证 (MEDIUM confidence, 社区验证)
-- [CrabNebula: Best UI Libraries for Tauri](https://crabnebula.dev/blog/the-best-ui-libraries-for-cross-platform-apps-with-tauri/) -- 前端框架选择参考 (MEDIUM confidence)
-- [GitHub Issue #11513: spawn() hangs in production](https://github.com/tauri-apps/tauri/issues/11513) -- 已知生产环境问题 (HIGH confidence, 官方 issue)
+- [Tauri v2 Window Customization](https://v2.tauri.app/learn/window-customization/) -- Frameless window setup, data-tauri-drag-region, window permissions -- HIGH confidence
+- [Tauri v2 Configuration Reference](https://v2.tauri.app/reference/config/) -- Window config options (decorations, shadow) -- HIGH confidence
+- [GitHub microsoft/terminal #9313](https://github.com/microsoft/terminal/issues/9313) -- wt.exe quoting behavior with spaces -- HIGH confidence
+- [StackOverflow: ExternalTerminal path spaces 0x80070002](https://github.com/microsoft/vscode-cpptools/issues/11970) -- cmd.exe path quoting causing ERROR_FILE_NOT_FOUND -- HIGH confidence
+- [Rust walkdir crate](https://docs.rs/walkdir) -- Directory traversal for folder size -- HIGH confidence
+- [fs_extra::dir::get_size](https://docs.rs/fs_extra/latest/fs_extra/dir/fn.get_size.html) -- Alternative to walkdir for folder size -- HIGH confidence
+- [StackOverflow: Get current git branch](https://stackoverflow.com/questions/6245570/how-do-i-get-the-current-branch-name-in-git) -- `git rev-parse --abbrev-ref HEAD` -- HIGH confidence
+- [Tauri v2 Calling Rust from Frontend](https://v2.tauri.app/develop/calling-rust/) -- Command registration pattern -- HIGH confidence
+- [project-detect crate](https://docs.rs/project-detect) -- Considered and rejected (anti-pattern 3) -- MEDIUM confidence

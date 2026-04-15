@@ -1,165 +1,164 @@
 # Project Research Summary
 
-**Project:** EasyPack
-**Domain:** Tauri 2.x Windows 桌面项目快捷指令启动器
-**Researched:** 2026-04-10
+**Project:** EasyPack v1.1
+**Domain:** Windows desktop project launcher -- Tauri 2 + React 19
+**Researched:** 2026-04-15
 **Confidence:** HIGH
 
 ## Executive Summary
 
-EasyPack 是一个面向 Windows 个人开发者的项目快捷指令启动器，核心交互是"选中项目 -> 点击卡片 -> 在系统终端执行命令"。这类工具在生态中存在明显空白：PowerToys Run 专注通用搜索，DevToys 是开发者工具箱，而市面上没有将"项目感知"与"自定义命令卡片"结合的产品。研究一致推荐使用 Tauri 2.x + React 19 + Vite 6 + Tailwind CSS 4 + shadcn/ui 的技术栈，所有组件间兼容性已经过验证。
+EasyPack v1.1 是在已有 MVP 基础上进行的体验增强迭代。核心目标是修复阻断所有用户的关键 Bug（命令执行 0x80070002 错误），并在此基础上提升窗口外观、添加智能特性（图标自动识别、项目信息展示）和效率工具（预设指令系统）。技术栈保持完全不变（Tauri 2.10 + React 19 + TypeScript 5.7 + Vite 6 + Tailwind CSS 4 + shadcn/ui），仅新增一个 Rust crate（walkdir 2.5.0）用于文件夹大小计算。
 
-关键架构决策是在 Rust 后端使用 `std::process::Command` 在外部终端执行命令（而非 Tauri Shell Plugin 的 JS API），这既满足了"在可见终端窗口中执行"的需求，也规避了 Shell Plugin 的 CVE-2025-31477 安全风险和复杂的 scope 配置。数据持久化使用 `tauri-plugin-store` 配合 `autoSave` 参数，适合本项目小数据量、低频写入的特点。
+研究得出的关键结论有三点。第一，命令执行 Bug 的根因已明确：Rust 的 `.args()` 在 Windows 上按 MSVCRT 规则自动转义参数，但 `cmd.exe` 使用自己的解析器，两套规则冲突导致路径引号被二次转义。修复方案是使用 `.current_dir()` 替代 `cd /d` 命令字符串拼接，彻底绕过引号转义问题（PITFALLS.md Pitfall 1，Rust 官方 issue #29494）。第二，无边框窗口是 v1.1 最大的布局变更（App.tsx 从单层 flex-row 变为 TitleBar + flex-row 双层结构），影响所有后续 UI 工作的开发基础，必须在其他 UI 特性之前完成（ARCHITECTURE.md Feature 2）。第三，预设指令系统是代码量最大的新特性，涉及 types、presets 数据、新组件和 MainArea 交互的多处联动，应放在最后以避免与布局变更冲突（FEATURES.md CMD-11）。
 
-主要风险集中在 Tauri 2 的权限/能力（Capabilities）模型配置和 Windows 路径处理。前者是社区公认的 Tauri 2 学习曲线最高点，配置遗漏会导致运行时权限错误且编译期不报错；后者在路径包含空格或中文时极易出错。两者都需要在项目初期建立正确的模式并持续验证。
+关键风险集中在 Windows 上 `decorations: false` 的已知行为（丢失 resize 能力和阴影，需 `shadow: true` 配合并验证四边拖拽行为）和 Rust 参数转义问题（已有明确解决方案：`.current_dir()` 或 `raw_arg()`）。两者均有详细的预防策略和社区验证。
 
 ## Key Findings
 
 ### Recommended Stack
 
-研究推荐经过验证的稳定版本组合，避免使用 2026.3 刚发布的 Vite 8 和 TypeScript 6.0（生态工具链尚未全面验证）。完整安装步骤已在 STACK.md 中给出。
+v1.1 不改变任何现有技术栈。唯一的新增依赖是 Rust 端的 `walkdir` crate (v2.5.0)，用于健壮地递归遍历目录以计算文件夹大小。前端不需要新增任何 npm 包 -- 预设系统的双下拉框使用 shadcn/ui 的 Select 组件（通过 `npx shadcn@latest add select` 脚手架生成，底层依赖 radix-ui 已在项目中）。Git 分支检测通过直接读取 `.git/HEAD` 文件实现，零依赖、零进程创建开销。
 
-**Core technologies:**
-- **Tauri 2.10.x**: 桌面应用框架（Rust 后端 + Web 前端） -- 安装包比 Electron 小 96%，本项目只需 Shell 命令执行 + 本地数据持久化，能力边界完全覆盖
-- **React 19.x**: 前端 UI 框架 -- shadcn/ui 原生支持，生态最成熟，组件化模型适合侧边栏 + 卡片网格的 UI 结构
-- **TypeScript 5.7.x**: 类型系统 -- 经过充分验证，与所有推荐库完全兼容；TS 6.0 生态尚未稳定
-- **Vite 6.x**: 前端构建工具 -- 经过一年验证，与 Tauri、React 19、Tailwind CSS v4 全面兼容无坑
-- **Tailwind CSS 4.x**: 原子化 CSS 框架 -- Oxide 引擎构建速度快 5x，CSS-first 配置零开箱即用，shadcn/ui 已官方支持
-- **shadcn/ui (latest)**: 预构建 UI 组件库 -- 源码直接复制到项目，完全可控，提供 Button、Dialog、Scroll Area 等本项目所需全部组件
-- **Rust 1.77.2+**: Tauri 后端语言 -- Shell Plugin 最低要求，推荐使用最新稳定版
+**新增内容:**
+- `walkdir` 2.5.0: 目录递归遍历 -- 处理符号链接和权限错误，393M+ 下载量，BurntSushi 维护
+- `src/components/ui/select.tsx`: shadcn Select 组件 -- 脚手架生成，非新 npm 依赖
+- `src/components/TitleBar.tsx`: 自定义标题栏 -- 纯 React 组件，使用已有 `@tauri-apps/api`
+- Tauri 配置变更: `decorations: false`, `shadow: true`, 4 个窗口权限
 
 ### Expected Features
 
-EasyPack 的竞品分析表明，市场上不存在"项目感知 + 自定义命令卡片 + 外部终端执行"三合一的工具。核心价值是填补这一空白。
-
 **Must have (table stakes):**
-- 项目列表侧边栏（添加/删除本地项目路径） -- 核心身份
-- 一键命令执行（在系统终端打开并运行） -- 即 THE product
-- 全局默认指令（build, start, git pull, git push, claude） -- 首次使用即有价值
-- 自定义指令创建（name + shell command string） -- 无此功能则工具是玩具
-- 按项目覆盖指令集（全局继承 + 项目专属覆盖） -- 不同项目不同构建工具
-- 本地 JSON 持久化 -- 重启不丢数据
-- 现代圆角卡片 UI -- 视觉身份
+- CMD-09: 修复命令执行 0x80070002 错误 -- 核心功能完全阻断，必须首先修复，复杂度 LOW
+- UI-08: 无边框窗口 + 自定义标题栏 -- 现代桌面应用标配，影响整体视觉定位，复杂度 MEDIUM
+- UI-09: 模态窗自适应大小 -- 小窗口下内容截断，基础可用性问题，复杂度 LOW
 
 **Should have (competitive):**
-- 深色/浅色主题 -- 开发者工具默认期望
-- 键盘导航 -- 强用户需求
-- 命令执行历史 -- 帮助回忆"上次跑了什么"
-- 命令分组/分类 -- 10+ 指令时的组织需求
-- 拖拽排序 -- 个性化排列
+- CMD-11: 预设指令系统（双下拉框）-- 降低配置成本，差异化竞争力，复杂度 HIGH
+- PROJ-07: 项目图标自动识别 -- 减少手动设置，提升智能感，复杂度 MEDIUM
+- CMD-10: 指令切换按钮化 + 打开文件夹 -- 提升操作效率和可用性，复杂度 LOW
 
 **Defer (v2+):**
-- 从 package.json 快速导入 -- 高价值但高复杂度
-- 导入/导出配置 -- 跨机器共享
-- 多终端配置支持 -- PowerShell / WSL / Git Bash
-- 全局热键呼出 -- PowerToys Run 式快捷访问
-- 批量执行 -- 跨项目运行"git pull"
+- PROJ-08: 文件夹大小 + Git 分支显示 -- 锦上添花，非核心路径，可考虑降级为可选
+- 实时文件监听、Windows Snap Layouts、git2 原生集成 -- 明确排除的特性（见 FEATURES.md Anti-Features）
 
 ### Architecture Approach
 
-EasyPack 采用经典 Tauri 2.x 分层架构：Rust 后端负责系统级操作（Shell 命令执行、路径验证），React 前端负责 UI 渲染和状态管理，通过 Tauri 的 `invoke` 命令系统桥接通信。数据持久化由前端直接通过 `tauri-plugin-store` 读写 JSON 文件，不需要经过 Rust 后端中转。
+v1.1 延续 v1.0 的分层架构（React 前端 + Rust 后端 + invoke 桥接），新增一个 Rust 命令模块 `commands/project.rs` 承载所有项目相关的系统操作。布局结构从单层 flex-row 变为 TitleBar + flex-row 的双层结构。新增 `useProjectInfo` hook 封装 Rust 数据获取逻辑，新增 `PresetSelector` 组件封装预设选择 UI。核心修复（CMD-09）使用 `.current_dir()` 替代 `cd /d` 字符串拼接，这是一个架构级决策 -- 以后所有需要指定工作目录的命令都应遵循此模式。
 
-**Major components:**
-1. **Rust Command Handlers** -- 路径验证、命令构建、通过 `std::process::Command` 在外部终端执行
-2. **前端 State Layer** -- 管理项目列表、指令列表、选中项目等响应式状态
-3. **Store Plugin 持久化层** -- JSON 文件读写，autoSave 100ms 防抖
-4. **UI 组件层** -- Sidebar（项目列表）、CommandGrid（卡片网格）、CommandCard（单个卡片）、Dialog（添加/编辑弹窗）
-5. **Capabilities 安全层** -- 声明式权限配置，最小权限原则
+**主要组件:**
+1. `commands/project.rs` (新建) -- detect_project_info, get_folder_size, get_git_branch, open_folder
+2. `TitleBar.tsx` (新建) -- 自定义窗口控制（拖拽、最小化、最大化、关闭）
+3. `PresetSelector.tsx` (新建) -- 双下拉框预设指令选择器
+4. `useProjectInfo.ts` (新建) -- 项目元数据获取 hook
+5. `shell.rs` (修改) -- 使用 `.current_dir()` 替代 `cd /d` 字符串拼接
 
 ### Critical Pitfalls
 
-1. **Shell 命令执行方式选错** -- 不要用 Shell Plugin 的 JS API，应在 Rust 后端用 `std::process::Command` 调用 `cmd.exe /C start cmd.exe /K` 在新终端窗口执行；Shell Plugin 曾有 CVE-2025-31477 RCE 漏洞
-2. **Capabilities 权限配置遗漏** -- Tauri 2 的三层安全模型（Permissions + Scopes + Capabilities）是社区公认最令人困惑的部分；配置遗漏导致运行时权限错误，编译期不报错
-3. **Windows 路径处理错误** -- 空格路径缺少引号包裹、中文路径编码、`PathBuf` 斜杠不一致、canonicalize 的 `\\?\` 前缀
-4. **数据持久化不设置 autoSave** -- 强制关闭应用会丢失数据；Store Plugin 默认只在优雅退出时保存
-5. **async 命令中使用借用类型或 std::sync::Mutex** -- 导致编译失败或死锁；应使用 owned 类型 + `tokio::sync::Mutex`
+1. **Rust `.args()` 与 cmd.exe 转义冲突 (0x80070002)** -- 使用 `.current_dir()` 设置进程工作目录，完全避免在命令字符串中嵌入路径。这是 Rust 在 Windows 上的已知长期问题（issue #29494，2015 年至今仍 open）
+2. **无边框窗口丢失 resize 和阴影** -- 必须设置 `shadow: true`，并验证四边和四角的拖拽调整大小是否正常工作。Tauri 2 在 Windows 上提供了原生 resize 支持，但需在 Windows 10 和 11 上实际验证
+3. **标题栏按钮被 data-tauri-drag-region 拦截** -- 按钮元素不得设置 `data-tauri-drag-region` 属性，必要时在按钮上调用 `e.stopPropagation()`
+4. **文件夹大小计算阻塞 UI** -- 必须使用 `spawn_blocking` 在独立线程执行，排除 node_modules/.git/target 等大型目录，结果缓存避免重复计算
+5. **预设指令 ID 迁移** -- 从索引 ID (`preset-0`) 改为语义化 ID (`preset-git-pull`)，需要数据迁移逻辑避免现有项目配置错乱
 
 ## Implications for Roadmap
 
-基于研究发现的依赖关系和风险分布，建议以下阶段结构：
+Based on research, suggested phase structure:
 
-### Phase 1: 项目脚手架与核心架构
-**Rationale:** 技术栈安装、权限配置、命令执行方式是所有后续功能的基础。6 个关键 Pitfall 中有 4 个在 Phase 1 就需要预防。
-**Delivers:** 可运行的 Tauri 应用骨架，点击按钮能在系统终端执行一条硬编码命令
-**Addresses:** 项目初始化、全局默认指令（硬编码版）
-**Avoids:** Shell 执行方式选错（Pitfall 1）、Capabilities 配置遗漏（Pitfall 2）、async 借用类型（Pitfall 5）、命令注册遗漏（Pitfall 6）
-**Stack:** Tauri 2.10.x + React 19 + Vite 6 + Tailwind CSS 4 + shadcn/ui 初始化
+### Phase 1: Fix Command Execution
+**Rationale:** 核心功能完全阻断，所有新特性的测试和验证都依赖命令能正常执行。这是零依赖的独立修复，风险最低。
+**Delivers:** 用户能正常点击指令卡片在终端执行命令
+**Addresses:** CMD-09 (执行修复)
+**Avoids:** Pitfall 1 (raw_arg 转义冲突) -- 使用 `.current_dir()` 方案完全规避
+**Research flag:** 无需额外研究 -- 根因明确（Rust issue #29494），修复方案已验证
 
-### Phase 2: 项目管理与数据持久化
-**Rationale:** 项目列表是产品核心身份，持久化是基本可靠性要求。路径处理在此阶段集中处理。
-**Delivers:** 侧边栏可添加/删除本地项目，项目和指令数据持久化保存，重启不丢失
-**Addresses:** 项目列表侧边栏、本地 JSON 持久化、自定义指令 CRUD
-**Avoids:** Windows 路径处理错误（Pitfall 3）、数据持久化策略选错（Pitfall 4）
-**Stack:** tauri-plugin-store（autoSave）、tauri-plugin-dialog（文件夹选择器）
+### Phase 2: Frameless Window + Custom Title Bar
+**Rationale:** 布局结构变更（App.tsx 从单层变双层）影响所有后续 UI 开发。必须在其他 UI 特性之前完成，避免反复调整布局。
+**Delivers:** 现代化的无边框窗口 + 自定义标题栏（拖拽、最小化、最大化、关闭）
+**Uses:** Tauri `decorations: false`, `shadow: true`, `data-tauri-drag-region`, `getCurrentWindow()` API
+**Implements:** TitleBar.tsx 组件, capabilities 权限更新, tauri.conf.json 配置变更
+**Avoids:** Pitfall 2 (丢失 resize/阴影), Pitfall 4 (按钮被拖拽拦截)
+**Research flag:** 需要实际测试 resize 行为 -- Tauri 2 在 Windows 上的 frameless resize 行为文档不够详细，需在 Windows 10 和 11 上验证
 
-### Phase 3: 指令卡片 UI 与命令执行集成
-**Rationale:** UI 组件层依赖状态管理层和命令执行系统的就绪。至此核心循环"选中项目 -> 点击卡片 -> 执行命令"完整闭环。
-**Delivers:** 卡片式指令网格，全局默认指令 + 按项目覆盖指令集，完整的一键执行体验
-**Addresses:** 现代圆角卡片 UI、全局默认指令、按项目覆盖指令、一键命令执行
-**Stack:** shadcn/ui 组件（Button, Dialog, Scroll Area, Tooltip）、lucide-react 图标
+### Phase 3: Rust Backend Expansion + Quick UI Fixes
+**Rationale:** 新增的 4 个 Rust 命令（detect_project_info, get_folder_size, get_git_branch, open_folder）彼此独立，可并行开发。模态窗自适应是纯 CSS 修复，风险极低。
+**Delivers:** 项目信息检测能力（类型、大小、Git 分支）+ 文件夹打开功能 + 模态窗自适应
+**Uses:** walkdir crate, std::fs::metadata, std::fs::read_to_string (.git/HEAD 解析)
+**Implements:** commands/project.rs 模块, useProjectInfo hook
+**Addresses:** UI-09 (模态窗自适应), PROJ-07 (图标识别后端), PROJ-08 (项目信息后端), CMD-10 partial (打开文件夹后端)
+**Avoids:** Pitfall 3 (文件夹计算阻塞 UI) -- 使用 spawn_blocking, Pitfall 5 (Git 非 Git 目录报错) -- 直接读 .git/HEAD 优雅降级
+**Research flag:** 标准模式 -- walkdir 和文件检测都是成熟的 Rust 模式
 
-### Phase 4: 体验增强
-**Rationale:** 核心功能闭环后，添加开发者期望的体验优化。这些功能独立性强，可按需添加。
-**Delivers:** 深色/浅色主题、键盘导航、命令执行历史、命令分组
-**Addresses:** 深色/浅色主题、键盘导航、命令执行历史、命令分组/分类
-**Stack:** Tailwind CSS dark 变体、React focus management
+### Phase 4: Frontend UI Integration
+**Rationale:** 按钮化切换、打开文件夹按钮、图标识别 UI、项目信息展示都修改 MainArea.tsx，必须顺序执行避免冲突。
+**Delivers:** 按钮化指令切换 + 打开文件夹按钮 + 图标自动识别 UI + 项目信息栏
+**Implements:** MainArea.tsx 按钮化改造, ProjectSettingsDialog 图标检测展示, Sidebar 标题去重
+**Addresses:** CMD-10 (按钮化切换 + 打开文件夹), PROJ-07 (图标识别前端), PROJ-08 (项目信息前端)
+**Avoids:** Pitfall 7 (图标检测报错) -- 使用 exists() 检查, Pitfall 11 (串行加载) -- 分层渲染 + 异步加载
+**Research flag:** 标准模式 -- 纯 React UI 集成，模式明确
+
+### Phase 5: Preset Command System
+**Rationale:** 代码量最大的新特性（types、presets 数据、新组件、MainArea 交互联动），依赖稳定的布局和对话框架构，放在最后避免与其他 UI 变更冲突。
+**Delivers:** 分类的预设指令库（Git/NPM/Python/pip/Rust）+ 双下拉框选择器
+**Implements:** PresetSelector.tsx, presets.ts 重写, types.ts 扩展, MainArea 集成
+**Addresses:** CMD-11 (预设指令系统)
+**Avoids:** Pitfall 8 (命令不准确), Pitfall 12 (ID 迁移) -- 语义化 ID + 迁移逻辑
+**Research flag:** 需要设计决策 -- 是否实现 package.json/Cargo.toml 动态检测来过滤预设（增加复杂度但提升准确性）
 
 ### Phase Ordering Rationale
 
-- Phase 1 必须先于所有其他阶段：安装了错误的依赖（如 Shell Plugin 的 JS API 代替 Rust Command）会导致后续大规模返工
-- Phase 2 和 Phase 3 有部分并行可能：持久化层和 UI 组件可以独立开发，但集成时需要串行
-- Phase 4 完全独立：体验增强功能互不依赖，可按优先级逐个添加
-- 路径验证放在 Phase 2 而非 Phase 3：项目添加时就应验证路径，不应延迟到命令执行时
+- Phase 1 必须最前：核心功能阻断，所有后续测试依赖它
+- Phase 2 必须在 UI 特性之前：布局变更影响所有 UI 代码的基础结构
+- Phase 3 和 4 可部分重叠：Rust 后端扩展不依赖 UI 变更，但前端集成必须等 Rust 命令就绪
+- Phase 5 必须最后：涉及最多文件的联动修改，依赖稳定的布局和对话框架构
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1:** Shell 命令执行的具体实现（`cmd.exe` vs `wt.exe` 检测逻辑、`/K` vs `/C` 参数组合）需要在编码时验证；Capabilities 完整配置需对照 Tauri 文档逐项确认
-- **Phase 2:** `tauri-plugin-store` 的 `autoSave` 行为在强制关闭场景下的实际表现需要测试验证；Store Plugin 的 `LazyStore` API 是否与文档描述一致需确认
+- **Phase 2:** 无边框窗口在 Windows 10 vs 11 上的 resize 行为差异 -- 需实际测试验证，文档不够详细。Issue #7900 请求的 `data-tauri-drag-resize-region` 仍未实现
+- **Phase 5:** 预设指令是否需要 package.json/Cargo.toml 动态检测 -- 需在计划阶段做产品决策
 
 Phases with standard patterns (skip research-phase):
-- **Phase 3:** shadcn/ui 组件使用、Tailwind CSS 卡片布局是标准模式，文档充分
-- **Phase 4:** 深色主题、键盘导航是 React 应用的常见模式，无需专门研究
+- **Phase 1:** 根因明确（Rust issue #29494），修复方案（`.current_dir()`）已验证
+- **Phase 3:** walkdir 和文件系统检测是成熟 Rust 模式
+- **Phase 4:** 纯 React UI 集成，模式清晰
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | 所有推荐技术均有官方文档和版本兼容性验证，多个来源交叉确认 |
-| Features | HIGH | 竞品分析覆盖 6 个同类工具，MVP 定义与 PROJECT.md 需求完全对齐，优先级矩阵清晰 |
-| Architecture | HIGH | Tauri 2.x 官方架构文档详尽，组件边界和数据流设计有官方最佳实践支撑 |
-| Pitfalls | HIGH | 6 个关键 Pitfall 均有官方文档或社区 issue 验证，包含 CVE 编号和具体代码示例 |
+| Stack | HIGH | 无新技术引入，唯一新增 walkdir 是成熟 crate（393M+ 下载），所有来源为官方文档和 crates.io |
+| Features | HIGH | 7 个特性均有详细实现方案和依赖分析，来源为 Tauri 官方文档、Rust issue、社区案例 |
+| Architecture | HIGH | 在现有架构上扩展，变更边界清晰，新模块模式与现有代码一致。依赖图完整 |
+| Pitfalls | HIGH | 5 个关键陷阱均有根因分析、预防代码和检测方法，来源为 Rust/Tauri 官方 issue |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Shell 命令执行细节：** `cmd.exe` 启动新终端窗口的具体参数组合（`/C start cmd.exe /K` vs `cmd.exe /K`）需要在实际 Windows 环境中测试验证，特别是 Windows Terminal 检测逻辑
-- **Store Plugin 数据迁移：** 如果后续从 `tauri-plugin-store` 迁移到自定义 Rust 持久化方案，迁移策略未研究
-- **生产构建验证：** Pitfalls 中提到的 release 模式下 capabilities 是否生效、`#![windows_subsystem = "windows"]` 配置需要在首次构建时验证
-- **应用签名和分发：** Windows 应用的代码签名、MSI 安装包配置未在本次研究中覆盖，属于发布阶段的前置工作
+- **无边框窗口 resize 行为:** Tauri 2 在 `decorations: false` 下的 Windows resize 行为文档不够明确，Issue #7900 请求的 `data-tauri-drag-resize-region` 仍未实现。需在 Phase 2 开始时做原型验证，确认是否需要手动实现 CSS resize 边框
+- **预设数据迁移:** 现有项目使用 `preset-0` 到 `preset-3` 作为 ID，v1.1 改变默认预设后需要数据迁移逻辑，迁移方案的完整性需要在 Phase 5 计划阶段仔细设计
+- **Windows 10 兼容性:** `shadow: true` 在 Windows 10 上的行为可能与 Windows 11 不同，Issue #8632 报告了阴影渲染问题，需在 Phase 2 测试矩阵中覆盖
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Tauri v2 Official Docs](https://v2.tauri.app/) -- 架构、插件、权限、安全
-- [Tauri Shell Plugin](https://v2.tauri.app/plugin/shell/) -- Shell 命令执行 API
-- [Tauri Store Plugin](https://v2.tauri.app/plugin/store/) -- 持久化存储 API
-- [Tailwind CSS v4 Blog](https://tailwindcss.com/blog/tailwindcss-v4) -- v4 特性与兼容性
-- [shadcn/ui Tailwind v4 Docs](https://ui.shadcn.com/docs/tailwind-v4) -- 组件库兼容性
-- [React Versions](https://react.dev/versions) -- 版本信息
-- [CVE-2025-31477](https://www.sentinelone.com/vulnerability-database/cve-2025-31477/) -- Shell Plugin 安全漏洞
+- [Tauri v2 Window Customization](https://v2.tauri.app/learn/window-customization/) -- 无边框窗口、data-tauri-drag-region、权限配置
+- [Tauri v2 Configuration Reference](https://v2.tauri.app/reference/config/) -- 窗口配置选项
+- [rust-lang/rust#29494](https://github.com/rust-lang/rust/issues/29494) -- Windows 参数转义问题根因（2015 年至今 open）
+- [walkdir crate v2.5.0](https://crates.io/crates/walkdir) -- 393M+ 下载，BurntSushi 维护
+- [shadcn/ui Select Component](https://ui.shadcn.com/docs/components/select) -- 双下拉框实现
 
 ### Secondary (MEDIUM confidence)
-- [tauri-ui by agmmnn](https://github.com/agmmnn/tauri-ui) -- Tauri + shadcn/ui 脚手架
-- [Tauri 2.0 Learning Curve - Reddit](https://www.reddit.com/r/tauri/comments/1h4nee8/tauri_20_is_a_nightmare_to_learn/) -- Capabilities 配置痛点
-- [PowerToys Command Palette](https://learn.microsoft.com/en-us/windows/powertoys/command-palette/overview) -- 竞品分析
-- [DevToys Official Site](https://devtoys.app/) -- 竞品分析
-- [Evil Martians: Tauri Sidecar](https://evilmartians.com/chronicles/making-desktop-apps-with-revved-up-potential-rust-tauri-sidecar) -- 外部进程执行模式
+- [Tauri Issue #8632](https://github.com/tauri-apps/tauri/issues/8632) -- 透明窗口 + 阴影渲染 bug
+- [Tauri Issue #11605](https://github.com/tauri-apps/tauri/issues/11605) -- 未聚焦窗口拖拽 bug
+- [Microsoft Terminal Issue #4228](https://github.com/microsoft/terminal/issues/4228) -- wt.exe 0x80070002 错误
+- [Stack Overflow: cmd /C with spaces in Rust](https://stackoverflow.com/questions/44757893/cmd-c-doesnt-work-in-rust-when-command-includes-spaces) -- Rust 参数转义解决方案
+- [SS64: CMD escape characters](https://ss64.com/nt/syntax-esc.html) -- cmd.exe 转义规则参考
 
 ### Tertiary (LOW confidence)
-- [Tauri v2 + React 19 Real-World Example](https://dev.to/purpledoubled/how-i-built-a-desktop-ai-app-with-tauri-v2-react-19-in-2026-1g47) -- 社区案例参考
+- [Tauri Issue #7900](https://github.com/tauri-apps/tauri/issues/7900) -- data-tauri-drag-resize-region 功能请求（未实现）
+- [Tauri Issue #14859](https://github.com/tauri-apps/tauri/issues/14859) -- decorations: false + shadow 边框 bug
 
 ---
-*Research completed: 2026-04-10*
+*Research completed: 2026-04-15*
 *Ready for roadmap: yes*
