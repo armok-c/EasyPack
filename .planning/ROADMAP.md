@@ -73,7 +73,7 @@ Plans:
   2. 用户可编辑和删除已有的自定义指令
   3. 用户可为特定项目设置独立指令集，覆盖全局默认指令
   4. 自定义指令（全局和项目级）在重启应用后完整恢复
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 Plans:
@@ -89,13 +89,13 @@ Plans:
   1. 用户可为项目设置图标和颜色标记，设置后在侧边栏项目中展示
   2. 用户可拖拽调整项目在侧边栏中的排序
   3. 用户可通过键盘上下箭头切换项目、Enter 键选中项目、快捷键触发指令卡片执行
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 Plans:
-- [ ] 05-01: 项目图标与颜色标记设置
-- [ ] 05-02: 拖拽排序功能
-- [ ] 05-03: 键盘导航（上下切换、Enter 选中、快捷键触发）
+- [ ] 05-01-PLAN.md — 项目图标与颜色标记（数据层 + 右键菜单 + 设置弹窗 + 侧边栏展示）
+- [ ] 05-02-PLAN.md — 拖拽排序（@dnd-kit/react 安装 + 拖拽手柄 + reorderProjects）
+- [ ] 05-03-PLAN.md — 键盘导航（useKeyboard hook + roving tabindex + 数字键快捷 + Tab 区域切换）
 
 ## Progress
 
@@ -108,4 +108,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. 项目侧边栏与持久化 | 2/2 | Complete   | 2026-04-12 |
 | 3. 指令卡片与核心交互 | 0/1 | Planning complete | - |
 | 4. 自定义指令与项目级覆盖 | 2/3 | In Progress | - |
-| 5. 项目个性化与键盘增强 | 0/3 | Not started | - |
+| 5. 项目个性化与键盘增强 | 0/3 | Planning complete | - |
