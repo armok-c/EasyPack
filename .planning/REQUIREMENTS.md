@@ -57,17 +57,30 @@ Deferred to future milestones.
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap creation) | | |
+| FIX-01 | Phase 6 | Pending |
+| FIX-02 | Phase 6 | Pending |
+| WIN-01 | Phase 7 | Pending |
+| WIN-02 | Phase 7 | Pending |
+| WIN-03 | Phase 7 | Pending |
+| PROJ-07 | Phase 8 | Pending |
+| PROJ-08 | Phase 8 | Pending |
+| PROJ-09 | Phase 8 | Pending |
+| PROJ-10 | Phase 8 | Pending |
+| UI-09 | Phase 8 | Pending |
+| PROJ-11 | Phase 9 | Pending |
+| UI-10 | Phase 9 | Pending |
+| PRE-01 | Phase 10 | Pending |
+| PRE-02 | Phase 10 | Pending |
+| PRE-03 | Phase 10 | Pending |
+| PRE-04 | Phase 10 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-15*
-*Last updated: 2026-04-15 after initial definition*
+*Last updated: 2026-04-15 after roadmap creation*
