@@ -23,6 +23,8 @@ function App() {
     deleteCommand,
     enableProjectCommands,
     disableProjectCommands,
+    // Phase 5: project icon & color
+    updateProjectStyle,
   } = useProject();
 
   return (
@@ -33,6 +35,7 @@ function App() {
         onAddProject={selectFolder}
         onSelectProject={selectProject}
         onRemoveProject={removeProject}
+        onUpdateStyle={updateProjectStyle}
       />
       <MainArea
         currentProject={currentProject}
