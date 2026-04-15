@@ -358,6 +358,15 @@ export function useProject() {
     [projects, store]
   );
 
+  // Phase 5 Plan 02: reorder projects via drag-and-drop
+  const reorderProjects = useCallback(
+    async (reordered: ProjectItem[]) => {
+      setProjects(reordered);
+      await store?.set(PROJECTS_KEY, reordered);
+    },
+    [store]
+  );
+
   return {
     // Legacy interface (backward compatible until Plan 02 migration)
     currentProject, // ProjectItem | null (compatible with old Project | null)
@@ -387,5 +396,8 @@ export function useProject() {
 
     // Phase 5 Plan 01: project icon & color
     updateProjectStyle, // (projectId: string, style: { icon?: string; color?: string }) => Promise<void>
+
+    // Phase 5 Plan 02: drag-and-drop reorder
+    reorderProjects, // (reordered: ProjectItem[]) => Promise<void>
   };
 }

@@ -25,6 +25,8 @@ function App() {
     disableProjectCommands,
     // Phase 5: project icon & color
     updateProjectStyle,
+    // Phase 5: drag-and-drop reorder
+    reorderProjects,
   } = useProject();
 
   return (
@@ -36,6 +38,7 @@ function App() {
         onSelectProject={selectProject}
         onRemoveProject={removeProject}
         onUpdateStyle={updateProjectStyle}
+        onReorderProjects={reorderProjects}
       />
       <MainArea
         currentProject={currentProject}
