@@ -12,6 +12,8 @@ export interface ProjectItem {
   name: string;     // folder name (per D-03)
   path: string;     // original full path (preserves original casing)
   addedAt: number;  // Date.now() timestamp
+  icon?: string;    // Phase 5: lucide icon name from ICON_OPTIONS keys, undefined means default
+  color?: string;   // Phase 5: CSS hex color value from COLOR_OPTIONS, empty/undefined means no color
 }
 
 // Backward-compatible type alias (remove after Plan 02 migration)
@@ -343,6 +345,19 @@ export function useProject() {
     toast.success("已切换到全局指令");
   }, [selectedId, store]);
 
+  // Phase 5 Plan 01: update project icon and color
+  const updateProjectStyle = useCallback(
+    async (projectId: string, style: { icon?: string; color?: string }) => {
+      const updated = projects.map((p) =>
+        p.id === projectId ? { ...p, ...style } : p
+      );
+      setProjects(updated);
+      await store?.set(PROJECTS_KEY, updated);
+      toast.success("已更新项目样式");
+    },
+    [projects, store]
+  );
+
   return {
     // Legacy interface (backward compatible until Plan 02 migration)
     currentProject, // ProjectItem | null (compatible with old Project | null)
@@ -369,5 +384,8 @@ export function useProject() {
     setEditMode, // (editMode: boolean) => void
     enableProjectCommands, // () => Promise<void>
     disableProjectCommands, // () => Promise<void>
+
+    // Phase 5 Plan 01: project icon & color
+    updateProjectStyle, // (projectId: string, style: { icon?: string; color?: string }) => Promise<void>
   };
 }
