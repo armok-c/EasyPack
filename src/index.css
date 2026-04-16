@@ -38,6 +38,30 @@ body {
   color-scheme: dark;
 }
 
+/* Window control buttons — custom classes for precise control */
+.titlebar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  cursor: default;
+  transition: background-color 100ms ease;
+}
+
+.titlebar-button:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.titlebar-button.close-button:hover {
+  background: oklch(0.5 0.15 25);
+  color: white;
+}
+
 /* Execution feedback flash animation (per D-05, D-06, D-07) */
 @keyframes card-flash {
   0% {

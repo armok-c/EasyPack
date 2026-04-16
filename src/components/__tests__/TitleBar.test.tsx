@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { TitleBar } from "@/components/TitleBar";
 
-const mockMinimize = vi.fn().mockResolvedValue(undefined);
-const mockToggleMaximize = vi.fn().mockResolvedValue(undefined);
-const mockClose = vi.fn().mockResolvedValue(undefined);
+const { mockMinimize, mockToggleMaximize, mockClose } = vi.hoisted(() => ({
+  mockMinimize: vi.fn().mockResolvedValue(undefined),
+  mockToggleMaximize: vi.fn().mockResolvedValue(undefined),
+  mockClose: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
@@ -14,6 +15,8 @@ vi.mock("@tauri-apps/api/window", () => ({
     close: mockClose,
   }),
 }));
+
+import { TitleBar } from "@/components/TitleBar";
 
 describe("TitleBar", () => {
   it("renders EasyPack title", () => {
