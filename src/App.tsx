@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/Sidebar";
 import { MainArea } from "@/components/MainArea";
+import { TitleBar } from "@/components/TitleBar";
 import { useProject } from "@/hooks/useProject";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import "./index.css";
@@ -46,33 +47,36 @@ function App() {
   });
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <Sidebar
-        projects={projects}
-        selectedId={selectedId}
-        onAddProject={selectFolder}
-        onSelectProject={selectProject}
-        onRemoveProject={removeProject}
-        onUpdateStyle={updateProjectStyle}
-        onReorderProjects={reorderProjects}
-        activeZone={activeZone}
-        onZoneSwitch={handleZoneSwitch}
-      />
-      <MainArea
-        currentProject={currentProject}
-        onExecute={executeCommand}
-        commands={commands}
-        commandMode={commandMode}
-        editMode={editMode}
-        setEditMode={setEditMode}
-        addCommand={addCommand}
-        updateCommand={updateCommand}
-        deleteCommand={deleteCommand}
-        enableProjectCommands={enableProjectCommands}
-        disableProjectCommands={disableProjectCommands}
-        activeZone={activeZone}
-        onZoneSwitch={handleZoneSwitch}
-      />
+    <div className="flex flex-col h-screen w-screen overflow-hidden">
+      <TitleBar />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
+          projects={projects}
+          selectedId={selectedId}
+          onAddProject={selectFolder}
+          onSelectProject={selectProject}
+          onRemoveProject={removeProject}
+          onUpdateStyle={updateProjectStyle}
+          onReorderProjects={reorderProjects}
+          activeZone={activeZone}
+          onZoneSwitch={handleZoneSwitch}
+        />
+        <MainArea
+          currentProject={currentProject}
+          onExecute={executeCommand}
+          commands={commands}
+          commandMode={commandMode}
+          editMode={editMode}
+          setEditMode={setEditMode}
+          addCommand={addCommand}
+          updateCommand={updateCommand}
+          deleteCommand={deleteCommand}
+          enableProjectCommands={enableProjectCommands}
+          disableProjectCommands={disableProjectCommands}
+          activeZone={activeZone}
+          onZoneSwitch={handleZoneSwitch}
+        />
+      </div>
       <Toaster richColors position="bottom-right" duration={1500} />
     </div>
   );
