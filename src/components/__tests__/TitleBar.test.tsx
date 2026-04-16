@@ -2,10 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
-const { mockMinimize, mockToggleMaximize, mockClose } = vi.hoisted(() => ({
+const { mockMinimize, mockToggleMaximize, mockClose, mockStartDragging } = vi.hoisted(() => ({
   mockMinimize: vi.fn().mockResolvedValue(undefined),
   mockToggleMaximize: vi.fn().mockResolvedValue(undefined),
   mockClose: vi.fn().mockResolvedValue(undefined),
+  mockStartDragging: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
@@ -13,12 +14,17 @@ vi.mock("@tauri-apps/api/window", () => ({
     minimize: mockMinimize,
     toggleMaximize: mockToggleMaximize,
     close: mockClose,
+    startDragging: mockStartDragging,
   }),
 }));
 
 import { TitleBar } from "@/components/TitleBar";
 
 describe("TitleBar", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders EasyPack title", () => {
     render(<TitleBar />);
     expect(screen.getByText("EasyPack")).toBeInTheDocument();
@@ -76,5 +82,19 @@ describe("TitleBar", () => {
     const outerDiv = container.firstElementChild as HTMLElement;
     fireEvent.doubleClick(outerDiv);
     expect(mockToggleMaximize).toHaveBeenCalled();
+  });
+
+  it("mouse down on drag region starts dragging", () => {
+    const { container } = render(<TitleBar />);
+    const outerDiv = container.firstElementChild as HTMLElement;
+    fireEvent.mouseDown(outerDiv, { button: 0 });
+    expect(mockStartDragging).toHaveBeenCalledOnce();
+  });
+
+  it("mouse down on button does not start dragging", () => {
+    render(<TitleBar />);
+    const btn = screen.getByLabelText("最小化");
+    fireEvent.mouseDown(btn, { button: 0 });
+    expect(mockStartDragging).not.toHaveBeenCalled();
   });
 });

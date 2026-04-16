@@ -15,11 +15,19 @@ async function handleClose() {
   await appWindow.close();
 }
 
+function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
+  if (e.button !== 0) return;
+  const target = e.target as HTMLElement;
+  if (target.closest("button")) return;
+  appWindow.startDragging();
+}
+
 export function TitleBar() {
   return (
     <div
       data-tauri-drag-region
       className="flex items-center h-[28px] select-none shrink-0"
+      onMouseDown={handleDragStart}
       onDoubleClick={handleMaximize}
     >
       <div

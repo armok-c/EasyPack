@@ -20,7 +20,17 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Skill(gsd-plan-phase)"
+      "Skill(gsd-plan-phase)",
+      "Skill(gsd-discuss-phase)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('exports',{}\\), indent=2\\)\\)\")",
+      "Skill(gsd-code-review)",
+      "Skill(gsd-progress)",
+      "Bash(curl -s \"https://crates.io/api/v1/crates/walkdir\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['crate']['max_version']\\)\")",
+      "Bash(curl -s \"https://crates.io/api/v1/crates/walkdir\" -H \"User-Agent: easypack-research\")",
+      "Bash(curl -s \"https://crates.io/api/v1/crates/walkdir\" -H \"User-Agent: easypack-research \\(easypack@example.com\\)\")",
+      "Bash(cargo test *)",
+      "Bash(cargo build *)"
     ]
   }
 }
