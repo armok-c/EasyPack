@@ -1,25 +1,31 @@
-use std::os::windows::process::CommandExt;
 use std::process::Command as StdCommand;
 
-/// 构建 cmd.exe 启动参数字符串
-/// 使用 start 命令在新窗口中运行 cmd /K，/d 指定工作目录
-/// start 的第一个 "" 作为空标题（避免路径被误解析为标题）
-/// shell_command 用引号包裹以正确处理含空格的命令（如 "npm run build"）
-fn build_cmd_start_args(project_path: &str, shell_command: &str) -> String {
-    format!(
-        r#"/C start "" /d "{}" cmd /K "{}""#,
-        project_path, shell_command
-    )
+/// 构建完整的 Shell 命令字符串
+/// 先 cd 到项目目录，再执行目标命令
+/// 路径始终用双引号包裹以处理空格和中文 (per D-11, D-13)
+pub fn build_full_command(project_path: &str, shell_command: &str) -> String {
+    format!("cd /d \"{}\" && {}", project_path, shell_command)
 }
 
-/// 在系统终端中执行命令
-/// 使用 cmd.exe 的 start 命令在新窗口中启动 cmd /K
-/// /d 指定工作目录，/K 保持终端窗口打开
+/// 在系统终端中执行命令 (per D-07, D-08, D-09)
+/// 优先使用 Windows Terminal (wt.exe)，未安装时回退到 cmd.exe
+/// 终端窗口保持打开（/K 参数）
 #[tauri::command]
 pub async fn execute_command(project_path: String, shell_command: String) -> Result<(), String> {
-    let args = build_cmd_start_args(&project_path, &shell_command);
+    // 优先尝试 Windows Terminal
+    // 使用 .args() 将每个参数作为独立 token 传递，WT 才能正确解析
+    // -d 指定工作目录，避免 cd /d + && 引号嵌套问题
+    let wt_result = StdCommand::new("wt")
+        .args(["new-tab", "-d", &project_path, "cmd", "/K", &shell_command])
+        .spawn();
+
+    if wt_result.is_ok() {
+        return Ok(());
+    }
+
+    // 回退到 cmd.exe: 使用 start /d 指定工作目录，独立窗口
     StdCommand::new("cmd")
-        .raw_arg(&args)
+        .args(["/C", "start", "", "/d", &project_path, "cmd", "/K", &shell_command])
         .spawn()
         .map_err(|e| format!("Failed to execute command: {}", e))?;
 
@@ -31,56 +37,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_cmd_start_args_basic() {
-        let result = build_cmd_start_args("E:\\git\\EasyPack", "claude");
-        assert_eq!(
-            result,
-            r##"/C start "" /d "E:\git\EasyPack" cmd /K "claude""##
-        );
+    fn test_build_full_command_basic() {
+        let result = build_full_command("D:\\Projects\\EasyPack", "npm run build");
+        assert_eq!(result, "cd /d \"D:\\Projects\\EasyPack\" && npm run build");
     }
 
     #[test]
-    fn test_build_cmd_start_args_path_with_spaces() {
-        let result = build_cmd_start_args("D:\\My Projects\\app", "npm run build");
-        assert!(result.contains(r#"start "" /d "D:\My Projects\app""#));
-        assert!(result.contains(r#"cmd /K "npm run build""#));
+    fn test_build_full_command_path_with_spaces() {
+        let result = build_full_command("D:\\My Projects\\app", "npm run dev");
+        assert!(result.contains("cd /d \"D:\\My Projects\\app\""));
+        assert!(result.contains("npm run dev"));
     }
 
     #[test]
-    fn test_build_cmd_start_args_path_with_cjk() {
-        let result = build_cmd_start_args("D:\\用户\\项目\\EasyPack", "git pull");
-        assert!(result.contains(r#"start "" /d "D:\用户\项目\EasyPack""#));
-        assert!(result.contains(r#"cmd /K "git pull""#));
+    fn test_build_full_command_path_with_cjk() {
+        let result = build_full_command("D:\\用户\\项目\\EasyPack", "git pull");
+        assert!(result.contains("cd /d \"D:\\用户\\项目\\EasyPack\""));
+        assert!(result.contains("git pull"));
     }
 
     #[test]
-    fn test_build_cmd_start_args_all_preset_commands() {
+    fn test_build_full_command_all_preset_commands() {
         let path = "D:\\Projects\\EasyPack";
         let commands = ["npm run build", "npm run dev", "git pull", "claude"];
-        for cmd in &commands {
-            let result = build_cmd_start_args(path, cmd);
-            assert!(
-                result.starts_with(r#"/C start "" /d"#),
-                "Should start with /C start, got: {}",
-                result
-            );
-            assert!(
-                result.contains(&format!("cmd /K \"{}\"", cmd)),
-                "Should contain cmd /K \"{}\", got: {}",
-                cmd,
-                result
-            );
+        for cmd in commands {
+            let result = build_full_command(path, cmd);
+            assert!(result.starts_with("cd /d \""));
+            assert!(result.contains(cmd));
         }
-    }
-
-    #[test]
-    fn test_build_cmd_start_args_simple_command() {
-        let result = build_cmd_start_args("E:\\git\\EasyPack", "claude");
-        // 验证空标题参数 "" 存在（防止路径被 start 当作标题）
-        assert!(result.contains("start \"\""));
-        // 验证 /d 目录参数被引号包裹
-        assert!(result.contains(r#"/d "E:\git\EasyPack""#));
-        // 验证命令被引号包裹
-        assert!(result.contains(r#"cmd /K "claude""#));
     }
 }
