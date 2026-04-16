@@ -66,14 +66,15 @@ Plans:
   2. 用户可在项目设置图标模态中选择自定义图标文件路径（.ico/.png/.svg），选中后图标在侧边栏中显示
   3. 选中项目后，指令卡片上方信息栏显示文件夹大小（排除 node_modules/.git/target 等大目录）和 Git 分支名（非 Git 仓库则不显示分支）
   4. 模态窗根据窗口大小自适应，窗口过小时模态窗内容可滚动查看，不会被截断
-**Plans**: 4 plans
+**Plans**: 5 plans
 **UI hint**: yes
 
 Plans:
 - [ ] 08-01-PLAN.md — Rust 后端命令实现（scan_project_icons + get_project_info）+ assetProtocol 配置
-- [ ] 08-02-PLAN.md — DialogContent 自适应高度修复（max-h-[90vh] + flex-col）
-- [ ] 08-03-PLAN.md — 前端图标集成（自定义图标导入 + 文件选择 + 侧边栏渲染）+ 人工验证
-- [ ] 08-04-PLAN.md — 前端项目信息集成（文件夹大小 + Git 分支显示）
+- [ ] 08-02-PLAN.md — DialogContent 自适应高度修复（max-h-[90vh] + flex-col + 内部滚动包装）
+- [ ] 08-03-PLAN.md — 图标类型判别工具函数 + Sidebar 文件图标渲染
+- [ ] 08-04-PLAN.md — ProjectSettingsDialog 自定义图标 UI（扫描 + 文件选择）+ 人工验证
+- [ ] 08-05-PLAN.md — 前端项目信息集成（文件夹大小 + Git 分支显示 + App.tsx props 传递）
 
 ### Phase 9: 前端 UI 集成
 **Goal**: 指令切换和控制操作以按钮样式呈现在同一行，用户可直接从应用内打开项目文件夹
@@ -111,6 +112,6 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 5. 项目个性化与键盘增强 | v1.0 | 3/3 | Complete | 2026-04-15 |
 | 6. 命令执行修复 | v1.1 | 0/1 | Planning | - |
 | 7. 无边框窗口与自定义标题栏 | v1.1 | 0/? | Not started | - |
-| 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 0/4 | Planning | - |
+| 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 0/5 | Planning | - |
 | 9. 前端 UI 集成 | v1.1 | 0/? | Not started | - |
 | 10. 预设指令系统 | v1.1 | 0/? | Not started | - |

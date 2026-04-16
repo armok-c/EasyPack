@@ -544,7 +544,7 @@ const info = await withTimeout(
 | A5 | Cargo.toml 图标字段可以用简单字符串搜索而非完整 TOML 解析 | Code Examples | 如果图标值在复杂 TOML 结构中（如 inline table），简单搜索可能遗漏 |
 | A6 | 前端 `Promise.race` 超时方案足够，不需要 Rust 端 tokio::time::timeout | Code Examples | 如果 Rust 命令长时间阻塞不释放线程，可能影响其他 Tauri 命令的执行 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **assetProtocol scope 配置策略**
    - What we know: 需要启用 assetProtocol，scope 需要允许用户选择的任意图标文件路径
