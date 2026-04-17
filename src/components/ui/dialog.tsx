@@ -53,18 +53,56 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // Separate header, footer, and middle content (per D-10)
+  let headers: React.ReactNode[] = [];
+  let footers: React.ReactNode[] = [];
+  let content: React.ReactNode[] = [];
+
+  function classifyChild(child: React.ReactNode) {
+    if (React.isValidElement(child)) {
+      const type = child.type;
+      if (type === React.Fragment) {
+        React.Children.forEach(child.props.children, classifyChild);
+        return;
+      }
+      const displayName =
+        typeof type === "function" || typeof type === "object"
+          ? (type as { displayName?: string }).displayName
+          : null;
+
+      if (displayName === "DialogHeader" || type === DialogHeader) {
+        headers.push(child);
+      } else if (displayName === "DialogFooter" || type === DialogFooter) {
+        footers.push(child);
+      } else {
+        content.push(child);
+      }
+    } else {
+      content.push(child);
+    }
+  }
+
+  React.Children.forEach(children, classifyChild);
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-50 flex flex-col w-full max-w-[calc(100%-2rem)] max-h-[90vh] translate-x-[-50%] translate-y-[-50%] rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
         {...props}
       >
-        {children}
+        {/* DialogHeader: fixed at top, does not scroll */}
+        {headers}
+        {/* Middle content: scrollable area (per D-10) */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {content}
+        </div>
+        {/* DialogFooter: fixed at bottom, does not scroll */}
+        {footers}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
@@ -88,6 +126,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
     />
   )
 }
+DialogHeader.displayName = "DialogHeader"
 
 function DialogFooter({
   className,
@@ -115,6 +154,7 @@ function DialogFooter({
     </div>
   )
 }
+DialogFooter.displayName = "DialogFooter"
 
 function DialogTitle({
   className,
