@@ -23,6 +23,10 @@ interface MainAreaProps {
   // Phase 5 Plan 03: keyboard navigation zone management
   activeZone: "sidebar" | "main";
   onZoneSwitch: () => void;
+  // Phase 8: project info display
+  projectInfo: { size: string; branch: string | null } | null;
+  projectInfoLoading: boolean;
+  projectInfoError: boolean;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -43,6 +47,9 @@ export function MainArea({
   disableProjectCommands,
   activeZone,
   onZoneSwitch,
+  projectInfo,
+  projectInfoLoading,
+  projectInfoError,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
@@ -180,6 +187,22 @@ export function MainArea({
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-1">{currentProject.path}</p>
+        {/* Phase 8: folder size + Git branch (per D-04, D-07, D-08) */}
+        {(projectInfo || projectInfoLoading) && (
+          <div className="flex items-center gap-1 mt-1" aria-live="polite">
+            <span className="text-xs text-muted-foreground">
+              {projectInfoLoading ? "计算中..." : projectInfoError ? "无法计算" : projectInfo?.size}
+            </span>
+            {projectInfo?.branch && (
+              <>
+                <span className="text-xs text-muted-foreground">·</span>
+                <span className="text-xs text-muted-foreground">
+                  分支: {projectInfo.branch}
+                </span>
+              </>
+            )}
+          </div>
+        )}
         {/* Mode label + switch entry (per D-09) */}
         <div className="flex items-center gap-2 mt-1">
           <span className="text-xs text-muted-foreground">

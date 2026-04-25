@@ -30,6 +30,10 @@ function App() {
     updateProjectStyle,
     // Phase 5: drag-and-drop reorder
     reorderProjects,
+    // Phase 8: project info
+    projectInfo,
+    projectInfoLoading,
+    projectInfoError,
   } = useProject();
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
@@ -75,6 +79,9 @@ function App() {
           disableProjectCommands={disableProjectCommands}
           activeZone={activeZone}
           onZoneSwitch={handleZoneSwitch}
+          projectInfo={projectInfo}
+          projectInfoLoading={projectInfoLoading}
+          projectInfoError={projectInfoError}
         />
       </div>
       <Toaster richColors position="bottom-right" duration={1500} />
