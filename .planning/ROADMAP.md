@@ -70,11 +70,11 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 08-01-PLAN.md — Rust 后端命令实现（scan_project_icons + get_project_info）+ assetProtocol 配置
-- [ ] 08-02-PLAN.md — DialogContent 自适应高度修复（max-h-[90vh] + flex-col + 内部滚动包装）
-- [ ] 08-03-PLAN.md — 图标类型判别工具函数 + Sidebar 文件图标渲染
-- [ ] 08-04-PLAN.md — ProjectSettingsDialog 自定义图标 UI（扫描 + 文件选择）+ 人工验证
-- [ ] 08-05-PLAN.md — 前端项目信息集成（文件夹大小 + Git 分支显示 + App.tsx props 传递）
+- [x] 08-01-PLAN.md — Rust 后端命令实现（scan_project_icons + get_project_info）+ assetProtocol 配置
+- [x] 08-02-PLAN.md — DialogContent 自适应高度修复（max-h-[90vh] + flex-col + 内部滚动包装）
+- [x] 08-03-PLAN.md — 图标类型判别工具函数 + Sidebar 文件图标渲染
+- [x] 08-04-PLAN.md — ProjectSettingsDialog 自定义图标 UI（扫描 + 文件选择）+ 人工验证
+- [x] 08-05-PLAN.md — 前端项目信息集成（文件夹大小 + Git 分支显示 + App.tsx props 传递）
 
 ### Phase 9: 前端 UI 集成
 **Goal**: 指令切换和控制操作以按钮样式呈现在同一行，用户可直接从应用内打开项目文件夹
@@ -110,8 +110,8 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 3. 指令卡片与核心交互 | v1.0 | 1/1 | Complete | 2026-04-13 |
 | 4. 自定义指令与项目级覆盖 | v1.0 | 3/3 | Complete | 2026-04-14 |
 | 5. 项目个性化与键盘增强 | v1.0 | 3/3 | Complete | 2026-04-15 |
-| 6. 命令执行修复 | v1.1 | 0/1 | Planning | - |
-| 7. 无边框窗口与自定义标题栏 | v1.1 | 0/? | Not started | - |
-| 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 0/5 | Planning | - |
+| 6. 命令执行修复 | v1.1 | 1/1 | Complete | 2026-04-17 |
+| 7. 无边框窗口与自定义标题栏 | v1.1 | 1/1 | Complete | 2026-04-17 |
+| 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
 | 9. 前端 UI 集成 | v1.1 | 0/? | Not started | - |
 | 10. 预设指令系统 | v1.1 | 0/? | Not started | - |
