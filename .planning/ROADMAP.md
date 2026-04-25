@@ -25,7 +25,7 @@
 - [ ] **Phase 6: 命令执行修复** -- 修复阻断所有指令执行的 0x80070002 错误，含特殊字符路径
 - [ ] **Phase 7: 无边框窗口与自定义标题栏** -- 实现无边框窗口、窗口阴影/resize、高 DPI 支持
 - [ ] **Phase 8: Rust 后端扩展与快速 UI 修复** -- 新增项目信息检测命令、文件夹大小/Git 分支后端、模态窗自适应
-- [ ] **Phase 9: 前端 UI 集成** -- 指令切换按钮化、打开文件夹按钮
+- [x] **Phase 9: 前端 UI 集成** -- 指令切换按钮化、打开文件夹按钮 -- completed 2026-04-25
 - [ ] **Phase 10: 预设指令系统** -- 分类的预设指令库、双下拉框选择器、全局/项目级选择
 
 ## Phase Details
@@ -87,7 +87,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 09-01-PLAN.md -- Toggle Group 按钮行 + 打开文件夹按钮 + open_folder Rust 命令
+- [x] 09-01-PLAN.md -- Toggle Group 按钮行 + 打开文件夹按钮 + open_folder Rust 命令
 
 ### Phase 10: 预设指令系统
 **Goal**: 用户通过分类下拉框快速选择预设指令（python/pip/git/rust/npm），降低手动配置成本
@@ -116,5 +116,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 6. 命令执行修复 | v1.1 | 1/1 | Complete | 2026-04-17 |
 | 7. 无边框窗口与自定义标题栏 | v1.1 | 1/1 | Complete | 2026-04-17 |
 | 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
-| 9. 前端 UI 集成 | v1.1 | 0/1 | Not started | - |
+| 9. 前端 UI 集成 | v1.1 | 1/1 | Complete | 2026-04-25 |
 | 10. 预设指令系统 | v1.1 | 0/? | Not started | - |
