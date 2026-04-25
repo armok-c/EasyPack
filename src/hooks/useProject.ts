@@ -16,6 +16,12 @@ export interface ProjectItem {
   color?: string;   // Phase 5: CSS hex color value from COLOR_OPTIONS, empty/undefined means no color
 }
 
+/** 项目信息（文件夹大小 + Git 分支），来自 Rust get_project_info 命令 */
+export interface ProjectInfoResult {
+  size: string;         // 人类可读格式，如 "12.3 MB"
+  branch: string | null; // null = 非 Git 仓库或 detached HEAD
+}
+
 // Backward-compatible type alias (remove after Plan 02 migration)
 export type Project = ProjectItem;
 
@@ -47,6 +53,11 @@ export function useProject() {
   const [commandMode, setCommandMode] = useState<"global" | "project">("global");
   const [projectCommandsMap, setProjectCommandsMap] = useState<Record<string, CommandItem[]>>({});
   const [editMode, setEditMode] = useState(false);
+
+  // Phase 8: project info (folder size + Git branch)
+  const [projectInfo, setProjectInfo] = useState<ProjectInfoResult | null>(null);
+  const [projectInfoLoading, setProjectInfoLoading] = useState(false);
+  const [projectInfoError, setProjectInfoError] = useState(false);
 
   // Derived state: current project from projects + selectedId
   const currentProject = selectedId
@@ -90,6 +101,14 @@ export function useProject() {
         if (savedProjects) setProjects(savedProjects);
         if (savedSelectedId) setSelectedId(savedSelectedId);
         if (savedCommands) setCustomCommands(savedCommands);
+
+        // Phase 8: fetch project info for already-selected project on startup
+        if (savedSelectedId && savedProjects) {
+          const savedProject = savedProjects.find((p: ProjectItem) => p.id === savedSelectedId);
+          if (savedProject) {
+            fetchProjectInfo(savedProject.path);
+          }
+        }
 
         // Restore project-level command data from store
         const allKeys = await (s as unknown as { keys: () => Promise<string[]> }).keys();
@@ -161,14 +180,42 @@ export function useProject() {
     [projects, selectedId, store]
   );
 
+  // Phase 8: fetch project info (folder size + Git branch) per D-04
+  const fetchProjectInfo = useCallback(async (projectPath: string) => {
+    setProjectInfoLoading(true);
+    setProjectInfoError(false);
+    setProjectInfo(null);
+    try {
+      // D-06: 8 second timeout (between 5-10s)
+      // 使用 reject 而非 resolve，确保超时状态可通过 catch 区分
+      const result = await Promise.race([
+        invoke<ProjectInfoResult>("get_project_info", { projectPath }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 8000)
+        ),
+      ]);
+      setProjectInfo(result);
+    } catch {
+      // 超时或 invoke 错误：设置错误标志
+      setProjectInfoError(true);
+    } finally {
+      setProjectInfoLoading(false);
+    }
+  }, []);
+
   // Select project (also exits edit mode on project switch)
   const selectProject = useCallback(
     async (id: string) => {
       setSelectedId(id);
       setEditMode(false);
       await store?.set(SELECTED_KEY, id);
+      // Phase 8: fetch project info on project switch (per D-04)
+      const project = projects.find((p) => p.id === id);
+      if (project) {
+        fetchProjectInfo(project.path);
+      }
     },
-    [store]
+    [store, projects, fetchProjectInfo]
   );
 
   // Folder picker (inherits Phase 1 logic, calls addProject internally)
@@ -399,5 +446,10 @@ export function useProject() {
 
     // Phase 5 Plan 02: drag-and-drop reorder
     reorderProjects, // (reordered: ProjectItem[]) => Promise<void>
+
+    // Phase 8: project info
+    projectInfo,           // ProjectInfoResult | null
+    projectInfoLoading,    // boolean
+    projectInfoError,      // boolean
   };
 }
