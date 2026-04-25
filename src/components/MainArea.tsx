@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { FolderOpen, Settings, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { CommandCard } from "@/components/CommandCard";
 import { CommandDialog } from "@/components/CommandDialog";
 import { getIconByName } from "@/lib/icons";
@@ -27,6 +28,9 @@ interface MainAreaProps {
   projectInfo: { size: string; branch: string | null } | null;
   projectInfoLoading: boolean;
   projectInfoError: boolean;
+  // Phase 9: open folder + toggle disabled state
+  onOpenFolder: () => void;
+  isProjectToggleDisabled: boolean;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -50,6 +54,8 @@ export function MainArea({
   projectInfo,
   projectInfoLoading,
   projectInfoError,
+  onOpenFolder,
+  isProjectToggleDisabled,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
@@ -203,27 +209,54 @@ export function MainArea({
             )}
           </div>
         )}
-        {/* Mode label + switch entry (per D-09) */}
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs text-muted-foreground">
-            {commandMode === "global" ? "全局指令" : "项目自定义指令"}
-          </span>
-          <span className="text-xs text-muted-foreground">·</span>
-          {commandMode === "global" ? (
-            <button
-              onClick={enableProjectCommands}
-              className="text-xs text-primary/60 hover:text-primary cursor-pointer underline-offset-2 hover:underline transition-colors duration-150"
+        {/* Phase 9: Toggle Group + 打开文件夹 button row (per D-01, D-02, D-03, D-05, D-06) */}
+        <div className="flex items-center justify-between mt-2">
+          <div
+            className="inline-flex rounded-md overflow-hidden border border-white/10"
+            role="radiogroup"
+            aria-label="指令模式切换"
+          >
+            <Button
+              variant={commandMode === "global" ? "secondary" : "ghost"}
+              size="sm"
+              role="radio"
+              aria-checked={commandMode === "global"}
+              aria-label="全局指令"
+              className={cn(
+                "rounded-none border-r border-white/10",
+                commandMode === "global" && "rounded-l-md"
+              )}
+              onClick={commandMode !== "global" ? disableProjectCommands : undefined}
             >
-              使用项目自定义指令
-            </button>
-          ) : (
-            <button
-              onClick={disableProjectCommands}
-              className="text-xs text-primary/60 hover:text-primary cursor-pointer underline-offset-2 hover:underline transition-colors duration-150"
+              全局指令
+            </Button>
+            <Button
+              variant={commandMode === "project" ? "secondary" : "ghost"}
+              size="sm"
+              role="radio"
+              aria-checked={commandMode === "project"}
+              aria-label="项目指令"
+              aria-disabled={isProjectToggleDisabled}
+              className={cn(
+                "rounded-none",
+                commandMode === "project" && "rounded-r-md"
+              )}
+              disabled={isProjectToggleDisabled}
+              onClick={commandMode !== "project" ? enableProjectCommands : undefined}
             >
-              使用全局指令
-            </button>
-          )}
+              项目指令
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenFolder}
+            disabled={!currentProject}
+            aria-label="打开项目文件夹"
+          >
+            <FolderOpen className="size-3.5" />
+            打开文件夹
+          </Button>
         </div>
       </div>
 

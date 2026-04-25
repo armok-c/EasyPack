@@ -33,6 +33,13 @@ function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
     deleteCommand: vi.fn().mockResolvedValue(undefined),
     enableProjectCommands: vi.fn().mockResolvedValue(undefined),
     disableProjectCommands: vi.fn().mockResolvedValue(undefined),
+    activeZone: "main" as const,
+    onZoneSwitch: vi.fn(),
+    projectInfo: null,
+    projectInfoLoading: false,
+    projectInfoError: false,
+    onOpenFolder: vi.fn(),
+    isProjectToggleDisabled: false,
     ...overrides,
   };
 }
@@ -106,33 +113,38 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     expect(screen.getByLabelText("完成编辑")).toBeInTheDocument();
   });
 
-  // Test 3: Mode label -- "全局指令" or "项目自定义指令"
-  it("shows '全局指令' label in global mode", () => {
+  // Test 3: Toggle Group -- "全局指令" and "项目指令" buttons
+  it("shows '全局指令' button in global mode with secondary variant", () => {
     render(<MainArea {...getDefaultProps({ commandMode: "global" })} />);
-    expect(screen.getByText("全局指令")).toBeInTheDocument();
+    const btn = screen.getByRole("radio", { name: "全局指令" });
+    expect(btn).toBeInTheDocument();
+    expect(btn).toHaveAttribute("aria-checked", "true");
   });
 
-  it("shows '项目自定义指令' label in project mode", () => {
+  it("shows '项目指令' button in project mode with secondary variant", () => {
     render(<MainArea {...getDefaultProps({ commandMode: "project" })} />);
-    expect(screen.getByText("项目自定义指令")).toBeInTheDocument();
+    const btn = screen.getByRole("radio", { name: "项目指令" });
+    expect(btn).toBeInTheDocument();
+    expect(btn).toHaveAttribute("aria-checked", "true");
   });
 
-  // Test 4: Mode switch entry -- "使用项目自定义指令" / "使用全局指令"
-  it("shows '使用项目自定义指令' switch in global mode", () => {
-    render(<MainArea {...getDefaultProps({ commandMode: "global" })} />);
-    expect(screen.getByText("使用项目自定义指令")).toBeInTheDocument();
+  // Test 4: Toggle Group mode switch via buttons
+  it("shows '打开文件夹' button with outline variant", () => {
+    render(<MainArea {...getDefaultProps()} />);
+    expect(screen.getByLabelText("打开项目文件夹")).toBeInTheDocument();
   });
 
-  it("shows '使用全局指令' switch in project mode", () => {
-    render(<MainArea {...getDefaultProps({ commandMode: "project" })} />);
-    expect(screen.getByText("使用全局指令")).toBeInTheDocument();
+  it("disables '项目指令' button when isProjectToggleDisabled is true", () => {
+    render(<MainArea {...getDefaultProps({ isProjectToggleDisabled: true })} />);
+    const btn = screen.getByRole("radio", { name: "项目指令" });
+    expect(btn).toBeDisabled();
   });
 
-  it("calls enableProjectCommands when clicking '使用项目自定义指令'", () => {
+  it("calls enableProjectCommands when clicking '项目指令' in global mode", () => {
     const enableProjectCommands = vi.fn().mockResolvedValue(undefined);
     render(<MainArea {...getDefaultProps({ commandMode: "global", enableProjectCommands })} />);
 
-    fireEvent.click(screen.getByText("使用项目自定义指令"));
+    fireEvent.click(screen.getByRole("radio", { name: "项目指令" }));
     expect(enableProjectCommands).toHaveBeenCalledOnce();
   });
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/Sidebar";
 import { MainArea } from "@/components/MainArea";
@@ -34,6 +34,9 @@ function App() {
     projectInfo,
     projectInfoLoading,
     projectInfoError,
+    // Phase 9: open folder + project commands map
+    openFolder,
+    projectCommandsMap,
   } = useProject();
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
@@ -41,6 +44,20 @@ function App() {
   const handleZoneSwitch = useCallback(() => {
     setActiveZone((prev) => (prev === "sidebar" ? "main" : "sidebar"));
   }, []);
+
+  // Phase 9: derive project toggle disabled state (per D-05)
+  const isProjectToggleDisabled = useMemo(() => {
+    if (!currentProject) return true;
+    const projectCmds = projectCommandsMap[currentProject.id];
+    return !projectCmds || projectCmds.length === 0;
+  }, [currentProject, projectCommandsMap]);
+
+  // Phase 9: open folder handler with project path bound
+  const handleOpenFolder = useCallback(() => {
+    if (currentProject) {
+      openFolder(currentProject.path);
+    }
+  }, [currentProject, openFolder]);
 
   // Phase 5 Plan 03: global number key shortcuts (per D-13)
   useKeyboard({
@@ -82,6 +99,8 @@ function App() {
           projectInfo={projectInfo}
           projectInfoLoading={projectInfoLoading}
           projectInfoError={projectInfoError}
+          onOpenFolder={handleOpenFolder}
+          isProjectToggleDisabled={isProjectToggleDisabled}
         />
       </div>
       <Toaster richColors position="bottom-right" duration={1500} />
