@@ -1,4 +1,5 @@
 use std::process::Command as StdCommand;
+use std::os::windows::process::CommandExt;
 
 /// 构建完整的 Shell 命令字符串
 /// 先 cd 到项目目录，再执行目标命令
@@ -29,6 +30,17 @@ pub async fn execute_command(project_path: String, shell_command: String) -> Res
         .spawn()
         .map_err(|e| format!("Failed to execute command: {}", e))?;
 
+    Ok(())
+}
+
+/// 在 Windows 文件资源管理器中打开项目文件夹 (per D-04)
+/// 使用 explorer.exe + raw_arg() 模式，路径用双引号包裹处理空格
+#[tauri::command]
+pub async fn open_folder(path: String) -> Result<(), String> {
+    StdCommand::new("explorer.exe")
+        .raw_arg(format!("\"{}\"", path))
+        .spawn()
+        .map_err(|e| format!("Failed to open folder: {}", e))?;
     Ok(())
 }
 

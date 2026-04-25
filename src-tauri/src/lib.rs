@@ -9,6 +9,7 @@ pub fn run() {
             commands::shell::execute_command,
             commands::project_info::scan_project_icons,
             commands::project_info::get_project_info,
+            commands::shell::open_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -414,6 +414,17 @@ export function useProject() {
     [store]
   );
 
+  // Phase 9: open project folder in Windows Explorer (per D-04)
+  const openFolder = useCallback(async (path: string) => {
+    try {
+      await invoke("open_folder", { path });
+    } catch (error) {
+      toast.error("无法打开文件夹", {
+        description: "路径无效或文件夹不存在",
+      });
+    }
+  }, []);
+
   return {
     // Legacy interface (backward compatible until Plan 02 migration)
     currentProject, // ProjectItem | null (compatible with old Project | null)
@@ -451,5 +462,9 @@ export function useProject() {
     projectInfo,           // ProjectInfoResult | null
     projectInfoLoading,    // boolean
     projectInfoError,      // boolean
+
+    // Phase 9: project-level command map + open folder
+    projectCommandsMap,    // Record<string, CommandItem[]>
+    openFolder,            // (path: string) => Promise<void>
   };
 }
