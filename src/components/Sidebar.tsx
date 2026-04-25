@@ -11,7 +11,8 @@ import {
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable, isSortable } from "@dnd-kit/react/sortable";
 import { cn } from "@/lib/utils";
-import { getIconByName } from "@/lib/icons";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { getIconByName, isFileIcon, getFilePath } from "@/lib/icons";
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 import type { ProjectItem } from "@/hooks/useProject";
 
@@ -88,10 +89,19 @@ function SortableProjectItem({
             </div>
 
             {/* Phase 5: project icon (per D-03) */}
-            {project.icon && (() => {
+            {project.icon && (isFileIcon(project.icon) ? (
+              <img
+                src={convertFileSrc(getFilePath(project.icon))}
+                alt=""
+                className="size-3.5 mr-1.5 flex-shrink-0 rounded-sm object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            ) : (() => {
               const ProjectIcon = getIconByName(project.icon);
               return <ProjectIcon className="size-3.5 mr-1.5 flex-shrink-0 text-muted-foreground" />;
-            })()}
+            })())}
 
             {/* D-03: only show folder name, truncate if too long */}
             <span className="text-xs text-foreground truncate flex-1">
