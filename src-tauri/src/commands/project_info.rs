@@ -47,6 +47,16 @@ const ICON_FILENAMES: &[&str] = &[
     "logo.svg",
 ];
 
+/// Common subdirectories that may contain icon files
+const ICON_SUBDIRS: &[&str] = &[
+    "src-tauri/icons",
+    "public",
+    "assets",
+    "resources",
+    "static",
+    "icons",
+];
+
 /// Format a byte count as a human-readable string
 pub fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
@@ -168,6 +178,39 @@ pub fn scan_icons(project_path: &Path) -> Result<Vec<IconCandidate>, String> {
                     name: filename.to_string(),
                     source: "file".to_string(),
                 });
+            }
+        }
+    }
+
+    // 3. Check common icon subdirectories
+    for subdir in ICON_SUBDIRS {
+        let dir_path = project_path.join(subdir);
+        if dir_path.exists() && dir_path.is_dir() {
+            if let Ok(entries) = fs::read_dir(&dir_path) {
+                for entry in entries.flatten() {
+                    let Ok(file_type) = entry.file_type() else {
+                        continue;
+                    };
+                    if !file_type.is_file() {
+                        continue;
+                    }
+                    let file_name = entry.file_name();
+                    let name = file_name.to_string_lossy();
+                    let lower = name.to_lowercase();
+                    if lower.ends_with(".ico")
+                        || lower.ends_with(".png")
+                        || lower.ends_with(".svg")
+                    {
+                        let path_str = entry.path().to_string_lossy().to_string();
+                        if !candidates.iter().any(|c| c.path == path_str) {
+                            candidates.push(IconCandidate {
+                                path: path_str,
+                                name: name.to_string(),
+                                source: format!("{}/", subdir),
+                            });
+                        }
+                    }
+                }
             }
         }
     }
