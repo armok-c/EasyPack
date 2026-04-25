@@ -2,31 +2,31 @@
 
 ## Milestones
 
-- ✅ **v1.0 MVP** — Phases 1-5 (shipped 2026-04-15)
-- 🚧 **v1.1 体验增强与预设指令** — Phases 6-10 (in progress)
+- **v1.0 MVP** -- Phases 1-5 (shipped 2026-04-15)
+- **v1.1 体验增强与预设指令** -- Phases 6-10 (in progress)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 MVP (Phases 1-5) — SHIPPED 2026-04-15</summary>
+<summary>v1.0 MVP (Phases 1-5) -- SHIPPED 2026-04-15</summary>
 
-- [x] Phase 1: 应用脚手架与 Shell 命令核心 (3/3 plans) — completed 2026-04-10
-- [x] Phase 2: 项目侧边栏与持久化 (2/2 plans) — completed 2026-04-12
-- [x] Phase 3: 指令卡片与核心交互 (1/1 plans) — completed 2026-04-13
-- [x] Phase 4: 自定义指令与项目级覆盖 (3/3 plans) — completed 2026-04-14
-- [x] Phase 5: 项目个性化与键盘增强 (3/3 plans) — completed 2026-04-15
+- [x] Phase 1: 应用脚手架与 Shell 命令核心 (3/3 plans) -- completed 2026-04-10
+- [x] Phase 2: 项目侧边栏与持久化 (2/2 plans) -- completed 2026-04-12
+- [x] Phase 3: 指令卡片与核心交互 (1/1 plans) -- completed 2026-04-13
+- [x] Phase 4: 自定义指令与项目级覆盖 (3/3 plans) -- completed 2026-04-14
+- [x] Phase 5: 项目个性化与键盘增强 (3/3 plans) -- completed 2026-04-15
 
 </details>
 
-### 🚧 v1.1 体验增强与预设指令 (In Progress)
+### v1.1 体验增强与预设指令 (In Progress)
 
 **Milestone Goal:** 修复命令执行核心问题，提升窗口体验和操作效率，引入预设指令系统降低配置成本。
 
-- [ ] **Phase 6: 命令执行修复** — 修复阻断所有指令执行的 0x80070002 错误，含特殊字符路径
-- [ ] **Phase 7: 无边框窗口与自定义标题栏** — 实现无边框窗口、窗口阴影/resize、高 DPI 支持
-- [ ] **Phase 8: Rust 后端扩展与快速 UI 修复** — 新增项目信息检测命令、文件夹大小/Git 分支后端、模态窗自适应
-- [ ] **Phase 9: 前端 UI 集成** — 图标自动识别 UI、文件夹信息栏、指令切换按钮化、打开文件夹按钮
-- [ ] **Phase 10: 预设指令系统** — 分类的预设指令库、双下拉框选择器、全局/项目级选择
+- [ ] **Phase 6: 命令执行修复** -- 修复阻断所有指令执行的 0x80070002 错误，含特殊字符路径
+- [ ] **Phase 7: 无边框窗口与自定义标题栏** -- 实现无边框窗口、窗口阴影/resize、高 DPI 支持
+- [ ] **Phase 8: Rust 后端扩展与快速 UI 修复** -- 新增项目信息检测命令、文件夹大小/Git 分支后端、模态窗自适应
+- [ ] **Phase 9: 前端 UI 集成** -- 指令切换按钮化、打开文件夹按钮
+- [ ] **Phase 10: 预设指令系统** -- 分类的预设指令库、双下拉框选择器、全局/项目级选择
 
 ## Phase Details
 
@@ -41,7 +41,7 @@
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md — 使用 raw_arg 修复命令执行传参，含人工验证 checkpoint
+- [ ] 06-01-PLAN.md -- 使用 raw_arg 修复命令执行传参，含人工验证 checkpoint
 
 ### Phase 7: 无边框窗口与自定义标题栏
 **Goal**: 应用拥有现代化的无边框窗口外观，顶部显示自定义标题栏（应用名称、拖拽区域、窗口控制按钮），窗口阴影和 resize 正常工作
@@ -55,7 +55,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [x] 07-01-PLAN.md — 无边框窗口和自定义标题栏实现（Task 3 checkpoint pending）
+- [x] 07-01-PLAN.md -- 无边框窗口和自定义标题栏实现（Task 3 checkpoint pending）
 
 ### Phase 8: Rust 后端扩展与快速 UI 修复
 **Goal**: Rust 后端提供项目信息检测能力（图标识别、文件夹大小、Git 分支、打开文件夹），模态窗在窗口过小时可滚动不被截断
@@ -70,11 +70,11 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [x] 08-01-PLAN.md — Rust 后端命令实现（scan_project_icons + get_project_info）+ assetProtocol 配置
-- [x] 08-02-PLAN.md — DialogContent 自适应高度修复（max-h-[90vh] + flex-col + 内部滚动包装）
-- [x] 08-03-PLAN.md — 图标类型判别工具函数 + Sidebar 文件图标渲染
-- [x] 08-04-PLAN.md — ProjectSettingsDialog 自定义图标 UI（扫描 + 文件选择）+ 人工验证
-- [x] 08-05-PLAN.md — 前端项目信息集成（文件夹大小 + Git 分支显示 + App.tsx props 传递）
+- [x] 08-01-PLAN.md -- Rust 后端命令实现（scan_project_icons + get_project_info）+ assetProtocol 配置
+- [x] 08-02-PLAN.md -- DialogContent 自适应高度修复（max-h-[90vh] + flex-col + 内部滚动包装）
+- [x] 08-03-PLAN.md -- 图标类型判别工具函数 + Sidebar 文件图标渲染
+- [x] 08-04-PLAN.md -- ProjectSettingsDialog 自定义图标 UI（扫描 + 文件选择）+ 人工验证
+- [x] 08-05-PLAN.md -- 前端项目信息集成（文件夹大小 + Git 分支显示 + App.tsx props 传递）
 
 ### Phase 9: 前端 UI 集成
 **Goal**: 指令切换和控制操作以按钮样式呈现在同一行，用户可直接从应用内打开项目文件夹
@@ -83,8 +83,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. 用户可通过"打开文件夹"按钮在 Windows 文件资源管理器中打开项目目录
   2. 全局指令/项目指令切换改为按钮样式，与"打开文件夹"按钮在同一行显示，点击切换正常工作
-**Plans**: TBD
+**Plans**: 1 plan
 **UI hint**: yes
+
+Plans:
+- [ ] 09-01-PLAN.md -- Toggle Group 按钮行 + 打开文件夹按钮 + open_folder Rust 命令
 
 ### Phase 10: 预设指令系统
 **Goal**: 用户通过分类下拉框快速选择预设指令（python/pip/git/rust/npm），降低手动配置成本
@@ -113,5 +116,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 6. 命令执行修复 | v1.1 | 1/1 | Complete | 2026-04-17 |
 | 7. 无边框窗口与自定义标题栏 | v1.1 | 1/1 | Complete | 2026-04-17 |
 | 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
-| 9. 前端 UI 集成 | v1.1 | 0/? | Not started | - |
+| 9. 前端 UI 集成 | v1.1 | 0/1 | Not started | - |
 | 10. 预设指令系统 | v1.1 | 0/? | Not started | - |
