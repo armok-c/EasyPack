@@ -18,7 +18,7 @@ export const PRESET_CATEGORIES: PresetCategory[] = [
   { id: "git",    label: "Git",         icon: "GitBranch" },
   { id: "npm",    label: "NPM/Node",    icon: "Package" },
   { id: "python", label: "Python/Pip",  icon: "Terminal" },
-  { id: "rust",   label: "Rust/Cargo",  icon: "CargoShip" },
+  { id: "rust",   label: "Rust/Cargo",  icon: "Ship" },
 ];
 
 export const ALL_PRESETS: PresetCommand[] = [
@@ -48,12 +48,12 @@ export const ALL_PRESETS: PresetCommand[] = [
   { id: "preset-py-test",      name: "Pytest",               command: "pytest",                   icon: "Terminal",  category: "python" },
 
   // Rust/Cargo (6 commands)
-  { id: "preset-rs-build",     name: "Cargo Build",          command: "cargo build",              icon: "CargoShip", category: "rust" },
-  { id: "preset-rs-run",       name: "Cargo Run",            command: "cargo run",                icon: "CargoShip", category: "rust" },
-  { id: "preset-rs-test",      name: "Cargo Test",           command: "cargo test",               icon: "CargoShip", category: "rust" },
-  { id: "preset-rs-clippy",    name: "Clippy",               command: "cargo clippy",             icon: "CargoShip", category: "rust" },
-  { id: "preset-rs-fmt",       name: "Cargo Fmt",            command: "cargo fmt",                icon: "CargoShip", category: "rust" },
-  { id: "preset-rs-check",     name: "Cargo Check",          command: "cargo check",              icon: "CargoShip", category: "rust" },
+  { id: "preset-rs-build",     name: "Cargo Build",          command: "cargo build",              icon: "Ship", category: "rust" },
+  { id: "preset-rs-run",       name: "Cargo Run",            command: "cargo run",                icon: "Ship", category: "rust" },
+  { id: "preset-rs-test",      name: "Cargo Test",           command: "cargo test",               icon: "Ship", category: "rust" },
+  { id: "preset-rs-clippy",    name: "Clippy",               command: "cargo clippy",             icon: "Ship", category: "rust" },
+  { id: "preset-rs-fmt",       name: "Cargo Fmt",            command: "cargo fmt",                icon: "Ship", category: "rust" },
+  { id: "preset-rs-check",     name: "Cargo Check",          command: "cargo check",              icon: "Ship", category: "rust" },
 ];
 
 /**
