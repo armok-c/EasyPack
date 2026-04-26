@@ -155,7 +155,7 @@ describe("useProject - command CRUD", () => {
     // Should include 2 defaults + 1 custom = 3
     expect(cmds.length).toBe(3);
     // Defaults should be present (git pull + claude per D-06)
-    expect(cmds.some((c) => c.name === "Git Pull")).toBe(true);
+    expect(cmds.some((c) => c.name === "拉取代码")).toBe(true);
     // Custom should be present
     expect(cmds.some((c) => c.name === "Custom1")).toBe(true);
   });
@@ -285,7 +285,7 @@ describe("useProject - project-level command override", () => {
     // 2 default copies (git pull + claude per D-06), no global presets/custom
     expect(cmds.length).toBe(2);
     expect(cmds.every((c) => c.scope === "project")).toBe(true);
-    expect(cmds.some((c) => c.name === "Git Pull")).toBe(true);
+    expect(cmds.some((c) => c.name === "拉取代码")).toBe(true);
     expect(cmds.some((c) => c.name === "启动 Claude")).toBe(true);
   });
 
@@ -332,7 +332,7 @@ describe("useProject - project-level command override", () => {
     expect(result.current.commandMode).toBe("global");
     // Commands should now show global defaults
     const cmds = result.current.commands;
-    expect(cmds.some((c) => c.name === "Git Pull")).toBe(true);
+    expect(cmds.some((c) => c.name === "拉取代码")).toBe(true);
     // Project command data should still exist in the map
     expect(result.current.projectCommandsMap[testProject.id]).toBeDefined();
     expect(result.current.projectCommandsMap[testProject.id].length).toBe(2);

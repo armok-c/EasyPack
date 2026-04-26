@@ -14,7 +14,7 @@ const mockProject: ProjectItem = {
 
 /** Default props for tests -- matches the expanded MainAreaProps interface. */
 const defaultCommands: CommandItem[] = [
-  { id: "preset-git-pull", name: "Git Pull", command: "git pull", icon: "GitBranch", type: "preset", scope: "global", addedAt: 0 },
+  { id: "preset-git-pull", name: "拉取代码", command: "git pull", icon: "GitBranch", type: "preset", scope: "global", addedAt: 0 },
   { id: "preset-claude", name: "启动 Claude", command: "claude", icon: "Sparkles", type: "preset", scope: "global", addedAt: 1 },
 ];
 
@@ -53,13 +53,13 @@ describe("MainArea - existing tests", () => {
 
   it("renders no CommandCard when no project selected", () => {
     render(<MainArea {...getDefaultProps({ currentProject: null })} />);
-    expect(screen.queryByText("Git Pull")).not.toBeInTheDocument();
+    expect(screen.queryByText("拉取代码")).not.toBeInTheDocument();
     expect(screen.queryByText("启动 Claude")).not.toBeInTheDocument();
   });
 
   it("renders 2 CommandCards when project is selected", () => {
     render(<MainArea {...getDefaultProps()} />);
-    expect(screen.getByText("Git Pull")).toBeInTheDocument();
+    expect(screen.getByText("拉取代码")).toBeInTheDocument();
     expect(screen.getByText("启动 Claude")).toBeInTheDocument();
   });
 
@@ -161,7 +161,7 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     ];
     render(<MainArea {...getDefaultProps({ commands: customCommands })} />);
     expect(screen.getByText("MyCmd")).toBeInTheDocument();
-    expect(screen.getByText("Git Pull")).toBeInTheDocument();
+    expect(screen.getByText("拉取代码")).toBeInTheDocument();
   });
 
   // Test 7: Click execute in non-edit mode
@@ -169,7 +169,7 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     const onExecute = vi.fn();
     render(<MainArea {...getDefaultProps({ onExecute })} />);
 
-    fireEvent.click(screen.getByText("Git Pull"));
+    fireEvent.click(screen.getByText("拉取代码"));
     expect(onExecute).toHaveBeenCalledWith("git pull");
   });
 });
