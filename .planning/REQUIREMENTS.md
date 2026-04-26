@@ -32,8 +32,8 @@
 ### PRE — 预设指令系统
 
 - [ ] **PRE-01**: 添加指令模态窗包含双下拉框（先选大分类，再选具体命令），用于选择预设指令
-- [ ] **PRE-02**: 默认卡片仅保留 git pull 和 open claude 两个，移除其他默认指令卡片
-- [ ] **PRE-03**: 预设命令库涵盖 python、pip、git、rust/cargo、npm/node 常用命令
+- [ ] **PRE-02**: ~~默认卡片仅保留 git pull 和 open claude 两个，移除其他默认指令卡片~~ Complete (10-01)
+- [ ] **PRE-03**: ~~预设命令库涵盖 python、pip、git、rust/cargo、npm/node 常用命令~~ Complete (10-01)
 - [ ] **PRE-04**: 用户通过预设添加指令时，可选择添加为全局指令或当前项目指令
 
 ## Future Requirements
@@ -72,8 +72,8 @@ Deferred to future milestones.
 | PROJ-11 | Phase 9 | Pending |
 | UI-10 | Phase 9 | Pending |
 | PRE-01 | Phase 10 | Pending |
-| PRE-02 | Phase 10 | Pending |
-| PRE-03 | Phase 10 | Pending |
+| PRE-02 | Phase 10 | Complete (10-01) |
+| PRE-03 | Phase 10 | Complete (10-01) |
 | PRE-04 | Phase 10 | Pending |
 
 **Coverage:**

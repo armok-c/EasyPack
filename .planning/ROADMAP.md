@@ -102,7 +102,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 10-01-PLAN.md -- 预设库数据层扩展（presets.ts 重写 + icons.ts 扩展 + Select 安装）
+- [x] 10-01-PLAN.md -- 预设库数据层扩展（presets.ts 重写 + icons.ts 扩展 + Select 安装）
 - [ ] 10-02-PLAN.md -- CommandDialog 双 Select 预设选择器 UI 集成
 
 ## Progress
@@ -121,4 +121,4 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 7. 无边框窗口与自定义标题栏 | v1.1 | 1/1 | Complete | 2026-04-17 |
 | 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
 | 9. 前端 UI 集成 | v1.1 | 1/1 | Complete | 2026-04-25 |
-| 10. 预设指令系统 | v1.1 | 0/2 | Not started | - |
+| 10. 预设指令系统 | v1.1 | 1/2 | In Progress | - |
