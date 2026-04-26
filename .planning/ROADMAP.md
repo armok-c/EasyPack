@@ -18,7 +18,7 @@
 
 </details>
 
-### v1.1 体验增强与预设指令 (In Progress)
+### v1.1 体验增强与预设指令 (Complete)
 
 **Milestone Goal:** 修复命令执行核心问题，提升窗口体验和操作效率，引入预设指令系统降低配置成本。
 
@@ -26,7 +26,7 @@
 - [x] **Phase 7: 无边框窗口与自定义标题栏** -- completed 2026-04-17
 - [x] **Phase 8: Rust 后端扩展与快速 UI 修复** -- completed 2026-04-25
 - [x] **Phase 9: 前端 UI 集成** -- completed 2026-04-25
-- [ ] **Phase 10: 预设指令系统** -- 分类的预设指令库、双下拉框选择器、全局/项目级选择
+- [x] **Phase 10: 预设指令系统** -- completed 2026-04-26
 
 ## Phase Details
 
@@ -50,7 +50,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. 应用窗口顶部显示自定义标题栏，包含应用名称、拖拽区域和最小化/最大化/关闭按钮，三个按钮功能正常
   2. 窗口保留正常阴影效果，用户可通过鼠标拖拽四边和四角调整窗口大小
-  3. 高 DPI 显示器下标题栏文字、按钮和窗口内容显示清晰正常，无模糊或缩放异常
+  3. 高 DPI 显示器下无边框窗口元素和文字显示正常，无模糊或缩放异常
 **Plans**: 1 plan
 **UI hint**: yes
 
@@ -98,12 +98,13 @@ Plans:
   2. 默认指令卡片仅保留 git pull 和 open claude 两个，其他原有默认卡片已移除
   3. 预设命令库涵盖 python、pip、git、rust/cargo、npm/node 常用命令，用户可在下拉框中浏览和选择
   4. 用户通过预设添加指令时，可选择添加为全局指令或当前项目指令，添加后指令卡片立即显示在对应区域
-**Plans**: 2 plans
+**Plans**: 3 plans
 **UI hint**: yes
 
 Plans:
 - [x] 10-01-PLAN.md -- 预设库数据层扩展（presets.ts 重写 + icons.ts 扩展 + Select 安装）
-- [ ] 10-02-PLAN.md -- CommandDialog 双 Select 预设选择器 UI 集成
+- [x] 10-02-PLAN.md -- CommandDialog 双 Select 预设选择器 UI 集成
+- [x] 10-03-PLAN.md -- Gap closure: CargoShip 替换为 Ship + scope 选择 UI (PRE-04)
 
 ## Progress
 
@@ -121,4 +122,4 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 7. 无边框窗口与自定义标题栏 | v1.1 | 1/1 | Complete | 2026-04-17 |
 | 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
 | 9. 前端 UI 集成 | v1.1 | 1/1 | Complete | 2026-04-25 |
-| 10. 预设指令系统 | v1.1 | 1/2 | In Progress | - |
+| 10. 预设指令系统 | v1.1 | 3/3 | Complete | 2026-04-26 |
