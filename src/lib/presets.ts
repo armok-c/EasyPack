@@ -1,34 +1,85 @@
-import { Package, Play, GitPullRequest, Sparkles, type LucideIcon } from "lucide-react";
 import type { CommandItem } from "./types";
 
-export interface PresetCommand {
-  name: string;
-  command: string;
-  icon: LucideIcon;
+export interface PresetCategory {
+  id: string;
+  label: string;
+  icon: string;
 }
 
-export const PRESET_COMMANDS: PresetCommand[] = [
-  { name: "打包项目", command: "npm run build", icon: Package },
-  { name: "启动项目", command: "npm run dev", icon: Play },
-  { name: "Git Pull", command: "git pull", icon: GitPullRequest },
-  { name: "启动 Claude", command: "claude", icon: Sparkles },
+export interface PresetCommand {
+  id: string;
+  name: string;
+  command: string;
+  icon: string;
+  category: string;
+}
+
+export const PRESET_CATEGORIES: PresetCategory[] = [
+  { id: "git",    label: "Git",         icon: "GitBranch" },
+  { id: "npm",    label: "NPM/Node",    icon: "Package" },
+  { id: "python", label: "Python/Pip",  icon: "Terminal" },
+  { id: "rust",   label: "Rust/Cargo",  icon: "CargoShip" },
 ];
 
-/** Hardcoded icon names matching PRESET_COMMANDS order (LucideIcon.displayName is unreliable). */
-const PRESET_ICON_NAMES = ["Package", "Play", "GitBranch", "Sparkles"] as const;
+export const ALL_PRESETS: PresetCommand[] = [
+  // Git (8 commands)
+  { id: "preset-git-pull",     name: "Git Pull",           command: "git pull",                  icon: "GitBranch", category: "git" },
+  { id: "preset-git-push",     name: "Git Push",           command: "git push",                  icon: "GitBranch", category: "git" },
+  { id: "preset-git-status",   name: "Git Status",         command: "git status",                icon: "GitBranch", category: "git" },
+  { id: "preset-git-log",      name: "Git Log",            command: "git log --oneline -10",     icon: "GitBranch", category: "git" },
+  { id: "preset-git-fetch",    name: "Git Fetch",          command: "git fetch",                 icon: "GitBranch", category: "git" },
+  { id: "preset-git-checkout", name: "Git Checkout Main",  command: "git checkout main",         icon: "GitBranch", category: "git" },
+  { id: "preset-git-add",      name: "Git Add All",        command: "git add .",                 icon: "GitBranch", category: "git" },
+  { id: "preset-git-commit",   name: "Git Commit",         command: "git commit",                icon: "GitBranch", category: "git" },
+
+  // NPM/Node (6 commands) — per D-02: includes "打包项目" and "启动项目" for user manual selection
+  { id: "preset-npm-install",  name: "Install Dependencies", command: "npm install",             icon: "Package",   category: "npm" },
+  { id: "preset-npm-build",    name: "Build Project",        command: "npm run build",           icon: "Package",   category: "npm" },
+  { id: "preset-npm-dev",      name: "Dev Server",           command: "npm run dev",             icon: "Package",   category: "npm" },
+  { id: "preset-npm-test",     name: "Run Tests",            command: "npm test",                icon: "Package",   category: "npm" },
+  { id: "preset-npm-lint",     name: "Lint",                 command: "npm run lint",            icon: "Package",   category: "npm" },
+  { id: "preset-npm-start",    name: "Start",                command: "npm start",               icon: "Package",   category: "npm" },
+
+  // Python/Pip (5 commands)
+  { id: "preset-py-run",       name: "Run Python",           command: "python",                   icon: "Terminal",  category: "python" },
+  { id: "preset-py-install",   name: "Pip Install",          command: "pip install",              icon: "Terminal",  category: "python" },
+  { id: "preset-py-reqs",      name: "Install Requirements", command: "pip install -r requirements.txt", icon: "Terminal", category: "python" },
+  { id: "preset-py-venv",      name: "Create Venv",          command: "python -m venv venv",      icon: "Terminal",  category: "python" },
+  { id: "preset-py-test",      name: "Pytest",               command: "pytest",                   icon: "Terminal",  category: "python" },
+
+  // Rust/Cargo (6 commands)
+  { id: "preset-rs-build",     name: "Cargo Build",          command: "cargo build",              icon: "CargoShip", category: "rust" },
+  { id: "preset-rs-run",       name: "Cargo Run",            command: "cargo run",                icon: "CargoShip", category: "rust" },
+  { id: "preset-rs-test",      name: "Cargo Test",           command: "cargo test",               icon: "CargoShip", category: "rust" },
+  { id: "preset-rs-clippy",    name: "Clippy",               command: "cargo clippy",             icon: "CargoShip", category: "rust" },
+  { id: "preset-rs-fmt",       name: "Cargo Fmt",            command: "cargo fmt",                icon: "CargoShip", category: "rust" },
+  { id: "preset-rs-check",     name: "Cargo Check",          command: "cargo check",              icon: "CargoShip", category: "rust" },
+];
 
 /**
- * Converts preset commands to the unified CommandItem format.
- * Used for displaying global commands in the command grid.
+ * Returns only the 2 default command items for new projects.
+ * Per D-06: only git pull + claude retained as defaults.
+ * Replaces the old getPresetAsCommandItems() which returned 4 items.
  */
-export function getPresetAsCommandItems(): CommandItem[] {
-  return PRESET_COMMANDS.map((cmd, idx) => ({
-    id: `preset-${idx}`,
-    name: cmd.name,
-    command: cmd.command,
-    icon: PRESET_ICON_NAMES[idx],
-    type: "preset" as const,
-    scope: "global" as const,
-    addedAt: idx,
-  }));
+export function getDefaultsAsCommandItems(): CommandItem[] {
+  return [
+    {
+      id: "preset-git-pull",
+      name: "Git Pull",
+      command: "git pull",
+      icon: "GitBranch",
+      type: "preset" as const,
+      scope: "global" as const,
+      addedAt: 0,
+    },
+    {
+      id: "preset-claude",
+      name: "启动 Claude",
+      command: "claude",
+      icon: "Sparkles",
+      type: "preset" as const,
+      scope: "global" as const,
+      addedAt: 1,
+    },
+  ];
 }

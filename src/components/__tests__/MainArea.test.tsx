@@ -14,10 +14,8 @@ const mockProject: ProjectItem = {
 
 /** Default props for tests -- matches the expanded MainAreaProps interface. */
 const defaultCommands: CommandItem[] = [
-  { id: "preset-0", name: "打包项目", command: "npm run build", icon: "Package", type: "preset", scope: "global", addedAt: 0 },
-  { id: "preset-1", name: "启动项目", command: "npm run dev", icon: "Play", type: "preset", scope: "global", addedAt: 1 },
-  { id: "preset-2", name: "Git Pull", command: "git pull", icon: "GitBranch", type: "preset", scope: "global", addedAt: 2 },
-  { id: "preset-3", name: "启动 Claude", command: "claude", icon: "Sparkles", type: "preset", scope: "global", addedAt: 3 },
+  { id: "preset-git-pull", name: "Git Pull", command: "git pull", icon: "GitBranch", type: "preset", scope: "global", addedAt: 0 },
+  { id: "preset-claude", name: "启动 Claude", command: "claude", icon: "Sparkles", type: "preset", scope: "global", addedAt: 1 },
 ];
 
 function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
@@ -55,16 +53,12 @@ describe("MainArea - existing tests", () => {
 
   it("renders no CommandCard when no project selected", () => {
     render(<MainArea {...getDefaultProps({ currentProject: null })} />);
-    expect(screen.queryByText("打包项目")).not.toBeInTheDocument();
-    expect(screen.queryByText("启动项目")).not.toBeInTheDocument();
     expect(screen.queryByText("Git Pull")).not.toBeInTheDocument();
     expect(screen.queryByText("启动 Claude")).not.toBeInTheDocument();
   });
 
-  it("renders 4 CommandCards when project is selected", () => {
+  it("renders 2 CommandCards when project is selected", () => {
     render(<MainArea {...getDefaultProps()} />);
-    expect(screen.getByText("打包项目")).toBeInTheDocument();
-    expect(screen.getByText("启动项目")).toBeInTheDocument();
     expect(screen.getByText("Git Pull")).toBeInTheDocument();
     expect(screen.getByText("启动 Claude")).toBeInTheDocument();
   });
@@ -167,7 +161,7 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     ];
     render(<MainArea {...getDefaultProps({ commands: customCommands })} />);
     expect(screen.getByText("MyCmd")).toBeInTheDocument();
-    expect(screen.getByText("打包项目")).toBeInTheDocument();
+    expect(screen.getByText("Git Pull")).toBeInTheDocument();
   });
 
   // Test 7: Click execute in non-edit mode
@@ -175,7 +169,7 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     const onExecute = vi.fn();
     render(<MainArea {...getDefaultProps({ onExecute })} />);
 
-    fireEvent.click(screen.getByText("打包项目"));
-    expect(onExecute).toHaveBeenCalledWith("npm run build");
+    fireEvent.click(screen.getByText("Git Pull"));
+    expect(onExecute).toHaveBeenCalledWith("git pull");
   });
 });

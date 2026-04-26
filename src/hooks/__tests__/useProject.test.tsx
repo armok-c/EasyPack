@@ -152,10 +152,10 @@ describe("useProject - command CRUD", () => {
     });
 
     const cmds = result.current.commands;
-    // Should include 4 presets + 1 custom = 5
-    expect(cmds.length).toBe(5);
-    // Presets should be present
-    expect(cmds.some((c) => c.name === "打包项目")).toBe(true);
+    // Should include 2 defaults + 1 custom = 3
+    expect(cmds.length).toBe(3);
+    // Defaults should be present (git pull + claude per D-06)
+    expect(cmds.some((c) => c.name === "Git Pull")).toBe(true);
     // Custom should be present
     expect(cmds.some((c) => c.name === "Custom1")).toBe(true);
   });
@@ -273,8 +273,8 @@ describe("useProject - project-level command override", () => {
     return result;
   }
 
-  // Test 1: enableProjectCommands — commands completely replaced with project-level (4 preset copies)
-  it("enableProjectCommands replaces commands with 4 project-level preset copies", async () => {
+  // Test 1: enableProjectCommands — commands completely replaced with project-level (2 default copies)
+  it("enableProjectCommands replaces commands with 2 project-level default copies", async () => {
     const result = await initWithProject();
 
     await act(async () => {
@@ -282,11 +282,9 @@ describe("useProject - project-level command override", () => {
     });
 
     const cmds = result.current.commands;
-    // 4 preset copies, no global presets/custom
-    expect(cmds.length).toBe(4);
+    // 2 default copies (git pull + claude per D-06), no global presets/custom
+    expect(cmds.length).toBe(2);
     expect(cmds.every((c) => c.scope === "project")).toBe(true);
-    expect(cmds.some((c) => c.name === "打包项目")).toBe(true);
-    expect(cmds.some((c) => c.name === "启动项目")).toBe(true);
     expect(cmds.some((c) => c.name === "Git Pull")).toBe(true);
     expect(cmds.some((c) => c.name === "启动 Claude")).toBe(true);
   });
@@ -317,8 +315,8 @@ describe("useProject - project-level command override", () => {
     expect(result.current.editMode).toBe(true);
   });
 
-  // Test 4: disableProjectCommands — deletes project-level set, reverts to global mode
-  it("disableProjectCommands removes project-level set and reverts to global", async () => {
+  // Test 4: disableProjectCommands — pure view toggle, preserves data, reverts to global mode
+  it("disableProjectCommands switches to global mode without deleting data", async () => {
     const result = await initWithProject();
 
     await act(async () => {
@@ -332,9 +330,12 @@ describe("useProject - project-level command override", () => {
     });
 
     expect(result.current.commandMode).toBe("global");
-    // Commands should now include global presets
+    // Commands should now show global defaults
     const cmds = result.current.commands;
-    expect(cmds.some((c) => c.name === "打包项目")).toBe(true);
+    expect(cmds.some((c) => c.name === "Git Pull")).toBe(true);
+    // Project command data should still exist in the map
+    expect(result.current.projectCommandsMap[testProject.id]).toBeDefined();
+    expect(result.current.projectCommandsMap[testProject.id].length).toBe(2);
   });
 
   // Test 5: commands switch — project with project-level set shows only project commands
@@ -388,8 +389,8 @@ describe("useProject - project-level command override", () => {
     });
 
     expect(result.current.commandMode).toBe("global");
-    // Should have 4 global presets
-    expect(result.current.commands.length).toBe(4);
+    // Should have 2 global defaults (git pull + claude per D-06)
+    expect(result.current.commands.length).toBe(2);
     expect(result.current.commands.every((c) => c.scope === "global")).toBe(true);
   });
 
@@ -404,7 +405,7 @@ describe("useProject - project-level command override", () => {
     expect(result.current.commandMode).toBe("project");
     const cmds = result.current.commands;
 
-    // Delete all 4 project-level commands one by one
+    // Delete all 2 project-level commands one by one
     for (const cmd of [...cmds]) {
       await act(async () => {
         await result.current.deleteCommand(cmd.id);
@@ -413,8 +414,8 @@ describe("useProject - project-level command override", () => {
 
     // Should have auto-reverted to global mode
     expect(result.current.commandMode).toBe("global");
-    // Global commands should now be showing
-    expect(result.current.commands.length).toBe(4);
+    // Global defaults should now be showing (2 per D-06)
+    expect(result.current.commands.length).toBe(2);
     expect(result.current.commands.every((c) => c.scope === "global")).toBe(true);
   });
 
@@ -433,7 +434,7 @@ describe("useProject - project-level command override", () => {
     );
     expect(projectCmdCall).toBeDefined();
     const saved = projectCmdCall![1] as CommandItem[];
-    expect(saved.length).toBe(4);
+    expect(saved.length).toBe(2);
     expect(saved.every((c) => c.scope === "project")).toBe(true);
   });
 
@@ -454,14 +455,14 @@ describe("useProject - project-level command override", () => {
       await result.current.deleteCommand(cmdToDelete.id);
     });
 
-    // store.set should update projectCommands key with 3 remaining
+    // store.set should update projectCommands key with 1 remaining
     const calls = mockStore.set.mock.calls;
     const projectCmdCall = calls.find(
       (c) => c[0] === "projectCommands:test/project-a"
     );
     expect(projectCmdCall).toBeDefined();
     const saved = projectCmdCall![1] as CommandItem[];
-    expect(saved.length).toBe(3);
+    expect(saved.length).toBe(1);
   });
 
   // Test 10: addCommand in project mode — appends to project-level Store key
@@ -479,7 +480,7 @@ describe("useProject - project-level command override", () => {
       await result.current.addCommand("项目专属指令", "npm run special");
     });
 
-    expect(result.current.commands.length).toBe(5);
+    expect(result.current.commands.length).toBe(3);
 
     const calls = mockStore.set.mock.calls;
     const projectCmdCall = calls.find(
@@ -487,7 +488,7 @@ describe("useProject - project-level command override", () => {
     );
     expect(projectCmdCall).toBeDefined();
     const saved = projectCmdCall![1] as CommandItem[];
-    expect(saved.length).toBe(5);
+    expect(saved.length).toBe(3);
     expect(saved.some((c) => c.name === "项目专属指令")).toBe(true);
     // New command should be custom type
     const added = saved.find((c) => c.name === "项目专属指令")!;
@@ -533,7 +534,7 @@ describe("useProject - project-level command override", () => {
     });
 
     expect(result.current.commandMode).toBe("global");
-    expect(result.current.commands.length).toBe(4);
+    expect(result.current.commands.length).toBe(2);
     expect(result.current.commands.every((c) => c.scope === "global")).toBe(true);
   });
 });

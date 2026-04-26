@@ -4,7 +4,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import type { CommandItem } from "@/lib/types";
-import { getPresetAsCommandItems } from "@/lib/presets";
+import { getDefaultsAsCommandItems } from "@/lib/presets";
 import { DEFAULT_ICON } from "@/lib/icons";
 
 export interface ProjectItem {
@@ -64,21 +64,23 @@ export function useProject() {
     ? projects.find((p) => p.id === selectedId) ?? null
     : null;
 
-  // Merged command list: project-level override or global presets + custom, sorted by addedAt
+  // Merged command list: use commandMode to decide, sorted by addedAt
   const commands = useMemo(() => {
     if (!selectedId) return [];
-    const projectCmds = projectCommandsMap[selectedId];
-    if (projectCmds && projectCmds.length > 0) {
-      // Project-level mode (per D-07: complete replacement)
-      return [...projectCmds].sort((a, b) => a.addedAt - b.addedAt);
+    if (commandMode === "project") {
+      const projectCmds = projectCommandsMap[selectedId];
+      if (projectCmds && projectCmds.length > 0) {
+        return [...projectCmds].sort((a, b) => a.addedAt - b.addedAt);
+      }
+      return [];
     }
     // Global mode: presets + global custom commands
-    return [...getPresetAsCommandItems(), ...customCommands].sort(
+    return [...getDefaultsAsCommandItems(), ...customCommands].sort(
       (a, b) => a.addedAt - b.addedAt
     );
-  }, [selectedId, customCommands, projectCommandsMap]);
+  }, [selectedId, customCommands, projectCommandsMap, commandMode]);
 
-  // Auto-update commandMode when selectedId or projectCommandsMap changes
+  // Auto-detect commandMode only when switching projects (not on every projectCommandsMap change)
   useEffect(() => {
     if (!selectedId) {
       setCommandMode("global");
@@ -86,7 +88,8 @@ export function useProject() {
     }
     const projectCmds = projectCommandsMap[selectedId];
     setCommandMode(projectCmds && projectCmds.length > 0 ? "project" : "global");
-  }, [selectedId, projectCommandsMap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   // Initialize: load store and restore persisted data
   useEffect(() => {
@@ -342,6 +345,7 @@ export function useProject() {
             return next;
           });
           await store?.delete(projectCommandsKey(selectedId));
+          setCommandMode("global");
         } else {
           setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
           await store?.set(projectCommandsKey(selectedId), updated);
@@ -362,11 +366,15 @@ export function useProject() {
 
   // --- Project-level command set management ---
 
-  // Enable project-level commands: create set with 4 preset copies (per D-08, D-22)
+  // Enable project-level commands: reuse existing set or create from presets (per D-08, D-22)
   const enableProjectCommands = useCallback(async () => {
     if (!selectedId) return;
-    const presets = getPresetAsCommandItems();
-    // Copy presets as project-level with new IDs and scope='project'
+    const existing = projectCommandsMap[selectedId];
+    if (existing && existing.length > 0) {
+      setCommandMode("project");
+      return;
+    }
+    const presets = getDefaultsAsCommandItems();
     const projectCmds: CommandItem[] = presets.map((p, idx) => ({
       ...p,
       id: crypto.randomUUID(),
@@ -375,22 +383,15 @@ export function useProject() {
     }));
     setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: projectCmds }));
     await store?.set(projectCommandsKey(selectedId), projectCmds);
+    setCommandMode("project");
     setEditMode(true); // per D-22: auto-enter edit mode
     toast.success("已创建项目指令集，请配置指令");
-  }, [selectedId, store]);
+  }, [selectedId, store, projectCommandsMap]);
 
-  // Disable project-level commands: remove set and revert to global
+  // Switch to global mode: pure view toggle, preserve project command data
   const disableProjectCommands = useCallback(async () => {
-    if (!selectedId) return;
-    setProjectCommandsMap((prev) => {
-      const next = { ...prev };
-      delete next[selectedId];
-      return next;
-    });
-    await store?.delete(projectCommandsKey(selectedId));
     setCommandMode("global");
-    toast.success("已切换到全局指令");
-  }, [selectedId, store]);
+  }, []);
 
   // Phase 5 Plan 01: update project icon and color
   const updateProjectStyle = useCallback(
