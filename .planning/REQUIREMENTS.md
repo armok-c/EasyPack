@@ -75,39 +75,39 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| KB-01 | — | Pending |
-| KB-02 | — | Pending |
-| KB-03 | — | Pending |
-| KB-04 | — | Pending |
-| KB-05 | — | Pending |
-| KB-06 | — | Pending |
-| TRAY-01 | — | Pending |
-| TRAY-02 | — | Pending |
-| TRAY-03 | — | Pending |
-| TRAY-04 | — | Pending |
-| TRAY-05 | — | Pending |
-| TRAY-06 | — | Pending |
-| TRAY-07 | — | Pending |
-| TRAY-08 | — | Pending |
-| FLOAT-01 | — | Pending |
-| FLOAT-02 | — | Pending |
-| FLOAT-03 | — | Pending |
-| FLOAT-04 | — | Pending |
-| FLOAT-05 | — | Pending |
-| FLOAT-06 | — | Pending |
-| FLOAT-07 | — | Pending |
-| DRAWER-01 | — | Pending |
-| DRAWER-02 | — | Pending |
-| DRAWER-03 | — | Pending |
-| DRAWER-04 | — | Pending |
-| DRAWER-05 | — | Pending |
-| DRAWER-06 | — | Pending |
+| KB-01 | Phase 11 | Pending |
+| KB-02 | Phase 11 | Pending |
+| KB-03 | Phase 11 | Pending |
+| KB-04 | Phase 11 | Pending |
+| KB-05 | Phase 11 | Pending |
+| KB-06 | Phase 11 | Pending |
+| TRAY-01 | Phase 12 | Pending |
+| TRAY-02 | Phase 12 | Pending |
+| TRAY-03 | Phase 12 | Pending |
+| TRAY-04 | Phase 12 | Pending |
+| TRAY-05 | Phase 12 | Pending |
+| TRAY-06 | Phase 12 | Pending |
+| TRAY-07 | Phase 12 | Pending |
+| TRAY-08 | Phase 12 | Pending |
+| FLOAT-01 | Phase 13 | Pending |
+| FLOAT-02 | Phase 13 | Pending |
+| FLOAT-03 | Phase 13 | Pending |
+| FLOAT-04 | Phase 13 | Pending |
+| FLOAT-05 | Phase 13 | Pending |
+| FLOAT-06 | Phase 13 | Pending |
+| FLOAT-07 | Phase 13 | Pending |
+| DRAWER-01 | Phase 14 | Pending |
+| DRAWER-02 | Phase 14 | Pending |
+| DRAWER-03 | Phase 14 | Pending |
+| DRAWER-04 | Phase 14 | Pending |
+| DRAWER-05 | Phase 14 | Pending |
+| DRAWER-06 | Phase 14 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 27 total
-- Mapped to phases: 0
-- Unmapped: 27 ⚠️
+- Mapped to phases: 27
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after initial definition*
+*Last updated: 2026-04-26 after roadmap creation*
