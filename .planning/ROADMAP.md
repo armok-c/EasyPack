@@ -22,10 +22,10 @@
 
 **Milestone Goal:** 修复命令执行核心问题，提升窗口体验和操作效率，引入预设指令系统降低配置成本。
 
-- [ ] **Phase 6: 命令执行修复** -- 修复阻断所有指令执行的 0x80070002 错误，含特殊字符路径
-- [ ] **Phase 7: 无边框窗口与自定义标题栏** -- 实现无边框窗口、窗口阴影/resize、高 DPI 支持
-- [ ] **Phase 8: Rust 后端扩展与快速 UI 修复** -- 新增项目信息检测命令、文件夹大小/Git 分支后端、模态窗自适应
-- [x] **Phase 9: 前端 UI 集成** -- 指令切换按钮化、打开文件夹按钮 -- completed 2026-04-25
+- [x] **Phase 6: 命令执行修复** -- completed 2026-04-17
+- [x] **Phase 7: 无边框窗口与自定义标题栏** -- completed 2026-04-17
+- [x] **Phase 8: Rust 后端扩展与快速 UI 修复** -- completed 2026-04-25
+- [x] **Phase 9: 前端 UI 集成** -- completed 2026-04-25
 - [ ] **Phase 10: 预设指令系统** -- 分类的预设指令库、双下拉框选择器、全局/项目级选择
 
 ## Phase Details
@@ -41,7 +41,7 @@
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- 使用 raw_arg 修复命令执行传参，含人工验证 checkpoint
+- [x] 06-01-PLAN.md -- 使用 raw_arg 修复命令执行传参
 
 ### Phase 7: 无边框窗口与自定义标题栏
 **Goal**: 应用拥有现代化的无边框窗口外观，顶部显示自定义标题栏（应用名称、拖拽区域、窗口控制按钮），窗口阴影和 resize 正常工作
@@ -55,7 +55,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [x] 07-01-PLAN.md -- 无边框窗口和自定义标题栏实现（Task 3 checkpoint pending）
+- [x] 07-01-PLAN.md -- 无边框窗口和自定义标题栏实现
 
 ### Phase 8: Rust 后端扩展与快速 UI 修复
 **Goal**: Rust 后端提供项目信息检测能力（图标识别、文件夹大小、Git 分支、打开文件夹），模态窗在窗口过小时可滚动不被截断
@@ -98,8 +98,12 @@ Plans:
   2. 默认指令卡片仅保留 git pull 和 open claude 两个，其他原有默认卡片已移除
   3. 预设命令库涵盖 python、pip、git、rust/cargo、npm/node 常用命令，用户可在下拉框中浏览和选择
   4. 用户通过预设添加指令时，可选择添加为全局指令或当前项目指令，添加后指令卡片立即显示在对应区域
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 10-01-PLAN.md -- 预设库数据层扩展（presets.ts 重写 + icons.ts 扩展 + Select 安装）
+- [ ] 10-02-PLAN.md -- CommandDialog 双 Select 预设选择器 UI 集成
 
 ## Progress
 
@@ -117,4 +121,4 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 7. 无边框窗口与自定义标题栏 | v1.1 | 1/1 | Complete | 2026-04-17 |
 | 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
 | 9. 前端 UI 集成 | v1.1 | 1/1 | Complete | 2026-04-25 |
-| 10. 预设指令系统 | v1.1 | 0/? | Not started | - |
+| 10. 预设指令系统 | v1.1 | 0/2 | Not started | - |
