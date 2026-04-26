@@ -9,6 +9,8 @@ import {
   Wrench,
   Rocket,
   Play,
+  Sparkles,
+  CargoShip,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +29,8 @@ export const ICON_OPTIONS: Record<string, LucideIcon> = {
   Wrench,
   Rocket,
   Play,
+  Sparkles,
+  CargoShip,
 };
 
 export const DEFAULT_ICON = "Terminal";
