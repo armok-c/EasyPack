@@ -1,17 +1,17 @@
-# Stack Research -- v1.1 Milestone Additions
+# Stack Research -- v1.2 Milestone Additions
 
 **Domain:** Tauri 2.x Windows 桌面项目快捷指令启动器
-**Milestone:** v1.1 体验增强与预设指令
-**Researched:** 2026-04-15
+**Milestone:** v1.2 快捷键、托盘与窗口增强
+**Researched:** 2026-04-26
 **Confidence:** HIGH
 
 ---
 
-## Existing Stack (v1.0, No Changes Needed)
+## Existing Stack (v1.1, No Changes Needed)
 
 | Technology | Version | Status |
 |------------|---------|--------|
-| Tauri | 2.10.x | Unchanged |
+| Tauri | 2.10.x | Unchanged (core) |
 | React | 19.x | Unchanged |
 | TypeScript | 5.7.x | Unchanged |
 | Vite | 6.x | Unchanged |
@@ -21,268 +21,324 @@
 | tauri-plugin-store | 2.4.2 | Unchanged |
 | tauri-plugin-dialog | 2.x | Unchanged |
 | @dnd-kit/react | 0.4.0 | Unchanged |
+| walkdir | 2.5.0 | Unchanged |
 
-## New Rust Crate Required
+## New Dependencies Required
 
-### walkdir 2.5.0
+### 1. tauri-plugin-global-shortcut (Rust + npm)
 
 | Aspect | Detail |
 |--------|--------|
-| **Crate** | `walkdir` |
-| **Version** | 2.5.0 (latest stable, published 2024-03-01) |
-| **Purpose** | Recursive directory traversal for folder size calculation |
-| **Why this crate** | Cross-platform, zero-config, by BurntSushi (same author as ripgrep). Iterates all files in a directory tree; sum `metadata().len()` for each file entry to compute total size. No unsafe code, minimal dependencies. |
-| **Why NOT alternatives** | `jwalk` adds parallel traversal overhead unnecessary for typical project directories (hundreds of MB, not millions of files). Manual `std::fs::read_dir` recursion is error-prone for symlink loops and permission errors. |
-| **Confidence** | HIGH -- verified via crates.io API, 393M+ downloads, well-maintained |
+| **Rust crate** | `tauri-plugin-global-shortcut` |
+| **npm package** | `@tauri-apps/plugin-global-shortcut` |
+| **Version** | 2.x (matches Tauri 2 ecosystem) |
+| **Purpose** | Register system-wide keyboard shortcuts that work even when the app is not focused |
+| **Why this plugin** | Official Tauri 2 plugin. Handles OS-level hotkey registration/unregistration with proper key event handling. The JS API provides `register()`, `unregister()`, `isRegistered()` and event callbacks for key press/release. This is the ONLY way to implement per-command hotkeys that work when the app is in the background. |
+| **Why NOT alternatives** | Rolling a custom solution via Win32 `RegisterHotKey` API requires `windows` crate + unsafe FFI + manual message loop integration. The official plugin abstracts all of this and is maintained by the Tauri team. |
+| **Confidence** | HIGH -- verified via official Tauri v2 docs at v2.tauri.app/plugin/global-shortcut |
 
 **Cargo.toml addition:**
 ```toml
-walkdir = "2.5"
+tauri-plugin-global-shortcut = "2"
 ```
 
-**Usage pattern for folder size:**
-```rust
-use walkdir::WalkDir;
-use std::path::Path;
+**npm install:**
+```bash
+npm install @tauri-apps/plugin-global-shortcut
+```
 
-pub fn calculate_folder_size(path: &Path) -> Result<u64, String> {
-    let mut total_size: u64 = 0;
-    for entry in WalkDir::new(path)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        if entry.file_type().is_file() {
-            total_size += entry.metadata().map(|m| m.len()).unwrap_or(0);
-        }
-    }
-    Ok(total_size)
+**lib.rs plugin registration:**
+```rust
+.plugin(tauri_plugin_global_shortcut::init())
+```
+
+**JS usage pattern:**
+```typescript
+import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
+
+// Register a hotkey for a command
+await register('CommandOrControl+Shift+G', (event) => {
+  if (event.state === 'Pressed') {
+    executeCommand(currentProject, command);
+  }
+});
+```
+
+**Required permissions:**
+```json
+"global-shortcut:allow-register",
+"global-shortcut:allow-unregister",
+"global-shortcut:allow-is-registered"
+```
+
+---
+
+### 2. System Tray -- Built-in Tauri Feature (NO new dependency)
+
+| Aspect | Detail |
+|--------|--------|
+| **Type** | Built-in Tauri 2 feature, NOT a separate plugin |
+| **Cargo feature** | `"tray-icon"` added to `tauri` features in Cargo.toml |
+| **npm package** | None -- `TrayIcon` API is included in `@tauri-apps/api` (already installed) |
+| **Purpose** | System tray icon with right-click context menu; minimize to tray on window close |
+| **Why built-in** | Tauri 2 ships tray support as a Cargo feature flag. The JS API (`TrayIcon`, `Menu`, `MenuItem`) comes from `@tauri-apps/api/tray` and `@tauri-apps/api/menu`. No external plugin needed. |
+| **Confidence** | HIGH -- verified via official Tauri v2 docs at v2.tauri.app/learn/system-tray |
+
+**Cargo.toml modification:**
+```toml
+# BEFORE:
+tauri = { version = "2", features = ["protocol-asset"] }
+
+# AFTER:
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+```
+
+**tauri.conf.json addition (under `app`):**
+```json
+"trayIcon": {
+  "iconPath": "icons/icon.png",
+  "iconAsTemplate": false,
+  "id": "main-tray",
+  "tooltip": "EasyPack"
 }
 ```
 
-### NOT Added: git2 crate
+**JS usage pattern (in lib.rs setup or frontend):**
+```typescript
+import { TrayIcon } from '@tauri-apps/api/tray';
+import { Menu, MenuItem } from '@tauri-apps/api/menu';
 
-Reading the current Git branch does NOT require the `git2` crate. The `git2` crate (v0.20.4) pulls in libgit2 C library + openssl dependencies, significantly bloating the build for a feature that needs only to read one text file.
+const menu = await Menu.new({
+  items: [
+    await MenuItem.new({ text: '显示主窗口', action: () => showWindow() }),
+    await MenuItem.new({ text: '退出', action: () => exitApp() }),
+  ]
+});
 
-**Instead:** Parse `.git/HEAD` directly with `std::fs::read_to_string` (~10 lines of Rust, zero dependencies). See Architecture section for implementation.
+const tray = await TrayIcon.new({ id: 'main-tray', menu });
+```
 
-### NOT Added: Any npm packages
+---
 
-No new frontend npm packages are needed for v1.1. The shadcn/ui Select component is already available via the existing `radix-ui` dependency -- just needs `npx shadcn@latest add select` to scaffold the component code.
+### 3. Multi-Window (Floating Mini Window) -- Built-in Tauri Feature (NO new dependency)
 
-## Tauri Configuration Changes
+| Aspect | Detail |
+|--------|--------|
+| **Type** | Built-in Tauri 2 feature |
+| **npm package** | None -- `WebviewWindow` is in `@tauri-apps/api/webviewWindow` (already installed) |
+| **Purpose** | Create a secondary small window for mini floating command launcher |
+| **Why built-in** | Tauri 2 supports multi-window natively via `WebviewWindow` API. Can define windows in config or create dynamically from JS. Supports `alwaysOnTop`, `skipTaskbar`, `parent`, `transparent` properties. |
+| **Confidence** | HIGH -- verified via official Tauri v2 docs |
 
-### tauri.conf.json Window Changes
+**tauri.conf.json addition (second window in `app.windows` array):**
+```json
+{
+  "label": "floating",
+  "title": "EasyPack Mini",
+  "url": "/floating",
+  "width": 280,
+  "height": 400,
+  "alwaysOnTop": true,
+  "skipTaskbar": true,
+  "resizable": false,
+  "decorations": false,
+  "shadow": true,
+  "visible": false,
+  "create": false,
+  "parent": "main"
+}
+```
+
+Key properties:
+- `create: false` -- window is defined in config but NOT created at startup; created on demand via JS
+- `visible: false` -- hidden by default
+- `parent: "main"` -- floating window is a child of the main window
+- `alwaysOnTop: true` -- stays above other windows
+- `skipTaskbar: true` -- does not appear in Windows taskbar
+
+**JS usage pattern:**
+```typescript
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+
+// Create the floating window on demand
+const floating = new WebviewWindow('floating', {
+  url: '/floating',
+  width: 280,
+  height: 400,
+  alwaysOnTop: true,
+  skipTaskbar: true,
+  decorations: false,
+  parent: 'main'
+});
+```
+
+**Required permissions:**
+```json
+"core:window:allow-create",
+"core:window:allow-show",
+"core:window:allow-hide",
+"core:window:allow-set-focus",
+"core:window:allow-set-always-on-top",
+"core:window:allow-close",
+"core:webview:allow-create-webview-window"
+```
+
+---
+
+### 4. Edge Drawer -- Custom Implementation (NO additional packages)
+
+| Aspect | Detail |
+|--------|--------|
+| **Type** | Custom logic using existing Tauri Window API |
+| **Packages needed** | None -- uses `getCurrentWindow()` API from `@tauri-apps/api/window` |
+| **Purpose** | Main window can snap to screen edges, auto-hide, slide out on mouse contact |
+| **Why custom** | Tauri 2 has NO built-in edge-snapping or drawer behavior. Must be implemented from scratch using `window.setPosition()`, `window.setSize()`, `window.show()`, `window.hide()` in combination with screen edge detection. May need `windows` crate for low-level mouse hook at screen edges. |
+| **Confidence** | MEDIUM -- no existing Tauri ecosystem solution; custom implementation required |
+
+**Potential Rust addition (for mouse hook at screen edge):**
+```toml
+# May be needed for detecting mouse at screen edge when window is hidden
+windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+```
+
+The `windows` crate is only needed if Tauri's event system cannot detect mouse position when the window is hidden (which is likely the case -- a hidden window receives no mouse events). A low-level Win32 mouse hook (`SetWindowsHookEx` with `WH_MOUSE_LL`) would be required to detect when the cursor touches a screen edge.
+
+**Implementation approach:**
+1. Track window position relative to screen edges
+2. When window is dragged to an edge and released, animate it off-screen (set position to just outside the edge, leaving a 2-4px strip visible)
+3. Use Win32 `WH_MOUSE_LL` hook to detect cursor at the edge
+4. When cursor touches the edge strip, slide the window back in
+5. When cursor leaves the window area, slide it back out
+
+---
+
+## Tauri Configuration Changes Summary
+
+### tauri.conf.json
+
+| Section | Change | Why |
+|---------|--------|-----|
+| `app.windows` | ADD second window config for floating mini | Pre-define floating window with `create: false` for lazy creation |
+| `app.trayIcon` | ADD tray icon config block | System tray icon and tooltip |
+
+### Cargo.toml
+
+| Change | Detail |
+|--------|--------|
+| ADD `tauri-plugin-global-shortcut = "2"` | System-wide keyboard shortcut registration |
+| MODIFY tauri features: ADD `"tray-icon"` | Enable built-in system tray support |
+| POSSIBLY ADD `windows = "0.58"` (conditional) | Only if edge drawer needs low-level mouse hooks |
+
+### capabilities/default.json
 
 **Current state:**
 ```json
 {
-  "label": "main",
-  "title": "EasyPack",
-  "width": 720,
-  "height": 480,
-  "minWidth": 600,
-  "minHeight": 400,
-  "resizable": true,
-  "center": true
-}
-```
-
-**Required changes for UI-08 (frameless window + custom titlebar):**
-```json
-{
-  "label": "main",
-  "title": "EasyPack",
-  "width": 720,
-  "height": 480,
-  "minWidth": 600,
-  "minHeight": 400,
-  "resizable": true,
-  "center": true,
-  "decorations": false,
-  "shadow": true
-}
-```
-
-| Field | Value | Why |
-|-------|-------|-----|
-| `decorations` | `false` | Removes native Windows title bar (frameless window). Required for custom titlebar UI. |
-| `shadow` | `true` | Adds Windows DWM drop shadow around the frameless window. Without this, the window has no visual boundary and looks like it floats on the desktop. Note: on Windows, `shadow: false` is ignored for decorated windows; `shadow: true` enables shadows specifically for undecorated windows. |
-
-**Source:** Tauri v2 official window customization docs -- HIGH confidence
-
-### Capabilities/Permissions Additions
-
-**Current `src-tauri/capabilities/default.json`:**
-```json
-{
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Capability for the main window",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
     "dialog:default",
     "store:default"
   ]
 }
 ```
 
-**Required additions for custom titlebar window controls:**
+**Required additions:**
 ```json
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": ["main", "floating"],
   "permissions": [
     "core:default",
-    "dialog:default",
-    "store:default",
-    "core:window:allow-start-dragging",
     "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
     "core:window:allow-close",
-    "core:window:allow-toggle-maximize"
+    "core:window:allow-start-dragging",
+    "core:window:allow-create",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-inner-position",
+    "core:window:allow-inner-size",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-is-visible",
+    "core:webview:allow-create-webview-window",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
+    "dialog:default",
+    "store:default"
   ]
 }
 ```
 
 | Permission | Purpose |
 |-----------|---------|
-| `core:window:allow-start-dragging` | Enable `data-tauri-drag-region` attribute for custom titlebar drag area |
-| `core:window:allow-minimize` | Custom minimize button |
-| `core:window:allow-close` | Custom close button |
-| `core:window:allow-toggle-maximize` | Custom maximize/restore button + double-click titlebar to toggle |
+| `core:window:allow-create` | Create floating window dynamically |
+| `core:window:allow-show` / `allow-hide` | Show/hide floating window and edge drawer |
+| `core:window:allow-set-focus` | Focus main window from tray |
+| `core:window:allow-set-always-on-top` | Floating window always on top |
+| `core:window:allow-set-position` | Edge drawer position animation |
+| `core:window:allow-set-size` | Edge drawer resize during slide animation |
+| `core:window:allow-inner-position` / `allow-inner-size` | Read current position/size for edge detection |
+| `core:window:allow-outer-position` / `allow-outer-size` | Read outer dimensions including decorations |
+| `core:window:allow-is-visible` | Check window visibility state |
+| `core:webview:allow-create-webview-window` | Create the floating webview window |
+| `global-shortcut:allow-register` | Register keyboard shortcuts |
+| `global-shortcut:allow-unregister` | Unregister keyboard shortcuts |
+| `global-shortcut:allow-is-registered` | Check if shortcut is already registered |
 
-Note: The Tauri docs explicitly state that `core:window:default` does NOT include `window:allow-start-dragging`, so it must be added separately.
+Note: `"windows": ["main"]` must change to `"windows": ["main", "floating"]` so capabilities apply to both windows.
 
-**Source:** Tauri v2 window customization docs + permissions table -- HIGH confidence
+---
 
-## New Tauri Commands to Register
+## NOT Added
 
-**Current `src-tauri/src/lib.rs` invoke_handler:**
-```rust
-.invoke_handler(tauri::generate_handler![
-    commands::shell::execute_command,
-])
-```
+| Rejected | Why | Use Instead |
+|----------|-----|-------------|
+| `tauri-plugin-autostart` | Not requested for v1.2 -- auto-start is out of scope for a personal tool | Manual startup |
+| `tauri-plugin-window-state` | Window state saving is handled by edge drawer logic custom; plugin saves position/size but does not handle edge-snapping behavior | Custom position persistence via store |
+| `tauri-plugin-opener` | Already have `open_folder` command using `explorer.exe` with `raw_arg()` | Existing Rust command |
+| `electron` | N/A | N/A |
+| Any animation library (framer-motion, react-spring) | Edge drawer animations are handled via Rust-side `setPosition` calls, not CSS animations. Floating window show/hide is instant. | Tauri Window API calls |
 
-**Required additions:**
-```rust
-.invoke_handler(tauri::generate_handler![
-    commands::shell::execute_command,
-    commands::project::get_folder_size,      // PROJ-08: folder size
-    commands::project::get_git_branch,       // PROJ-08: git branch name
-    commands::project::detect_project_icon,  // PROJ-07: auto-detect icon
-    commands::shell::open_folder,            // CMD-10: open in explorer
-])
-```
-
-Each new command should be in a new `src-tauri/src/commands/project.rs` module.
-
-## New Frontend Components
-
-### shadcn/ui Select Component
-
-Needed for CMD-11 (preset command system -- dual dropdown selector).
-
-**Installation:**
-```bash
-npx shadcn@latest add select
-```
-
-This scaffolds `src/components/ui/select.tsx` using the already-installed `radix-ui` package (currently at ^1.4.3 in package.json). No additional npm dependencies are added; the Select component is built on `@radix-ui/react-select` which is included in the `radix-ui` meta-package.
-
-**Usage pattern for dual-dropdown preset selector:**
-```tsx
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// First dropdown: category (python/pip/git/rust/npm)
-<Select value={category} onValueChange={setCategory}>
-  <SelectTrigger className="w-[140px]">
-    <SelectValue placeholder="选择类别" />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectItem value="python">Python</SelectItem>
-    <SelectItem value="pip">pip</SelectItem>
-    <SelectItem value="git">Git</SelectItem>
-    <SelectItem value="rust">Rust</SelectItem>
-    <SelectItem value="npm">npm</SelectItem>
-  </SelectContent>
-</Select>
-
-// Second dropdown: specific command within selected category
-<Select value={command} onValueChange={setCommand}>
-  <SelectTrigger className="w-[180px]">
-    <SelectValue placeholder="选择指令" />
-  </SelectTrigger>
-  <SelectContent>
-    {PRESET_MAP[category]?.map(cmd => (
-      <SelectItem key={cmd.command} value={cmd.command}>
-        {cmd.name}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-```
-
-### Titlebar Component (New)
-
-A new `src/components/Titlebar.tsx` component is needed for UI-08. This is a custom React component (not a shadcn component) that implements:
-- Application name display area with `data-tauri-drag-region` for window dragging
-- Minimize / Maximize / Close buttons using `@tauri-apps/api/window`
-
-**Key APIs:**
-```typescript
-import { getCurrentWindow } from '@tauri-apps/api/window';
-
-const appWindow = getCurrentWindow();
-await appWindow.minimize();
-await appWindow.toggleMaximize();
-await appWindow.close();
-```
-
-No new npm packages -- `@tauri-apps/api` is already installed (^2.10.1).
-
-## Summary: What Changes vs What Stays
-
-| Category | Change | Detail |
-|----------|--------|--------|
-| **Cargo.toml** | ADD `walkdir = "2.5"` | One new Rust crate for folder size calculation |
-| **tauri.conf.json** | ADD `decorations: false`, `shadow: true` | Frameless window configuration |
-| **capabilities/default.json** | ADD 4 window permissions | Drag, minimize, close, toggle-maximize |
-| **lib.rs invoke_handler** | ADD 4 new commands | get_folder_size, get_git_branch, detect_project_icon, open_folder |
-| **commands/project.rs** | NEW file | Rust implementations for folder size, git branch, icon detection, open folder |
-| **src/components/Titlebar.tsx** | NEW file | Custom titlebar React component |
-| **src/components/ui/select.tsx** | SCAFFOLD via shadcn | Dual-dropdown for preset commands |
-| **npm packages** | NONE | No new frontend dependencies needed |
+---
 
 ## Installation
 
 ```bash
-# 1. Add Rust dependency (in src-tauri/ directory)
+# 1. Add Rust dependencies (in src-tauri/ directory)
 cd src-tauri
-cargo add walkdir@2.5
+cargo add tauri-plugin-global-shortcut@2
+# Modify tauri features in Cargo.toml: add "tray-icon"
+# Optionally: cargo add windows@0.58 --features "Win32_UI_WindowsAndMessaging,Win32_Foundation"
 
-# 2. Scaffold shadcn/ui Select component (in project root)
+# 2. Add frontend dependency (in project root)
 cd ..
-npx shadcn@latest add select
+npm install @tauri-apps/plugin-global-shortcut
 
-# No npm install needed -- no new npm packages
+# 3. No shadcn components to scaffold -- all UI is custom-built
 ```
+
+---
 
 ## Sources
 
-- [Tauri v2 Window Customization Docs](https://v2.tauri.app/learn/window-customization/) -- frameless window, data-tauri-drag-region, permissions table -- HIGH confidence
-- [walkdir crate on crates.io](https://crates.io/crates/walkdir) -- version 2.5.0, 393M+ downloads -- HIGH confidence
-- [walkdir GitHub (BurntSushi)](https://github.com/BurntSushi/walkdir) -- well-maintained, same author as ripgrep -- HIGH confidence
-- [Tauri v2 Window API Reference](https://v2.tauri.app/reference/javascript/api/namespacewindow/) -- minimize, close, toggleMaximize -- HIGH confidence
-- [shadcn/ui Select Component](https://ui.shadcn.com/docs/components/select) -- dual dropdown implementation -- HIGH confidence
-- [Tauri issue #14859: decorations: false + shadow: false titlebar bug](https://github.com/tauri-apps/tauri/issues/14859) -- known Windows bug -- MEDIUM confidence
-- [Tauri issue #10889: decorations: false border display issue](https://github.com/tauri-apps/tauri/issues/10889) -- black line at top border -- MEDIUM confidence
-- [StackOverflow: How to check directory size in Rust](https://stackoverflow.com/questions/60041710/how-to-check-directory-size) -- walkdir pattern -- HIGH confidence
-- [Microsoft Terminal issue #4228: 0x80070002 error](https://github.com/microsoft/terminal/issues/4228) -- wt.exe file not found diagnosis -- HIGH confidence
+- [Tauri v2 Global Shortcut Plugin](https://v2.tauri.app/plugin/global-shortcut/) -- official plugin docs, JS API, permissions -- HIGH confidence
+- [Tauri v2 System Tray](https://v2.tauri.app/learn/system-tray/) -- built-in tray feature, `tray-icon` flag, Menu API -- HIGH confidence
+- [Tauri v2 Window Configuration](https://v2.tauri.app/reference/config/) -- WindowConfig properties (alwaysOnTop, skipTaskbar, parent, create) -- HIGH confidence
+- [Tauri v2 Multi-Window](https://v2.tauri.app/learn/window-customization/) -- WebviewWindow API, window creation -- HIGH confidence
+- [Tauri v2 Window API](https://v2.tauri.app/reference/javascript/api/namespacewindow/) -- setPosition, setSize, show, hide -- HIGH confidence
+- [windows crate](https://crates.io/crates/windows) -- Win32 API bindings, WH_MOUSE_LL hook -- HIGH confidence
+- [tauri-plugin-global-shortcut on crates.io](https://crates.io/crates/tauri-plugin-global-shortcut) -- version info -- HIGH confidence
 
 ---
-*Stack research for: EasyPack v1.1 milestone*
-*Researched: 2026-04-15*
+*Stack research for: EasyPack v1.2 milestone*
+*Researched: 2026-04-26*

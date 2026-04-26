@@ -1,12 +1,13 @@
-# Architecture Patterns -- v1.1 Integration Research
+# Architecture Patterns -- v1.2 Integration Research
 
-**Domain:** EasyPack v1.1 -- Tauri 2 + React 19 Windows Desktop Project Launcher
-**Researched:** 2026-04-15
-**Focus:** Integration of 7 new features into existing v1.0 architecture
+**Domain:** EasyPack v1.2 -- Tauri 2 + React 19 Windows Desktop Project Launcher
+**Researched:** 2026-04-26
+**Focus:** Integration of keyboard shortcuts, system tray, floating mini window, and edge drawer into existing v1.1 architecture
+**Overall Confidence:** HIGH
 
-## Current Architecture Summary (v1.0 Baseline)
+## Current Architecture (v1.1 Baseline)
 
-EasyPack 采用 Tauri 2.x 经典分层架构。Rust 后端 (`src-tauri/src/`) 负责系统级操作，React 前端 (`src/`) 负责 UI 渲染和状态管理，通过 `invoke()` / `#[tauri::command]` 桥接。
+EasyPack v1.1 采用 Tauri 2.x 经典分层架构。Rust 后端负责系统级操作，React 前端负责 UI 渲染和状态管理，通过 `invoke()` / `#[tauri::command]` 桥接。
 
 ```
 +----------------------------------------------------------+
@@ -17,13 +18,14 @@ EasyPack 采用 Tauri 2.x 经典分层架构。Rust 后端 (`src-tauri/src/`) �
 |  |   (src/)            |     |   (src-tauri/src/)       |  |
 |  |                     |     |                         |  |
 |  |  App.tsx            |     |  lib.rs (builder)       |  |
-|  |    |-- Sidebar      |     |  commands/mod.rs         |  |
-|  |    |-- MainArea     |     |  commands/shell.rs       |  |
-|  |         |-- CommandCard   |    - execute_command     |  |
-|  |         |-- CommandDialog |    - build_full_command  |  |
-|  |                     |     |                         |  |
+|  |    |-- TitleBar     |     |  commands/mod.rs        |  |
+|  |    |-- Sidebar      |     |  commands/shell.rs      |  |
+|  |    |-- MainArea     |     |    - execute_command    |  |
+|  |         |-- CommandCard   |    - open_folder        |  |
+|  |         |-- CommandDialog |  commands/project_info.rs|  |
+|  |         |-- PresetSelector|    - scan_project_icons  |  |
+|  |                     |     |    - get_project_info    |  |
 |  |  hooks/useProject.ts|     |                         |  |
-|  |    (state + store)  |     |                         |  |
 |  |  hooks/useKeyboard.ts|    |                         |  |
 |  |  lib/types.ts       |     |                         |  |
 |  |  lib/presets.ts     |     |                         |  |
@@ -43,23 +45,25 @@ EasyPack 采用 Tauri 2.x 经典分层架构。Rust 后端 (`src-tauri/src/`) �
 
 | Component | File(s) | Responsibility |
 |-----------|---------|---------------|
-| `App.tsx` | `src/App.tsx` | Root layout: flex row (Sidebar + MainArea), zone management |
+| `App.tsx` | `src/App.tsx` | Root layout: TitleBar + flex row (Sidebar + MainArea), zone management |
+| `TitleBar` | `src/components/TitleBar.tsx` | Custom frameless window title bar with drag, min/max/close |
 | `Sidebar` | `src/components/Sidebar.tsx` | Project list, add/remove, drag reorder, context menu settings |
 | `MainArea` | `src/components/MainArea.tsx` | Project info, command grid, mode switch, edit mode, keyboard nav |
 | `CommandCard` | `src/components/CommandCard.tsx` | Single command button with flash feedback |
 | `CommandDialog` | `src/components/CommandDialog.tsx` | Add/edit custom command modal |
+| `PresetSelector` | in `MainArea.tsx` | Dual dropdown for preset command selection |
 | `ProjectSettingsDialog` | `src/components/ProjectSettingsDialog.tsx` | Icon + color picker modal |
 | `useProject` hook | `src/hooks/useProject.ts` | All state: projects, commands, CRUD, store sync, execute |
-| `useKeyboard` hook | `src/hooks/useKeyboard.ts` | Global number key shortcuts (1-9) |
-| `execute_command` | `src-tauri/src/commands/shell.rs` | Build cmd string, spawn wt.exe/cmd.exe |
-| `lib.rs` | `src-tauri/src/lib.rs` | Tauri builder, plugin registration, command handler registration |
+| `useKeyboard` hook | `src/hooks/useKeyboard.ts` | Browser-level number key shortcuts (1-9) |
+| `execute_command` | `src-tauri/src/commands/shell.rs` | Build cmd string, spawn wt.exe/cmd.exe with `.current_dir()` |
+| `lib.rs` | `src-tauri/src/lib.rs` | Tauri builder, plugin registration (dialog, store), command handlers |
 
 ### Existing Data Models
 
 ```typescript
 // src/lib/types.ts
 interface CommandItem {
-  id: string;          // crypto.randomUUID() or "preset-{idx}"
+  id: string;          // crypto.randomUUID() or "preset-{name}"
   name: string;        // Display name
   command: string;     // Shell command string
   icon: string;        // Lucide icon name string
@@ -77,6 +81,11 @@ interface ProjectItem {
   icon?: string;       // Lucide icon name
   color?: string;      // CSS hex color
 }
+
+interface ProjectInfoResult {
+  size: string;         // Human-readable, e.g. "12.3 MB"
+  branch: string | null; // null = not a Git repo
+}
 ```
 
 ### Store Structure (easypack-store.json)
@@ -88,614 +97,1003 @@ customCommands: CommandItem[]               // Global custom commands
 projectCommands:{normalizedId}: CommandItem[] // Per-project overrides
 ```
 
-## v1.1 Feature Integration Analysis
+### Key Tauri Configuration (v1.1)
 
-### Feature 1: Fix Command Execution (0x80070002)
-
-**Problem:** Error `0x80070002` = `ERROR_FILE_NOT_FOUND`. Current `build_full_command` produces `cd /d "{path}" && {cmd}`, but when passed through `wt.exe` -> `cmd.exe` chain, the quoting gets mangled.
-
-**Root cause analysis:**
-
-The current flow is:
-```rust
-// 1. Build: cd /d "D:\Projects\EasyPack" && npm run build
-let full_command = format!("cd /d \"{}\" && {}", project_path, shell_command);
-
-// 2a. Windows Terminal path:
-StdCommand::new("wt")
-    .args(["new-tab", "cmd", "/K", &full_command])
-    .spawn();
-
-// 2b. cmd.exe fallback:
-StdCommand::new("cmd")
-    .args(["/C", "start", "cmd", "/K", &full_command])
-    .spawn();
-```
-
-The `full_command` string contains double quotes. When `.args()` passes it to `wt.exe` or `cmd.exe`, the quote nesting breaks because `args()` on Windows does not escape inner quotes for shell-level passing. The path `"D:\Projects\EasyPack"` gets its quotes stripped or mangled by the argument parser.
-
-**What changes:**
-
-| Layer | File | Change Type |
-|-------|------|-------------|
-| Rust | `commands/shell.rs` | **MODIFY** `execute_command` and `build_full_command` |
-| No frontend changes | -- | -- |
-
-**Architecture approach:** Instead of embedding the `cd /d` command as a string argument, use the process working directory directly:
-
-```rust
-// Fix: Use .current_dir() instead of cd /d command string
-// This avoids all quoting issues entirely
-let project_path_ref = std::path::Path::new(&project_path);
-if !project_path_ref.exists() {
-    return Err(format!("Project path does not exist: {}", project_path));
-}
-
-// Windows Terminal
-let wt_result = StdCommand::new("wt")
-    .args(["new-tab", "cmd", "/K", &shell_command])
-    .current_dir(project_path_ref)
-    .spawn();
-
-// Fallback: cmd.exe
-StdCommand::new("cmd")
-    .args(["/C", "start", "cmd", "/K", &shell_command])
-    .current_dir(project_path_ref)
-    .spawn()
-    .map_err(|e| format!("Failed to execute command: {}", e))?;
-```
-
-Key insight: `.current_dir()` sets the working directory at the OS process level, completely bypassing the `cd /d` quoting problem. The `shell_command` alone (e.g., `npm run build`) is passed as the argument, which never needs inner quoting.
-
-**build_full_command** becomes unused for execution (kept for display/tooltip only).
-
-### Feature 2: Frameless Window + Custom Title Bar
-
-**What changes:**
-
-| Layer | File | Change Type |
-|-------|------|-------------|
-| Config | `src-tauri/tauri.conf.json` | **MODIFY** add `decorations: false` |
-| Config | `src-tauri/capabilities/default.json` | **MODIFY** add window permissions |
-| React | New: `src/components/TitleBar.tsx` | **NEW** component |
-| React | `src/App.tsx` | **MODIFY** add TitleBar to layout |
-| CSS | `src/index.css` | **MODIFY** add titlebar styles |
-
-**Architecture approach:** Per [Tauri v2 Window Customization docs](https://v2.tauri.app/learn/window-customization/):
-
-1. Set `decorations: false` in tauri.conf.json window config
-2. Add permissions: `core:window:allow-start-dragging`, `core:window:allow-minimize`, `core:window:allow-close`, `core:window:allow-toggle-maximize`
-3. Create a `TitleBar.tsx` React component with `data-tauri-drag-region` attribute
-4. Use `getCurrentWindow()` from `@tauri-apps/api/window` for minimize/maximize/close
-
-**Layout change in App.tsx:**
-```
-Before: <div class="flex h-screen"> [Sidebar | MainArea]
-After:  <div class="flex flex-col h-screen">
-          <TitleBar />           <-- NEW: fixed height ~30px
-          <div class="flex flex-1"> [Sidebar | MainArea]
-```
-
-**TitleBar component design:**
-- Left: App name "EasyPack" (draggable region)
-- Right: Minimize, Maximize, Close buttons (using SVG icons, consistent with dark theme)
-- Height: 30px fixed
-- Background: matches app dark theme gradient
-- Double-click on drag region = toggle maximize
-
-**Edge case:** The existing Sidebar has its own title area (`<h1>EasyPack</h1>` in the `p-6 border-b` div). After adding the custom TitleBar, the sidebar title should be removed or merged into the TitleBar to avoid duplication.
-
-### Feature 3: Project Icon Auto-Detection
-
-**What changes:**
-
-| Layer | File | Change Type |
-|-------|------|-------------|
-| Rust | New: `src-tauri/src/commands/project.rs` | **NEW** command module |
-| Rust | `src-tauri/src/commands/mod.rs` | **MODIFY** add `pub mod project` |
-| Rust | `src-tauri/src/lib.rs` | **MODIFY** register new commands |
-| Rust | `src-tauri/Cargo.toml` | **MODIFY** add `serde_json` (already present) |
-| React | `src/hooks/useProject.ts` | **MODIFY** call detect on project add |
-| React | `src/components/ProjectSettingsDialog.tsx` | **MODIFY** show detected icon + allow custom path |
-
-**Architecture approach:** Add Rust commands that scan a project directory for marker files:
-
-```rust
-// New Tauri command
-#[tauri::command]
-pub async fn detect_project_info(path: String) -> Result<ProjectInfo, String> {
-    // Returns: { detected_icon: Option<String>, project_type: Option<String> }
-}
-
-#[derive(Serialize)]
-pub struct ProjectInfo {
-    pub detected_icon: Option<String>,  // Lucide icon name
-    pub project_type: Option<String>,   // "node", "rust", "python", etc.
-}
-```
-
-**Detection strategy (no external crate needed):**
-```
-Priority scan in project directory:
-1. package.json exists -> "node" project, icon = "Package"
-   - If scripts.build contains "react" or "vite" -> icon = "Code"
-   - If scripts.start contains "next" -> icon = "Globe"
-2. Cargo.toml exists -> "rust" project, icon = "Terminal"
-3. requirements.txt or pyproject.toml or setup.py -> "python", icon = "Server"
-4. go.mod -> "go", icon = "Code"
-5. .git directory exists -> at least a git repo, icon = "GitBranch"
-6. No match -> no icon change (keep default)
-```
-
-This uses only `std::fs::metadata` and `std::fs::read_to_string` (already available via `serde_json`). No new crate dependency needed.
-
-**Frontend integration:** In `useProject.ts`, after `addProject()` is called, invoke `detect_project_info` and auto-set the icon if a match is found. User can override via ProjectSettingsDialog.
-
-**Data model change:** Add optional field to `ProjectItem`:
-```typescript
-interface ProjectItem {
-  // ... existing fields ...
-  detectedType?: string;  // "node" | "rust" | "python" | "go" | "git" | undefined
-}
-```
-
-This field is informational only -- it does not affect behavior but helps the ProjectSettingsDialog show "Detected: Node.js project" context.
-
-### Feature 4: Modal Auto-Sizing
-
-**What changes:**
-
-| Layer | File | Change Type |
-|-------|------|-------------|
-| React | `src/components/ui/dialog.tsx` | **MODIFY** DialogContent sizing |
-| React | `src/components/CommandDialog.tsx` | **MODIFY** pass responsive size |
-| React | `src/components/ProjectSettingsDialog.tsx` | **MODIFY** pass responsive size |
-
-**Architecture approach:** The current `DialogContent` uses `sm:max-w-lg` which is static. The fix requires:
-
-1. Add `max-h-[calc(100vh-4rem)]` and `overflow-y-auto` to DialogContent to prevent overflow
-2. Use CSS `min-height` constraints per dialog type
-3. Consider using a `useWindowSize` or `useResizeObserver` hook to adapt `max-height` dynamically
-
-**Key CSS change in dialog.tsx:**
-```typescript
-// Add to DialogContent className:
-"max-h-[calc(100vh-4rem)] overflow-y-auto"
-```
-
-This is a CSS-only fix. No Rust changes. No new data model.
-
-### Feature 5: Command Tab Switch to Button Style + Open Folder Button
-
-**What changes:**
-
-| Layer | File | Change Type |
-|-------|------|-------------|
-| React | `src/components/MainArea.tsx` | **MODIFY** mode switch UI |
-
-**Architecture approach:** Pure frontend UI change. Replace the text link ("使用项目自定义指令" / "使用全局指令") with styled button elements, and add an "Open Folder" button on the same row.
-
-Current layout (text links):
-```
-当前项目: EasyPack                        [Settings gear]
-D:\Projects\EasyPack
-全局指令 · 使用项目自定义指令  <-- text links
-```
-
-New layout (button row):
-```
-当前项目: EasyPack                        [Settings gear]
-D:\Projects\EasyPack
-[全局指令] [项目指令]     [打开文件夹]    <-- buttons + open folder
-```
-
-The "Open Folder" button calls a new Rust command:
-```rust
-#[tauri::command]
-pub async fn open_folder(path: String) -> Result<(), String> {
-    // Use Windows explorer.exe to open the folder
-    StdCommand::new("explorer")
-        .arg(&path)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-```
-
-This needs to be registered in `lib.rs` invoke_handler.
-
-### Feature 6: Folder Size + Git Branch Display
-
-**What changes:**
-
-| Layer | File | Change Type |
-|-------|------|-------------|
-| Rust | `src-tauri/src/commands/project.rs` | **ADD** two new commands |
-| Rust | `src-tauri/src/lib.rs` | **MODIFY** register new commands |
-| React | New: `src/hooks/useProjectInfo.ts` | **NEW** hook for fetching project metadata |
-| React | `src/components/MainArea.tsx` | **MODIFY** display info bar above command grid |
-
-**Architecture approach:**
-
-Two new Rust commands:
-
-```rust
-#[tauri::command]
-pub async fn get_folder_size(path: String) -> Result<u64, String> {
-    // Walk directory, sum file sizes
-    // Use std::fs (no external crate needed for basic walk)
-    // Or add walkdir crate for robust directory traversal
-}
-
-#[tauri::command]
-pub async fn get_git_branch(path: String) -> Result<Option<String>, String> {
-    // Run: git rev-parse --abbrev-ref HEAD
-    // If .git directory doesn't exist, return None
-    let output = StdCommand::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(&path)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Ok(Some(branch))
-    } else {
-        Ok(None)  // Not a git repo
-    }
-}
-```
-
-**Folder size calculation options:**
-- Option A: Add `walkdir` crate dependency -- robust, handles symlinks, permission errors
-- Option B: Pure `std::fs` recursion -- no new dependency but fragile with deep trees / permission issues
-- **Recommendation:** Use `walkdir` crate. It handles edge cases (symlinks, permission denied) that pure `std::fs` does not. Only ~50 lines of integration code.
-
-**New frontend hook:** `useProjectInfo.ts`
-```typescript
-interface ProjectInfoData {
-  folderSize: number | null;     // bytes
-  gitBranch: string | null;      // branch name
-  loading: boolean;
-}
-
-function useProjectInfo(projectPath: string | null): ProjectInfoData
-```
-
-This hook calls the Rust commands when `projectPath` changes. Uses `useEffect` with debouncing to avoid hammering the filesystem during rapid project switches.
-
-**Display in MainArea:** Add an info bar between project header and command grid:
-```
-当前项目: EasyPack                        [Settings gear]
-D:\Projects\EasyPack
-文件夹: 234 MB | 分支: main              [全局] [项目] [打开文件夹]
-[command grid...]
-```
-
-**Performance consideration:** Folder size calculation is expensive for large projects (node_modules etc). Consider:
-- Run on project selection with a debounce (500ms)
-- Cache results per project (invalidate on project re-select)
-- Skip hidden directories (node_modules, .git, target) to speed up calculation
-- Consider making folder size calculation optional or lazy (expand/collapse)
-
-### Feature 7: Preset Command System
-
-**What changes:**
-
-| Layer | File | Change Type |
-|-------|------|-------------|
-| React | `src/lib/presets.ts` | **MAJOR REWRITE** expand to categorized library |
-| React | `src/lib/types.ts` | **MODIFY** add preset category types |
-| React | `src/components/MainArea.tsx` | **MODIFY** dual dropdown UI in edit mode |
-| React | New: `src/components/PresetSelector.tsx` | **NEW** dual dropdown component |
-| React | `src/hooks/useProject.ts` | **MODIFY** preset → command conversion logic |
-
-**Architecture approach:**
-
-Current preset system is hardcoded as 4 items in `PRESET_COMMANDS`. The new system requires:
-
-1. **Categorized preset library** in `presets.ts`:
-```typescript
-interface PresetCategory {
-  id: string;          // "python", "git", "rust", "npm"
-  label: string;       // "Python / pip"
-  icon: string;        // Lucide icon name
-  commands: PresetCommand[];
-}
-
-interface PresetCommand {
-  id: string;          // "pip-install", "cargo-build"
-  name: string;        // "Install Dependencies"
-  command: string;     // "pip install ."
-  icon: string;        // Lucide icon name
-}
-
-// Default visible presets (v1.0 compat):
-// Only "git pull" and "claude" remain as always-visible
-// Everything else is in the categorized library
-```
-
-2. **Dual dropdown UI:** Two dropdowns in the command grid area (visible in edit mode):
-   - Dropdown 1: Category selector (Python/pip, Git, Rust, npm, ...)
-   - Dropdown 2: Command selector (filtered by selected category)
-   - "Add" button to add selected preset to the current scope
-
-3. **Scope selector:** Each added preset can be added to global or project-level scope.
-
-4. **Data model change:** The `CommandItem` type stays the same -- presets added to a project are stored as `type: "preset"` with the appropriate `scope`.
-
-**Default preset change:** Per CMD-11 requirement, the default grid only shows `git pull` and `claude`. Other presets (`npm run build`, `npm run dev`) move to the categorized library.
-
-**PresetSelector component:**
-```typescript
-interface PresetSelectorProps {
-  onAddPreset: (preset: PresetCommand, scope: "global" | "project") => void;
-  scope: "global" | "project";
-  categories: PresetCategory[];
-}
-```
-
-This component renders as a compact row of two `<select>` elements (or shadcn Select components) plus an "Add" button, only visible in edit mode.
-
-## New/Modified Files Summary
-
-### New Files
-
-| File | Purpose | Dependencies |
-|------|---------|-------------|
-| `src/components/TitleBar.tsx` | Custom frameless window title bar | `@tauri-apps/api/window` |
-| `src/components/PresetSelector.tsx` | Dual dropdown for preset command selection | `src/lib/presets.ts` |
-| `src/hooks/useProjectInfo.ts` | Fetch folder size + git branch from Rust | `@tauri-apps/api/core` |
-| `src-tauri/src/commands/project.rs` | Project info commands (detect, size, git, open) | `walkdir` (new crate) |
-
-### Modified Files
-
-| File | Changes | Affected Features |
-|------|---------|-------------------|
-| `src-tauri/tauri.conf.json` | `decorations: false` | Frameless window |
-| `src-tauri/capabilities/default.json` | Add window permissions | Frameless window |
-| `src-tauri/Cargo.toml` | Add `walkdir` dependency | Folder size |
-| `src-tauri/src/lib.rs` | Register new commands | All Rust-side features |
-| `src-tauri/src/commands/mod.rs` | Add `pub mod project` | Project info |
-| `src-tauri/src/commands/shell.rs` | Fix command execution (use `.current_dir()`) | Bug fix |
-| `src/App.tsx` | Add TitleBar, adjust layout | Frameless window |
-| `src/components/MainArea.tsx` | Info bar, button mode switch, open folder, preset selector | Features 5, 6, 7 |
-| `src/components/Sidebar.tsx` | Remove duplicate title if merged to TitleBar | Frameless window |
-| `src/components/ProjectSettingsDialog.tsx` | Show detected icon/type, custom icon path | Icon detection |
-| `src/components/ui/dialog.tsx` | Add max-height, overflow | Modal auto-sizing |
-| `src/hooks/useProject.ts` | Call detect on add, preset system changes | Icon detection, presets |
-| `src/lib/presets.ts` | Expand to categorized library, change defaults | Preset system |
-| `src/lib/types.ts` | Add PresetCategory, PresetCommand types | Preset system |
-| `src/index.css` | TitleBar styles | Frameless window |
-
-## Suggested Build Order
-
-Based on dependency analysis -- features that other features depend on should be built first:
-
-```
-Phase 1: Bug Fix (BLOCKS EVERYTHING)
-  Feature 1: Fix command execution error
-  |-- WHY FIRST: Core functionality broken, all testing depends on it
-  |-- Risk: LOW (isolated change in shell.rs)
-  |-- No dependencies on other features
-
-Phase 2: Window Shell (INDEPENDENT)
-  Feature 2: Frameless window + custom title bar
-  |-- WHY EARLY: Layout restructure affects all subsequent UI work
-  |-- Risk: MEDIUM (layout changes touch App.tsx, Sidebar.tsx)
-  |-- Must be done before other UI features that depend on layout
-
-Phase 3: Rust Backend Expansion (PARALLEL SAFE)
-  Feature 3: Project icon auto-detection (Rust command)
-  Feature 6: Folder size + Git branch (Rust commands)
-  Feature 5 (partial): Open folder command (Rust command)
-  |-- WHY PARALLEL: All are new Rust commands with no frontend coupling
-  |-- Risk: LOW (additive changes, no existing code modification)
-  |-- New file: src-tauri/src/commands/project.rs
-
-Phase 4: Frontend Integration (SEQUENTIAL)
-  Feature 4: Modal auto-sizing
-  |-- WHY FIRST in frontend: Fixes UX bug in dialogs used by later features
-  |-- Risk: LOW (CSS change in dialog.tsx)
-
-  Feature 3 (frontend): Icon detection UI integration
-  Feature 5 (UI): Button mode switch + open folder button
-  Feature 6 (frontend): Info bar display
-  |-- Risk: MEDIUM (MainArea.tsx gets multiple changes)
-  |-- NOTE: These all modify MainArea.tsx, so they should be sequential
-
-Phase 5: Preset System (LAST)
-  Feature 7: Preset command system
-  |-- WHY LAST: Depends on stable MainArea layout + dialog behavior
-  |-- Risk: MEDIUM (largest change surface: new types, new component, preset rewrite)
-  |-- Changes presets.ts, types.ts, MainArea.tsx, new PresetSelector.tsx
-```
-
-**Dependency graph:**
-```
-Feature 1 (bug fix)
-    |
-    v
-Feature 2 (frameless window)
-    |
-    +-------------------+
-    |                   |
-    v                   v
-Feature 3 (Rust)    Feature 6 (Rust)    Feature 5 partial (Rust)
-    |                   |                   |
-    +-------------------+-------------------+
-                        |
-                        v
-              Feature 4 (modal sizing)
-                        |
-                        v
-              Feature 3 (UI) + Feature 5 (UI) + Feature 6 (UI)
-                        |
-                        v
-              Feature 7 (preset system)
-```
-
-## Rust Command Registration Change
-
-Current `lib.rs`:
-```rust
-.invoke_handler(tauri::generate_handler![
-    commands::shell::execute_command,
-])
-```
-
-After all features:
-```rust
-.invoke_handler(tauri::generate_handler![
-    commands::shell::execute_command,
-    commands::project::detect_project_info,
-    commands::project::get_folder_size,
-    commands::project::get_git_branch,
-    commands::project::open_folder,
-])
-```
-
-New module `commands/project.rs` houses all project-related system commands. This follows the existing pattern of `commands/shell.rs` for shell-related commands.
-
-## New Crate Dependency
-
-| Crate | Version | Purpose | Why |
-|-------|---------|---------|-----|
-| `walkdir` | 2.x | Robust directory traversal for folder size | Handles symlinks, permission errors, deep recursion. Pure `std::fs` would be fragile for large project directories with `node_modules`, `target/`, etc. |
-
-No other new dependencies needed. All other features use existing crates (`serde`, `serde_json`, `std::process::Command`) or frontend-only changes.
-
-## Capabilities/Permissions Change
-
-Current `capabilities/default.json`:
 ```json
+// tauri.conf.json -- single window, frameless, shadow
 {
-  "permissions": ["core:default", "dialog:default", "store:default"]
+  "app": {
+    "windows": [{
+      "label": "main",
+      "width": 720, "height": 480,
+      "minWidth": 600, "minHeight": 400,
+      "decorations": false,
+      "shadow": true
+    }]
+  }
 }
 ```
 
-After frameless window feature:
 ```json
+// capabilities/default.json -- minimal permissions
 {
+  "windows": ["main"],
   "permissions": [
     "core:default",
-    "core:window:default",
-    "core:window:allow-start-dragging",
     "core:window:allow-minimize",
-    "core:window:allow-maximize",
-    "core:window:allow-close",
     "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
     "dialog:default",
     "store:default"
   ]
 }
 ```
 
-No additional shell or FS permissions needed because the new Rust commands use `std::process::Command` and `std::fs` directly (not through Tauri plugins), and the Tauri commands are registered via `invoke_handler` which bypasses the capability system.
+## v1.2 Target Architecture
 
-## Patterns to Follow
+v1.2 将 EasyPack 从"点击执行"进化为"键盘驱动 + 随手可用"的桌面工具。四个新功能引入了多窗口、系统级快捷键、托盘驻留和边缘抽屉行为。架构变更的核心是：
 
-### Pattern 1: Tauri Command Module Organization
+1. **单窗口 -> 多窗口** -- 新增迷你悬浮窗 (floating window)
+2. **应用内键盘 -> 系统级全局快捷键** -- 从 `window.addEventListener("keydown")` 升级到 `tauri-plugin-global-shortcut`
+3. **单次关闭 -> 托盘驻留** -- 关闭窗口最小化到系统托盘
+4. **固定窗口 -> 边缘吸附隐藏** -- 窗口可吸附到屏幕四边
 
-**What:** Group related Rust commands into separate module files under `commands/`.
-
-**When:** Adding new system-level operations.
-
-**Example:**
 ```
-src-tauri/src/commands/
-  mod.rs          -- pub mod shell; pub mod project;
-  shell.rs        -- execute_command, build_full_command
-  project.rs      -- detect_project_info, get_folder_size, get_git_branch, open_folder
++----------------------------------------------------------+
+|                    Tauri Application                       |
+|                                                           |
+|  +--------------------+  +-----------------------------+  |
+|  |  Main Window       |  |  Floating Mini Window       |  |
+|  |  (label: "main")   |  |  (label: "floating")        |  |
+|  |                    |  |                             |  |
+|  |  TitleBar          |  |  MiniCommandGrid            |  |
+|  |  Sidebar           |  |    (shows top 4-6 commands) |  |
+|  |  MainArea          |  |                             |  |
+|  |                    |  |                             |  |
+|  +--------------------+  +-----------------------------+  |
+|     |         ^                   |         ^              |
+|     | emit()  | listen()          | emit()  | listen()     |
+|     v         |                   v         |              |
+|  +-------------------------------------------------------+|
+|  |              Tauri Event Bus                           ||
+|  |  "execute-command" | "project-changed" | "show-main"  ||
+|  +-------------------------------------------------------+|
+|                          |                                |
+|  +-----------------------+-------------------------------+|
+|  |  Rust Backend (src-tauri/src/)                        ||
+|  |  lib.rs -- builder + setup closure                    ||
+|  |    plugins: dialog, store, global-shortcut            ||
+|  |    tray-icon feature + tray setup in .setup()         ||
+|  |  commands/shell.rs -- execute_command, open_folder    ||
+|  |  commands/project_info.rs -- scan, get_project_info   ||
+|  +-------------------------------------------------------+|
+|                          |                                |
+|  +-----------+  +------------------+  +----------------+||
+|  | System    |  | System Tray      |  | Win32 API      |||
+|  | Terminal  |  | (tray-icon feat) |  | (edge drawer)  |||
+|  +-----------+  +------------------+  +----------------+||
++----------------------------------------------------------+
+         |
+         v
+  +------------------+
+  | Global Shortcuts  |  (tauri-plugin-global-shortcut)
+  | Register: Cmd+1..9|
+  | Register: Cmd+M   |  (show/hide mini window)
+  +------------------+
 ```
 
-### Pattern 2: Frontend Data-Fetching Hook
+## Feature Integration Analysis
 
-**What:** Encapsulate Rust invoke calls in dedicated hooks that manage loading/error state.
+### Feature 1: Global Keyboard Shortcuts for Commands
 
-**When:** Fetching data from Rust backend that is not part of the core store-managed state.
+**Current state:** `useKeyboard.ts` 使用浏览器 `window.addEventListener("keydown")` 监听数字键 1-9，仅在应用窗口聚焦时有效。有多层防护（输入框焦点、编辑模式、Radix 弹窗打开时不触发）。
 
-**Example:**
+**Problem:** 用户需求是"选中项目后按快捷键直接在终端执行命令"。这要求快捷键在应用不聚焦时也能工作。当前方案无法满足。
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Config | `src-tauri/Cargo.toml` | **ADD** `tauri-plugin-global-shortcut = "2"` |
+| Config | `src-tauri/src/lib.rs` | **MODIFY** register plugin, add setup for shortcuts |
+| Config | `src-tauri/capabilities/default.json` | **ADD** global-shortcut permissions |
+| npm | `package.json` | **ADD** `@tauri-apps/plugin-global-shortcut` |
+| React | `src/lib/types.ts` | **MODIFY** add `shortcut` field to CommandItem |
+| React | New: `src/hooks/useGlobalShortcut.ts` | **NEW** hook for global shortcut registration |
+| React | `src/hooks/useProject.ts` | **MODIFY** persist shortcut bindings in store |
+| React | `src/components/CommandDialog.tsx` | **MODIFY** add shortcut recording UI |
+| React | `src/components/CommandCard.tsx` | **MODIFY** show shortcut badge on card |
+| React | `src/hooks/useKeyboard.ts` | **DEPRECATE** replaced by global shortcut system |
+
+**Architecture approach:**
+
+The global shortcut system replaces the browser-level keyboard hook. Each command can be assigned a shortcut (e.g., `Ctrl+Alt+G`, `Ctrl+Shift+1`). When pressed, the shortcut triggers `executeCommand` with the currently selected project and the bound command.
+
+Data model extension:
 ```typescript
-// useProjectInfo.ts
-function useProjectInfo(projectPath: string | null) {
-  const [info, setInfo] = useState({ folderSize: null, gitBranch: null, loading: false });
-
-  useEffect(() => {
-    if (!projectPath) return;
-    setInfo(prev => ({ ...prev, loading: true }));
-    Promise.all([
-      invoke<number>("get_folder_size", { path: projectPath }),
-      invoke<string | null>("get_git_branch", { path: projectPath }),
-    ]).then(([size, branch]) => {
-      setInfo({ folderSize: size, gitBranch: branch, loading: false });
-    });
-  }, [projectPath]);
-
-  return info;
+// types.ts -- add optional shortcut field
+interface CommandItem {
+  // ... existing fields ...
+  shortcut?: string;  // Tauri shortcut string, e.g. "CommandOrControl+Alt+G"
 }
 ```
 
-### Pattern 3: current_dir() Over cd /d
+The `useGlobalShortcut` hook manages the lifecycle:
+```typescript
+function useGlobalShortcut(
+  commands: CommandItem[],
+  currentProject: ProjectItem | null,
+  onExecute: (command: string) => void
+) {
+  // On commands/project change:
+  // 1. Unregister all previous shortcuts
+  // 2. Filter commands with shortcut bindings
+  // 3. Register each shortcut with the plugin
+  // 4. On key press: call onExecute(cmd.command)
+}
+```
 
-**What:** Always use `std::process::Command::current_dir()` instead of embedding `cd /d` in command strings.
+**Critical design decision:** Keep `useKeyboard.ts` for number-key shortcuts (1-9) as a fallback for when the app is focused. The global shortcut plugin handles user-defined shortcuts that work even when the app is not focused. Both systems coexist -- `useKeyboard` for quick in-app number keys, `useGlobalShortcut` for system-wide custom hotkeys.
 
-**When:** Spawning any process that needs to run in a specific directory.
+Actually, reconsidering: maintaining two keyboard systems adds complexity. The cleaner approach is to register the number keys (1-9) as global shortcuts too, so they work regardless of focus. This simplifies the code by removing `useKeyboard.ts` entirely. However, this would mean number keys 1-9 are ALWAYS captured globally, which is too aggressive for a personal tool. **Recommendation: keep `useKeyboard.ts` for in-app number keys, use global shortcuts only for user-assigned hotkeys.**
 
-**Why:** Avoids all Windows path quoting issues with spaces, CJK characters, and special characters. The OS sets the working directory before the process starts, so no shell escaping is needed.
+**Shortcut conflict resolution:** When registering a global shortcut that conflicts with a system shortcut or another app's shortcut, the `register()` call will fail. The hook must handle this gracefully with a toast notification: "快捷键 Ctrl+Alt+G 已被其他程序占用".
+
+**Required permissions:**
+```json
+"global-shortcut:allow-register",
+"global-shortcut:allow-unregister",
+"global-shortcut:allow-is-registered"
+```
+
+**Integration points:**
+- `useProject` hook: `addCommand` / `updateCommand` must persist the `shortcut` field
+- Store: new shortcut bindings saved alongside command data
+- `execute_command` Rust command: unchanged -- the shortcut hook calls the same `executeCommand` flow
+
+---
+
+### Feature 2: System Tray
+
+**Current state:** Window close button (`TitleBar.tsx` `handleClose`) calls `appWindow.close()`, which destroys the window and exits the app. No tray icon exists.
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Config | `src-tauri/Cargo.toml` | **MODIFY** add `"tray-icon"` to tauri features |
+| Config | `src-tauri/src/lib.rs` | **MODIFY** add tray setup in `.setup()` closure |
+| Config | `src-tauri/tauri.conf.json` | **ADD** `trayIcon` config block |
+| Config | `src-tauri/capabilities/default.json` | **ADD** tray permissions |
+| React | `src/components/TitleBar.tsx` | **MODIFY** close button -> hide to tray |
+| React | `src/App.tsx` | **MODIFY** init tray on mount |
+
+**Architecture approach:**
+
+System tray is a built-in Tauri 2 feature (not a separate plugin). Requires the `tray-icon` feature flag on the `tauri` crate.
+
+The tray has two integration points:
+
+1. **Close -> Tray:** Instead of calling `appWindow.close()`, the close button should call `appWindow.hide()`. The window persists in memory, visible via the tray icon.
+
+2. **Tray menu actions:** Right-click tray shows a context menu with:
+   - "显示主窗口" -- shows and focuses the main window
+   - "显示悬浮窗" -- toggles the mini floating window
+   - separator
+   - "退出" -- actually exits the app (`app.exit()`)
+
+**Tray creation (in Rust `.setup()`):**
+
+```rust
+.use(|app| {
+    // Tray setup goes here -- created once at app start
+    // The tray icon persists for the entire app lifecycle
+    Ok(())
+})
+```
+
+However, Tauri 2's tray API is available from both Rust and JavaScript. Given that the tray menu actions need to interact with React state (show/hide windows, know which project is selected), creating the tray from **JavaScript** is more practical:
+
+```typescript
+// src/hooks/useTray.ts or in App.tsx
+import { TrayIcon } from '@tauri-apps/api/tray';
+import { Menu, MenuItem, PredefinedMenuItem } from '@tauri-apps/api/menu';
+
+async function setupTray() {
+  const showMain = await MenuItem.new({
+    text: '显示主窗口',
+    action: async () => {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().show();
+      await getCurrentWindow().setFocus();
+    }
+  });
+
+  const quit = await MenuItem.new({
+    text: '退出',
+    action: async () => {
+      const { exit } = await import('@tauri-apps/api/process');
+      await exit(0);
+    }
+  });
+
+  const menu = await Menu.new({ items: [showMain, quit] });
+
+  const tray = await TrayIcon.new({
+    id: 'main-tray',
+    icon: 'icons/icon.png',  // Uses app icon
+    tooltip: 'EasyPack',
+    menu,
+    menuOnLeftClick: false,
+    action: async (event) => {
+      if (event.type === 'click' && event.button === 'Left') {
+        // Left-click tray -> show main window
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().show();
+        await getCurrentWindow().setFocus();
+      }
+    }
+  });
+}
+```
+
+**Close behavior change:**
+
+```typescript
+// TitleBar.tsx -- change close handler
+async function handleClose() {
+  await appWindow.hide();  // Was: appWindow.close()
+}
+```
+
+**Prevent actual close on window X:** Use `onCloseRequested` event to intercept the system close (Alt+F4):
+
+```typescript
+// App.tsx -- intercept window close
+useEffect(() => {
+  const unlisten = appWindow.onCloseRequested(async (event) => {
+    event.preventDefault();  // Prevent actual close
+    await appWindow.hide();  // Minimize to tray instead
+  });
+  return () => { unlisten.then(fn => fn()); };
+}, []);
+```
+
+**Required permissions:**
+```json
+"core:window:allow-show",
+"core:window:allow-hide",
+"core:window:allow-set-focus",
+"core:window:allow-close",
+"core:window:allow-on-close-requested"
+```
+
+**Required Cargo.toml change:**
+```toml
+# Before:
+tauri = { version = "2", features = ["protocol-asset"] }
+# After:
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+```
+
+**Required tauri.conf.json addition:**
+```json
+"trayIcon": {
+  "iconPath": "icons/icon.png",
+  "iconAsTemplate": false,
+  "id": "main-tray",
+  "tooltip": "EasyPack"
+}
+```
+
+---
+
+### Feature 3: Mini Floating Window
+
+**Current state:** Single window application. No multi-window support.
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Config | `src-tauri/tauri.conf.json` | **ADD** floating window config |
+| Config | `src-tauri/capabilities/default.json` | **ADD** window labels + permissions |
+| React | New: `src/floating.tsx` | **NEW** floating window entry point |
+| React | New: `src/components/FloatingCommandGrid.tsx` | **NEW** mini window content |
+| React | New: `src/hooks/useFloatingWindow.ts` | **NEW** window management |
+| React | `src/App.tsx` | **MODIFY** add floating window toggle |
+| Vite | `index.html` | **ADD** floating window HTML entry |
+| Vite | `vite.config.ts` | **MODIFY** multi-page build config |
+
+**Architecture approach:**
+
+The floating mini window is an independent Tauri webview window. It shows a compact grid of the most-used commands (top 4-6 from the current command list). Clicking a command in the floating window executes it against the currently selected project.
+
+**Window configuration (tauri.conf.json):**
+```json
+{
+  "label": "floating",
+  "title": "EasyPack Mini",
+  "url": "/floating.html",
+  "width": 280,
+  "height": 360,
+  "alwaysOnTop": true,
+  "skipTaskbar": true,
+  "resizable": false,
+  "decorations": false,
+  "shadow": true,
+  "visible": false,
+  "parent": "main"
+}
+```
+
+Key properties explained:
+- `create: false` (not set) -- window is defined but can be created on demand via JS
+- `visible: false` -- hidden by default, shown on user action
+- `parent: "main"` -- floating window is a child of main, closes when main closes
+- `alwaysOnTop: true` -- stays above other windows (essential for quick access)
+- `skipTaskbar: true` -- does not appear in Windows taskbar
+
+**Multi-page Vite config:**
+
+The floating window needs its own HTML entry point and React root. This requires Vite's multi-page build:
+
+```typescript
+// vite.config.ts -- add floating entry
+build: {
+  rollupOptions: {
+    input: {
+      main: path.resolve(__dirname, 'index.html'),
+      floating: path.resolve(__dirname, 'floating.html'),
+    }
+  }
+}
+```
+
+```
+// floating.html
+<div id="floating-root"></div>
+<script type="module" src="/src/floating.tsx"></script>
+```
+
+```typescript
+// src/floating.tsx
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { FloatingCommandGrid } from '@/components/FloatingCommandGrid';
+import './index.css';
+
+createRoot(document.getElementById('floating-root')!).render(
+  <React.StrictMode>
+    <FloatingCommandGrid />
+  </React.StrictMode>
+);
+```
+
+**Inter-window communication:**
+
+The floating window needs to know:
+1. Which project is currently selected (to show project name)
+2. What commands are available (to render command buttons)
+3. How to execute a command (to call `execute_command`)
+
+Three approaches:
+
+**Approach A (Recommended): Shared Rust state via Tauri events.**
+The main window emits state changes. The floating window listens.
+
+```
+Main Window                           Floating Window
+    |                                      |
+    |--- emit("project-changed", {id,name,path}) --->|
+    |--- emit("commands-updated", [...commands]) --->|
+    |                                      |
+    |<--- emit("execute-command", {cmd}) ------------|
+```
+
+```typescript
+// Main window (App.tsx or useProject.ts)
+import { emit } from '@tauri-apps/api/event';
+
+// On project change:
+emit('project-changed', { id, name, path });
+
+// On commands change:
+emit('commands-updated', commands);
+
+// Listen for execution requests from floating window:
+listen('execute-command', (event) => {
+  executeCommand(event.payload.command);
+});
+```
+
+```typescript
+// Floating window (FloatingCommandGrid.tsx)
+import { listen, emit } from '@tauri-apps/api/event';
+
+// Listen for state updates:
+listen('project-changed', (event) => {
+  setCurrentProject(event.payload);
+});
+listen('commands-updated', (event) => {
+  setCommands(event.payload);
+});
+
+// Execute command via main window:
+emit('execute-command', { command: cmd.command });
+```
+
+**Why events over direct invoke():** The floating window CAN call `invoke("execute_command", ...)` directly since the Rust command is registered globally. However, using events allows the main window to:
+- Show the success toast
+- Update any state that depends on execution
+- Maintain a single point of control for execution logic
+
+Actually, the simpler approach is: **the floating window calls `invoke("execute_command", ...)` directly**. It has access to the project path (received via event) and the shell command. The toast notification is less important for the floating window since the user can see the terminal window open.
+
+**Recommended hybrid:** Floating window calls `invoke` directly for command execution, but listens to events for state synchronization (project selection, command list).
+
+**Window lifecycle management (`useFloatingWindow.ts`):**
+
+```typescript
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+
+export function useFloatingWindow() {
+  const [isOpen, setIsOpen] = useState(false);
+  const floatingRef = useRef<WebviewWindow | null>(null);
+
+  const toggle = useCallback(async () => {
+    if (isOpen && floatingRef.current) {
+      await floatingRef.current.hide();
+      setIsOpen(false);
+    } else {
+      // Create or show
+      if (!floatingRef.current) {
+        floatingRef.current = new WebviewWindow('floating', {
+          url: '/floating.html',
+          width: 280,
+          height: 360,
+          alwaysOnTop: true,
+          skipTaskbar: true,
+          decorations: false,
+          shadow: true,
+          parent: 'main',
+        });
+        // Wait for window to be ready
+        await floatingRef.current.once('tauri://created', () => {});
+      }
+      await floatingRef.current.show();
+      await floatingRef.current.setFocus();
+      setIsOpen(true);
+    }
+  }, [isOpen]);
+
+  return { isOpen, toggle };
+}
+```
+
+**Required permissions:**
+```json
+"core:window:allow-create",
+"core:window:allow-show",
+"core:window:allow-hide",
+"core:window:allow-set-focus",
+"core:window:allow-set-always-on-top",
+"core:window:allow-close",
+"core:webview:allow-create-webview-window"
+```
+
+**Capabilities scope:** The `"windows"` array in `capabilities/default.json` must include `"floating"`:
+```json
+{
+  "windows": ["main", "floating"],
+  "permissions": [ /* ... all permissions ... */ ]
+}
+```
+
+---
+
+### Feature 4: Edge Drawer
+
+**Current state:** Window is a standard free-floating desktop window with no edge behavior.
+
+**What changes:**
+
+| Layer | File | Change Type |
+|-------|------|-------------|
+| Rust | `src-tauri/Cargo.toml` | **POSSIBLY ADD** `windows` crate for mouse hook |
+| Rust | New: `src-tauri/src/commands/drawer.rs` | **NEW** edge detection and mouse hook commands |
+| Rust | `src-tauri/src/lib.rs` | **MODIFY** register drawer commands |
+| React | New: `src/hooks/useEdgeDrawer.ts` | **NEW** edge snap + auto-hide logic |
+| React | `src/App.tsx` | **MODIFY** integrate drawer hook |
+
+**Architecture approach:**
+
+Edge drawer has NO native Tauri support. It must be implemented from scratch using the Tauri Window API for position/size manipulation and Win32 API for mouse position detection when the window is hidden.
+
+**Core mechanism:**
+
+1. **Snap detection:** When the window is dragged near a screen edge (< 20px), snap it to the edge
+2. **Auto-hide:** After snapping, animate the window off-screen, leaving a 2-4px sliver visible
+3. **Auto-reveal:** When the mouse cursor touches the edge sliver, slide the window back in
+4. **Auto-hide again:** When the mouse leaves the window area (with a 300ms delay), slide it back out
+
+**The fundamental problem:** When a window is hidden (moved off-screen), it receives NO mouse events. The WebView cannot detect the mouse cursor approaching the edge. This requires either:
+
+**Option A: Win32 `WH_MOUSE_LL` low-level mouse hook** (via `windows` crate)
+- Pros: Detects mouse position anywhere on screen, works when window is hidden
+- Cons: Requires unsafe FFI, `windows` crate adds ~2MB to binary, needs a background thread running the hook
+- Implementation: Rust command starts a background thread that runs `SetWindowsHookEx(WH_MOUSE_LL, callback, ...)`. When mouse position is within 4px of the drawer edge, emit a Tauri event to show the window.
+
+**Option B: Thin sliver window always visible**
+- Keep the main window at its full size but shift it off-screen so only a 2-4px strip is visible
+- The visible strip still receives mouse enter/leave events
+- Pros: No Win32 API needed, pure Tauri Window API
+- Cons: The "hidden" window is still technically visible (2px strip), may trigger taskbar thumbnail, some Windows versions may behave differently with near-off-screen windows
+
+**Option C: Timer-based polling** (not recommended)
+- Use `setInterval` to check mouse position via Tauri API
+- Cons: Polling is wasteful, may have latency, Tauri doesn't expose global mouse position
+
+**Recommendation: Option B (thin sliver window)** for v1.2 MVP. This avoids the complexity of the `windows` crate and Win32 FFI. The 2-4px strip is barely visible on modern high-DPI displays.
+
+**Edge detection algorithm:**
+
+```typescript
+// src/hooks/useEdgeDrawer.ts
+function useEdgeDrawer() {
+  const appWindow = getCurrentWindow();
+  const [drawerState, setDrawerState] = useState<'free' | 'docked' | 'hidden'>('free');
+  const [edge, setEdge] = useState<'left' | 'right' | 'top' | null>(null);
+
+  // Monitor window position for edge proximity
+  useEffect(() => {
+    const unlisten = appWindow.onMoved(async ({ payload: position }) => {
+      const monitor = await appWindow.currentMonitor();
+      if (!monitor) return;
+
+      const { size } = monitor;
+      const threshold = 20; // px from edge to trigger snap
+
+      // Check proximity to each edge
+      if (position.x <= threshold) setEdge('left');
+      else if (position.x + window.outerWidth >= size.width - threshold) setEdge('right');
+      else if (position.y <= threshold) setEdge('top');
+      else setEdge(null);
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, []);
+
+  // When edge is detected and user releases drag -> dock and hide
+  const dockAndHide = useCallback(async () => {
+    if (!edge) return;
+    setDrawerState('docked');
+
+    const monitor = await appWindow.currentMonitor();
+    if (!monitor) return;
+
+    // Move window off-screen, leaving 2px strip
+    switch (edge) {
+      case 'left':
+        await appWindow.setPosition(new LogicalPosition(-window.outerWidth + 2, 0));
+        break;
+      case 'right':
+        await appWindow.setPosition(new LogicalPosition(monitor.size.width - 2, 0));
+        break;
+      case 'top':
+        await appWindow.setPosition(new LogicalPosition(0, -window.outerHeight + 2));
+        break;
+    }
+
+    setDrawerState('hidden');
+  }, [edge]);
+
+  // When mouse enters the 2px strip -> reveal
+  const reveal = useCallback(async () => {
+    if (drawerState !== 'hidden') return;
+    // Slide window back to edge
+    switch (edge) {
+      case 'left':
+        await appWindow.setPosition(new LogicalPosition(0, 0));
+        break;
+      case 'right':
+        await appWindow.setPosition(new LogicalPosition(
+          monitor.size.width - window.outerWidth, 0
+        ));
+        break;
+      case 'top':
+        await appWindow.setPosition(new LogicalPosition(0, 0));
+        break;
+    }
+  }, [drawerState, edge]);
+
+  return { drawerState, edge, dockAndHide, reveal };
+}
+```
+
+**Required permissions:**
+```json
+"core:window:allow-set-position",
+"core:window:allow-set-size",
+"core:window:allow-inner-position",
+"core:window:allow-inner-size",
+"core:window:allow-outer-position",
+"core:window:allow-outer-size",
+"core:window:allow-is-visible",
+"core:window:allow-current-monitor",
+"core:window:allow-available-monitors",
+"core:window:allow-on-moved"
+```
+
+**State persistence:** The drawer state (docked edge, hidden/revealed) should be persisted via `tauri-plugin-store` so it survives app restart. Store keys:
+```
+drawerEdge: "left" | "right" | "top" | null
+drawerState: "free" | "docked" | "hidden"
+drawerPosition: { x: number, y: number }
+```
+
+---
+
+## Component Boundaries After v1.2
+
+| Component | File(s) | Responsibility | Communicates With |
+|-----------|---------|---------------|-------------------|
+| `App.tsx` | `src/App.tsx` | Root layout, tray init, floating window toggle, edge drawer integration | TitleBar, Sidebar, MainArea, useTray, useFloatingWindow, useEdgeDrawer |
+| `TitleBar` | `src/components/TitleBar.tsx` | Custom title bar, close -> hide to tray | useTray (indirect), appWindow.hide() |
+| `FloatingCommandGrid` | `src/components/FloatingCommandGrid.tsx` | Mini floating window content -- compact command buttons | Tauri events (listen for state, emit for execution) |
+| `useTray` | `src/hooks/useTray.ts` | System tray setup, menu actions, left-click show | TrayIcon API, Menu API |
+| `useGlobalShortcut` | `src/hooks/useGlobalShortcut.ts` | Register/unregister system-wide shortcuts | global-shortcut plugin, useProject.executeCommand |
+| `useFloatingWindow` | `src/hooks/useFloatingWindow.ts` | Create/show/hide floating window | WebviewWindow API, Tauri events |
+| `useEdgeDrawer` | `src/hooks/useEdgeDrawer.ts` | Edge snap detection, auto-hide, auto-reveal | Window position API, monitor info API |
+| `useKeyboard` | `src/hooks/useKeyboard.ts` | In-app number key shortcuts (1-9) -- unchanged | commands, currentProject, executeCommand |
+| `useProject` | `src/hooks/useProject.ts` | All state management -- add shortcut persistence | Store, Tauri events (emit state changes) |
+
+## Data Flow Changes
+
+### Current Data Flow (v1.1)
+
+```
+User click on CommandCard
+  -> MainArea.onExecute(cmd.command)
+    -> useProject.executeCommand(shellCommand)
+      -> invoke("execute_command", { projectPath, shellCommand })
+        -> Rust: std::process::Command spawn wt.exe/cmd.exe
+```
+
+### New Data Flow (v1.2) -- Three Execution Paths
+
+**Path A: Main Window Click (unchanged)**
+```
+User click CommandCard
+  -> MainArea.onExecute(cmd.command)
+    -> useProject.executeCommand(shellCommand)
+      -> invoke("execute_command", { projectPath, shellCommand })
+```
+
+**Path B: Global Shortcut**
+```
+User presses Ctrl+Alt+G (registered shortcut)
+  -> useGlobalShortcut.onKeyPress
+    -> find command by shortcut binding
+    -> useProject.executeCommand(cmd.command)
+      -> invoke("execute_command", { projectPath, shellCommand })
+```
+
+**Path C: Floating Mini Window**
+```
+User clicks command button in floating window
+  -> FloatingCommandGrid.onExecute(cmd.command)
+    -> invoke("execute_command", { projectPath, shellCommand })
+  OR
+    -> emit("execute-command", { command })
+      -> Main window listens -> useProject.executeCommand(cmd.command)
+```
+
+### State Synchronization Flow
+
+```
+Main Window                             Floating Window
+    |                                        |
+    |-- emit("project-changed") ----------->|  update displayed project
+    |-- emit("commands-updated") ---------->|  update command grid
+    |-- emit("shortcuts-changed") --------->|  update shortcut display
+    |                                        |
+    |<-- invoke("execute_command") ---------|  direct Rust call (recommended)
+    |                                        |
+    |-- emit("drawer-state-changed") ------>|  (floating window may need to
+    |                                        |   know if main is in drawer mode)
+```
+
+## File Change Summary
+
+### New Files
+
+| File | Purpose | Feature |
+|------|---------|---------|
+| `src/hooks/useGlobalShortcut.ts` | System-wide shortcut registration | Shortcuts |
+| `src/hooks/useTray.ts` | System tray setup and menu | Tray |
+| `src/hooks/useFloatingWindow.ts` | Floating window lifecycle | Floating |
+| `src/hooks/useEdgeDrawer.ts` | Edge snap + auto-hide logic | Drawer |
+| `src/floating.tsx` | Floating window React entry point | Floating |
+| `src/floating.html` | Floating window HTML entry | Floating |
+| `src/components/FloatingCommandGrid.tsx` | Mini window command buttons | Floating |
+
+### Modified Files
+
+| File | Changes | Feature(s) |
+|------|---------|------------|
+| `src-tauri/Cargo.toml` | Add `tauri-plugin-global-shortcut`, add `tray-icon` feature | Shortcuts, Tray |
+| `src-tauri/src/lib.rs` | Register global-shortcut plugin, add `.setup()` for tray | Shortcuts, Tray |
+| `src-tauri/tauri.conf.json` | Add `trayIcon` config, add floating window config | Tray, Floating |
+| `src-tauri/capabilities/default.json` | Add all new permissions, add "floating" to windows array | All |
+| `src/App.tsx` | Add tray init, floating window toggle, edge drawer integration, state event emission | All |
+| `src/components/TitleBar.tsx` | Close button -> hide to tray | Tray |
+| `src/components/CommandDialog.tsx` | Add shortcut recording UI field | Shortcuts |
+| `src/components/CommandCard.tsx` | Show shortcut key badge | Shortcuts |
+| `src/hooks/useProject.ts` | Persist shortcut bindings, emit state change events | Shortcuts, Floating |
+| `src/hooks/useKeyboard.ts` | Keep as-is (in-app number keys) or remove if global shortcuts absorb | Shortcuts |
+| `src/lib/types.ts` | Add `shortcut?: string` to CommandItem | Shortcuts |
+| `vite.config.ts` | Add multi-page build config for floating window | Floating |
+
+## Suggested Build Order
+
+Based on dependency analysis -- features that others depend on should be built first:
+
+```
+Phase 1: Global Shortcuts (FOUNDATION)
+  Feature 1: Keyboard shortcut registration
+  |-- WHY FIRST: Replaces core interaction model, needs to be stable before
+  |   floating window or tray menu can trigger command execution
+  |-- Risk: MEDIUM (new plugin, capabilities config, data model change)
+  |-- No dependency on other v1.2 features
+  |-- Provides the execution trigger that tray and floating window will use
+
+Phase 2: System Tray (INDEPENDENT)
+  Feature 2: Tray icon + close-to-tray behavior
+  |-- WHY SECOND: Independent of floating window, changes close behavior
+  |   which affects edge drawer (hidden window vs tray-hidden window)
+  |-- Risk: LOW (built-in Tauri feature, well-documented)
+  |-- Depends on: Phase 1 (for tray menu "execute last command" option)
+  |-- NOTE: Must resolve the close behavior BEFORE edge drawer
+  |   because both features interact with window visibility
+
+Phase 3: Floating Mini Window (DEPENDS ON TRAY)
+  Feature 3: Independent mini window with command buttons
+  |-- WHY THIRD: Depends on tray (floating window toggle in tray menu),
+  |   depends on event system for state sync
+  |-- Risk: MEDIUM (multi-window, multi-page Vite build, inter-window events)
+  |-- Depends on: Phase 1 (shortcut system for floating window commands),
+  |   Phase 2 (tray menu entry for floating window)
+
+Phase 4: Edge Drawer (DEPENDS ON ALL ABOVE, MOST COMPLEX)
+  Feature 4: Edge snap, auto-hide, auto-reveal
+  |-- WHY LAST: Most complex, depends on all window management features
+  |   being stable. Interacts with tray (tray also hides window) and
+  |   floating window (main window hidden state affects floating)
+  |-- Risk: HIGH (custom implementation, no Tauri native support,
+  |   thin sliver approach may have edge cases on different Windows versions)
+  |-- Depends on: Phase 2 (tray close behavior must be stable),
+  |   Phase 3 (floating window must work when main is hidden)
+```
+
+**Dependency graph:**
+
+```
+Phase 1: Global Shortcuts
+    |
+    v
+Phase 2: System Tray
+    |         \
+    v          \
+Phase 3: Floating Window
+    |          |
+    v          v
+Phase 4: Edge Drawer
+```
+
+## Patterns to Follow
+
+### Pattern 1: Tauri Event-Based State Synchronization
+
+**What:** Use Tauri's event system (`emit` / `listen`) to synchronize state between windows.
+
+**When:** Multi-window applications where secondary windows need access to primary window state.
+
+**Example:**
+```typescript
+// Main window -- emit state changes
+import { emit } from '@tauri-apps/api/event';
+
+// Whenever selected project changes:
+useEffect(() => {
+  if (currentProject) {
+    emit('project-changed', { id: currentProject.id, name: currentProject.name, path: currentProject.path });
+  }
+}, [currentProject]);
+
+// Whenever commands change:
+useEffect(() => {
+  emit('commands-updated', commands);
+}, [commands]);
+```
+
+```typescript
+// Floating window -- listen for state
+import { listen } from '@tauri-apps/api/event';
+
+const unlistenProject = await listen('project-changed', (event) => {
+  setCurrentProject(event.payload);
+});
+const unlistenCommands = await listen('commands-updated', (event) => {
+  setCommands(event.payload);
+});
+```
+
+### Pattern 2: Window Lifecycle Management via Ref
+
+**What:** Maintain a ref to created windows to avoid re-creating them on each show/hide toggle.
+
+**When:** Managing secondary windows that are shown/hidden repeatedly.
+
+**Example:**
+```typescript
+const windowRef = useRef<WebviewWindow | null>(null);
+
+async function showFloating() {
+  if (!windowRef.current) {
+    windowRef.current = new WebviewWindow('floating', { /* config */ });
+    windowRef.current.once('tauri://destroyed', () => {
+      windowRef.current = null;
+    });
+  }
+  await windowRef.current.show();
+  await windowRef.current.setFocus();
+}
+```
+
+### Pattern 3: Global Shortcut Registration Lifecycle
+
+**What:** Register shortcuts when commands change, unregister on cleanup.
+
+**When:** Using `tauri-plugin-global-shortcut` for dynamic shortcut bindings.
+
+**Example:**
+```typescript
+useEffect(() => {
+  const shortcuts = commands.filter(c => c.shortcut);
+
+  // Unregister all, then register current set
+  async function syncShortcuts() {
+    await unregisterAll();
+    for (const cmd of shortcuts) {
+      if (cmd.shortcut) {
+        await register(cmd.shortcut, (event) => {
+          if (event.state === 'Pressed') {
+            executeCommand(cmd.command);
+          }
+        });
+      }
+    }
+  }
+
+  syncShortcuts();
+  return () => { unregisterAll(); };
+}, [commands, executeCommand]);
+```
+
+### Pattern 4: Close-to-Tray Interception
+
+**What:** Intercept window close events to hide instead of destroy.
+
+**When:** System tray applications that should persist in the background.
+
+**Example:**
+```typescript
+useEffect(() => {
+  const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
+    event.preventDefault();
+    await getCurrentWindow().hide();
+  });
+  return () => { unlisten.then(fn => fn()); };
+}, []);
+```
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Calculating Folder Size Synchronously on UI Thread
+### Anti-Pattern 1: Direct DOM Communication Between Windows
 
-**What:** Running folder size calculation in the main Tauri event loop.
+**What:** Trying to share React state between main and floating windows via localStorage or DOM APIs.
 
-**Why bad:** Large directories (node_modules) can take seconds to traverse, freezing the UI.
+**Why bad:** Tauri windows have separate JavaScript contexts. localStorage writes from one window may not trigger storage events in another. The state gets out of sync.
 
-**Instead:** Use `#[tauri::command] async fn` which runs on a separate thread. Add a timeout to prevent hanging on network drives or broken symlinks.
+**Instead:** Use Tauri's event system (`emit` / `listen`) which is designed for inter-window communication.
 
-### Anti-Pattern 2: Polling Folder Size / Git Branch
+### Anti-Pattern 2: Registering Global Shortcuts That Conflict with System Keys
 
-**What:** Using `setInterval` to periodically re-fetch folder size and git branch.
+**What:** Registering shortcuts like `Ctrl+C`, `Alt+Tab`, `Win+D` as command hotkeys.
 
-**Why bad:** Wastes filesystem I/O. These values change slowly (folder size) or only on git operations (branch).
+**Why bad:** These are system-reserved shortcuts. Registration may fail silently or override critical OS behavior.
 
-**Instead:** Fetch once on project selection. Provide a manual refresh button if needed.
+**Instead:** Enforce a modifier combination policy. All user shortcuts must include at least two modifiers (e.g., `Ctrl+Alt+`, `Ctrl+Shift+`, `Win+Alt+`). Reject single-modifier shortcuts during assignment.
 
-### Anti-Pattern 3: Adding Heavy Rust Crate Dependencies for Simple Detection
+### Anti-Pattern 3: Creating Floating Window on Every Toggle
 
-**What:** Using `project-detect` or similar crates for project type detection.
+**What:** Calling `new WebviewWindow('floating', ...)` every time the user toggles the floating window.
 
-**Why bad:** Over-engineering. EasyPack only needs to check if a few files exist (package.json, Cargo.toml, etc.), which is trivially done with `std::fs::metadata`.
+**Why bad:** Creating a webview window is expensive (~100-200ms). Toggling should be near-instant.
 
-**Instead:** Direct `std::fs::metadata(path).is_ok()` checks for known marker files.
+**Instead:** Create the window once, then show/hide it. Store the reference in a ref or module-level variable.
 
-### Anti-Pattern 4: Mixing Preset Data with User Data in Store
+### Anti-Pattern 4: Edge Drawer Using Tauri Window.hide()
 
-**What:** Storing the full categorized preset library in the Store JSON file.
+**What:** Calling `appWindow.hide()` to "hide" the window in edge drawer mode.
 
-**Why bad:** Presets are static data defined in code. Storing them duplicates data and makes updates harder.
+**Why bad:** `hide()` removes the window from the screen entirely. The window receives no mouse events, so auto-reveal via mouse hover is impossible without a Win32 mouse hook.
 
-**Instead:** Only store user-added commands (custom + selected presets converted to CommandItem). The preset library is hardcoded in `presets.ts` and always reflects the latest version.
+**Instead:** Use `setPosition()` to move the window off-screen, leaving a 2-4px strip visible. The visible strip receives `onMouseEnter` events for auto-reveal.
+
+### Anti-Pattern 5: Blocking the Main Thread with Edge Position Calculations
+
+**What:** Running continuous `requestAnimationFrame` loops to check window position for edge detection.
+
+**Why bad:** Wastes CPU cycles when the window is stationary.
+
+**Instead:** Use Tauri's `onMoved` event listener to detect position changes only when the window is actually being moved.
 
 ## Scalability Considerations
 
-| Concern | Current (5-50 projects) | Growth (100+ projects) | Mitigation |
-|---------|------------------------|------------------------|------------|
-| Folder size calculation | Instant per project | Could be slow with many large projects | Cache results, lazy load, skip hidden dirs |
-| Git branch detection | Fast (git rev-parse) | Fast (no scalability concern) | N/A |
-| Preset library size | ~20 presets across 5 categories | Could grow to 50+ | Virtualize dropdown, search filter |
-| Frameless window perf | No impact | No impact | N/A |
-| Store JSON size | <100KB | Still manageable | If needed, split per-project data into separate keys (already done for projectCommands) |
+| Concern | Current (10-50 shortcuts) | Growth (100+ shortcuts) | Mitigation |
+|---------|--------------------------|------------------------|------------|
+| Global shortcut registration | Instant | Registration is O(n) but fast | Cap max shortcuts at ~50 |
+| Tray menu items | 3-5 items | Still manageable | Tray menus should stay concise |
+| Floating window commands | 4-6 shown | Grid may need scrolling | Limit to 6-8 visible, add "more" link |
+| Event bus messages | Low volume | Low volume | Events are lightweight, no concern |
+| Edge drawer position tracking | On event only | No concern | Already event-driven |
+| Multi-window memory | ~20MB for floating | ~20MB | Single floating window, no concern |
+| Store JSON size (with shortcuts) | <200KB | Still manageable | Shortcuts are short strings |
+
+## Critical Integration Risks
+
+### Risk 1: Close-to-Tray Conflicts with Edge Drawer
+
+Both the tray and edge drawer modify window visibility. The tray wants to hide the window entirely; the edge drawer wants to move it off-screen but keep it partially visible. These two features must coordinate:
+
+**Resolution:** Edge drawer takes priority. If the window is in drawer-hidden state, the tray "show" action should first restore the window from the drawer, then show it. Add a state machine:
+
+```
+Window visibility states:
+  VISIBLE -> (close button) -> TRAY_HIDDEN
+  VISIBLE -> (edge snap) -> DRAWER_HIDDEN
+  TRAY_HIDDEN -> (tray show) -> VISIBLE
+  DRAWER_HIDDEN -> (mouse hover) -> VISIBLE
+  DRAWER_HIDDEN -> (tray show) -> VISIBLE (force reveal from drawer)
+  TRAY_HIDDEN -> (tray exit) -> APP_EXIT
+```
+
+### Risk 2: Floating Window Behavior When Main Window Is Hidden
+
+When the main window is in tray-hidden or drawer-hidden state, the floating window should still be functional. The floating window calls `invoke("execute_command", ...)` directly, which works regardless of main window visibility. However, state synchronization events from the main window may stop if the main window's React tree is not processing events.
+
+**Resolution:** Tauri events are processed by the Rust backend, not by the React frontend. Even if the main window is hidden, the event system continues to work. Verify this assumption during Phase 3 testing.
+
+### Risk 3: Shortcut Conflicts with Windows Terminal
+
+Users may have global shortcuts configured in Windows Terminal or other tools. When EasyPack registers a shortcut, it may conflict.
+
+**Resolution:** The `register()` function returns an error on conflict. Display a clear message: "快捷键 {key} 注册失败，可能被其他程序占用". Allow the user to choose a different shortcut.
 
 ## Sources
 
-- [Tauri v2 Window Customization](https://v2.tauri.app/learn/window-customization/) -- Frameless window setup, data-tauri-drag-region, window permissions -- HIGH confidence
-- [Tauri v2 Configuration Reference](https://v2.tauri.app/reference/config/) -- Window config options (decorations, shadow) -- HIGH confidence
-- [GitHub microsoft/terminal #9313](https://github.com/microsoft/terminal/issues/9313) -- wt.exe quoting behavior with spaces -- HIGH confidence
-- [StackOverflow: ExternalTerminal path spaces 0x80070002](https://github.com/microsoft/vscode-cpptools/issues/11970) -- cmd.exe path quoting causing ERROR_FILE_NOT_FOUND -- HIGH confidence
-- [Rust walkdir crate](https://docs.rs/walkdir) -- Directory traversal for folder size -- HIGH confidence
-- [fs_extra::dir::get_size](https://docs.rs/fs_extra/latest/fs_extra/dir/fn.get_size.html) -- Alternative to walkdir for folder size -- HIGH confidence
-- [StackOverflow: Get current git branch](https://stackoverflow.com/questions/6245570/how-do-i-get-the-current-branch-name-in-git) -- `git rev-parse --abbrev-ref HEAD` -- HIGH confidence
-- [Tauri v2 Calling Rust from Frontend](https://v2.tauri.app/develop/calling-rust/) -- Command registration pattern -- HIGH confidence
-- [project-detect crate](https://docs.rs/project-detect) -- Considered and rejected (anti-pattern 3) -- MEDIUM confidence
+- [Tauri v2 Global Shortcut Plugin](https://v2.tauri.app/plugin/global-shortcut/) -- official plugin docs, JS API, permissions -- HIGH confidence
+- [Tauri v2 System Tray](https://v2.tauri.app/learn/system-tray/) -- built-in tray feature, `tray-icon` flag, Menu API -- HIGH confidence
+- [Tauri v2 Window Configuration](https://v2.tauri.app/reference/config/) -- WindowConfig properties (alwaysOnTop, skipTaskbar, parent, create) -- HIGH confidence
+- [Tauri v2 WebviewWindow API](https://v2.tauri.app/reference/javascript/api/namespacewebviewwindow/) -- multi-window creation and management -- HIGH confidence
+- [Tauri v2 Event System](https://v2.tauri.app/develop/calling-frontend/) -- emit, listen, emitTo for inter-window communication -- HIGH confidence
+- [Tauri v2 Window API](https://v2.tauri.app/reference/javascript/api/namespacewindow/) -- setPosition, setSize, show, hide, onCloseRequested -- HIGH confidence
+- [Tauri v2 Window State Plugin](https://v2.tauri.app/plugin/window-state/) -- considered but rejected for edge drawer (custom position logic needed) -- HIGH confidence
+- [Windows crate](https://crates.io/crates/windows) -- Win32 API bindings, considered for WH_MOUSE_LL hook -- HIGH confidence
+- [Tauri v2 Multi-Window Pattern](https://v2.tauri.app/develop/calling-frontend/) -- inter-window communication patterns -- HIGH confidence
+
+---
+*Architecture research for: EasyPack v1.2 milestone -- keyboard shortcuts, system tray, floating mini window, edge drawer*
+*Researched: 2026-04-26*
