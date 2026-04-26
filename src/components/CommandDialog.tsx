@@ -9,6 +9,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PRESET_CATEGORIES, ALL_PRESETS } from "@/lib/presets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +44,13 @@ export function CommandDialog({
   );
   const [nameDirty, setNameDirty] = useState(false);
   const [commandDirty, setCommandDirty] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+
+  const filteredPresets = useMemo(
+    () => ALL_PRESETS.filter((p) => p.category === selectedCategory),
+    [selectedCategory]
+  );
 
   const isValid = name.trim().length > 0 && command.trim().length > 0;
 
@@ -58,6 +74,28 @@ export function CommandDialog({
     setSelectedIcon(iconName);
   }, []);
 
+  const handleCategoryChange = useCallback((categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setSelectedPresetId("");
+    setName("");
+    setCommand("");
+    setSelectedIcon(DEFAULT_ICON);
+    setNameDirty(false);
+    setCommandDirty(false);
+  }, []);
+
+  const handlePresetChange = useCallback((presetId: string) => {
+    const preset = ALL_PRESETS.find((p) => p.id === presetId);
+    if (preset) {
+      setName(preset.name);
+      setCommand(preset.command);
+      setSelectedIcon(preset.icon);
+      setNameDirty(false);
+      setCommandDirty(false);
+    }
+    setSelectedPresetId(presetId);
+  }, []);
+
   const handleSubmit = useCallback(() => {
     if (!isValid) return;
     onSubmit({
@@ -76,6 +114,8 @@ export function CommandDialog({
         setSelectedIcon(initialData?.icon ?? DEFAULT_ICON);
         setNameDirty(false);
         setCommandDirty(false);
+        setSelectedCategory("");
+        setSelectedPresetId("");
       }
       onOpenChange(newOpen);
     },
@@ -99,6 +139,62 @@ export function CommandDialog({
         </DialogHeader>
 
         <div className="py-4 space-y-4">
+          {/* Preset selection area per D-03 */}
+          <div className="pb-4 mb-4 border-b border-white/10">
+            <div className="grid grid-cols-2 gap-2">
+              {/* Category Select */}
+              <div className="space-y-2">
+                <Label>分类</Label>
+                <Select
+                  value={selectedCategory}
+                  onValueChange={handleCategoryChange}
+                >
+                  <SelectTrigger aria-label="选择预设分类" className="w-full">
+                    <SelectValue placeholder="选择分类..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {PRESET_CATEGORIES.map((cat) => {
+                        const CategoryIcon = getIconByName(cat.icon);
+                        return (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            <div className="flex items-center gap-2">
+                              <CategoryIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                              {cat.label}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Command Select */}
+              <div className="space-y-2">
+                <Label>命令</Label>
+                <Select
+                  value={selectedPresetId}
+                  onValueChange={handlePresetChange}
+                  disabled={!selectedCategory}
+                >
+                  <SelectTrigger aria-label="选择预设命令" className="w-full">
+                    <SelectValue placeholder={selectedCategory ? "选择命令..." : "先选择分类"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {filteredPresets.map((preset) => (
+                        <SelectItem key={preset.id} value={preset.id}>
+                          {preset.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
           {/* Name field */}
           <div className="space-y-2">
             <Label htmlFor="cmd-name">名称</Label>
