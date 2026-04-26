@@ -261,9 +261,12 @@ export function useProject() {
 
   // Add custom command (supports both global and project-level modes)
   const addCommand = useCallback(
-    async (name: string, command: string, icon?: string) => {
-      if (commandMode === "project" && selectedId) {
-        // Project-level mode: add to projectCommandsMap
+    async (name: string, command: string, icon?: string, scope?: "global" | "project") => {
+      // Use explicit scope parameter, fallback to current commandMode
+      const effectiveScope = scope ?? (commandMode === "project" && selectedId ? "project" : "global");
+
+      if (effectiveScope === "project" && selectedId) {
+        // Project-level: add to projectCommandsMap
         const newItem: CommandItem = {
           id: crypto.randomUUID(),
           name,
@@ -442,7 +445,7 @@ export function useProject() {
 
     // Command CRUD interface
     commands, // CommandItem[]
-    addCommand, // (name: string, command: string, icon?: string) => Promise<void>
+    addCommand, // (name: string, command: string, icon?: string, scope?: "global" | "project") => Promise<void>
     updateCommand, // (id: string, data: { name: string; command: string; icon: string }) => Promise<void>
     deleteCommand, // (id: string) => Promise<void>
 

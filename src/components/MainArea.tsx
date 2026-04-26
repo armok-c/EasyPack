@@ -16,7 +16,7 @@ interface MainAreaProps {
   commandMode: "global" | "project";
   editMode: boolean;
   setEditMode: (editMode: boolean) => void;
-  addCommand: (name: string, command: string, icon?: string) => Promise<void>;
+  addCommand: (name: string, command: string, icon?: string, scope?: "global" | "project") => Promise<void>;
   updateCommand: (id: string, data: { name: string; command: string; icon: string }) => Promise<void>;
   deleteCommand: (id: string) => Promise<void>;
   enableProjectCommands: () => Promise<void>;
@@ -69,11 +69,11 @@ export function MainArea({
   }, []);
 
   const handleDialogSubmit = useCallback(
-    async (data: { name: string; command: string; icon: string }) => {
+    async (data: { name: string; command: string; icon: string; scope?: "global" | "project" }) => {
       if (editingCommand) {
         await updateCommand(editingCommand.id, data);
       } else {
-        await addCommand(data.name, data.command, data.icon);
+        await addCommand(data.name, data.command, data.icon, data.scope);
       }
       setDialogOpen(false);
       setEditingCommand(null);
@@ -319,6 +319,8 @@ export function MainArea({
         onOpenChange={handleDialogOpenChange}
         onSubmit={handleDialogSubmit}
         initialData={editingCommand}
+        commandMode={commandMode}
+        hasProject={!!currentProject}
       />
     </main>
   );
