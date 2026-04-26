@@ -1,7 +1,7 @@
 ---
 phase: 10
 slug: 10-预设指令系统
-status: draft
+status: approved
 shadcn_initialized: true
 preset: new-york (zinc, CSS variables)
 created: 2026-04-26
@@ -522,11 +522,11 @@ No third-party registries or blocks declared. Phase 10 uses shadcn official Sele
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS (FLAG: "添加"按钮单字词，弹窗上下文中合理)
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS (FLAG: shadcn Select 内置 py-1.5=6px 非4倍数，框架默认值)
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-04-26
