@@ -31,6 +31,9 @@ interface MainAreaProps {
   // Phase 9: open folder + toggle disabled state
   onOpenFolder: () => void;
   isProjectToggleDisabled: boolean;
+  // Phase 11: shortcut management
+  assignShortcut: (commandId: string, shortcut: string) => Promise<boolean>;
+  clearShortcut: (commandId: string) => Promise<void>;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -56,6 +59,8 @@ export function MainArea({
   projectInfoError,
   onOpenFolder,
   isProjectToggleDisabled,
+  assignShortcut,
+  clearShortcut,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
@@ -63,10 +68,47 @@ export function MainArea({
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
+  // Phase 11: shortcut recording state
+  const [recordingCommandId, setRecordingCommandId] = useState<string | null>(null);
+  const [conflictCommandId, setConflictCommandId] = useState<string | null>(null);
+
   const handleEdit = useCallback((cmd: CommandItem) => {
     setEditingCommand(cmd);
     setDialogOpen(true);
   }, []);
+
+  // Phase 11: shortcut recording callbacks
+  const handleRecordingStart = useCallback((commandId: string) => {
+    setRecordingCommandId(commandId);
+    setConflictCommandId(null);
+  }, []);
+
+  const handleRecordingStop = useCallback(() => {
+    setRecordingCommandId(null);
+    setConflictCommandId(null);
+  }, []);
+
+  const handleShortcutAssign = useCallback(async (commandId: string, shortcut: string) => {
+    const success = await assignShortcut(commandId, shortcut);
+    if (!success) {
+      setConflictCommandId(commandId);
+      setTimeout(() => setConflictCommandId(null), 2000);
+    } else {
+      setRecordingCommandId(null);
+    }
+  }, [assignShortcut]);
+
+  const handleShortcutClear = useCallback(async (commandId: string) => {
+    await clearShortcut(commandId);
+  }, [clearShortcut]);
+
+  // Cancel recording when edit mode is turned off
+  useEffect(() => {
+    if (!editMode) {
+      setRecordingCommandId(null);
+      setConflictCommandId(null);
+    }
+  }, [editMode]);
 
   const handleDialogSubmit = useCallback(
     async (data: { name: string; command: string; icon: string; scope?: "global" | "project" }) => {
@@ -286,7 +328,14 @@ export function MainArea({
               commandId={cmd.id}
               onClick={() => onExecute(cmd.command)}
               tabIndex={isCardFocused ? 0 : -1}
-              shortcutNumber={!isCustom && !canEdit && index < 9 ? index + 1 : undefined}
+              shortcut={cmd.shortcut}
+              shortcutNumber={!cmd.shortcut && !isCustom && !canEdit && index < 9 ? index + 1 : undefined}
+              isRecording={recordingCommandId === cmd.id}
+              hasConflict={conflictCommandId === cmd.id}
+              onRecordingStart={() => handleRecordingStart(cmd.id)}
+              onRecordingStop={handleRecordingStop}
+              onShortcutAssign={(s) => handleShortcutAssign(cmd.id, s)}
+              onShortcutClear={() => handleShortcutClear(cmd.id)}
             />
           );
         })}
