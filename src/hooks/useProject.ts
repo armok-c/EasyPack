@@ -554,5 +554,8 @@ export function useProject() {
     // Phase 9: project-level command map + open folder
     projectCommandsMap,    // Record<string, CommandItem[]>
     openFolder,            // (path: string) => Promise<void>
+
+    // Phase 12: expose store for tray settings persistence
+    store,                 // Store | null
   };
 }

@@ -1,12 +1,19 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/Sidebar";
 import { MainArea } from "@/components/MainArea";
 import { TitleBar } from "@/components/TitleBar";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { useProject } from "@/hooks/useProject";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
+import { useVisibilityState } from "@/hooks/useVisibilityState";
+import { useRecentCommands } from "@/hooks/useRecentCommands";
+import { useTray } from "@/hooks/useTray";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./index.css";
+
+const appWindow = getCurrentWindow();
 
 function App() {
   const {
@@ -40,6 +47,8 @@ function App() {
     // Phase 11: shortcut assignment
     assignShortcut,
     clearShortcut,
+    // Phase 12: store for tray settings
+    store,
   } = useProject();
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
@@ -72,16 +81,95 @@ function App() {
     setIsRecording(recording);
   }, []);
 
+  // Phase 12: tray settings state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [trayEnabled, setTrayEnabled] = useState(true);
+  const [closeToTray, setCloseToTray] = useState(true);
+
+  // Phase 12: window visibility state machine
+  const { visibility, hideToTray, showFromTray } = useVisibilityState();
+
+  // Phase 12: recent commands tracking
+  const { recentCommands, addRecentCommand } = useRecentCommands({ store });
+
+  // Phase 12: execute with recent command tracking
+  const handleExecuteWithRecent = useCallback(async (shellCommand: string) => {
+    await executeCommand(shellCommand);
+    const cmd = commands.find((c) => c.command === shellCommand);
+    if (cmd) {
+      await addRecentCommand(cmd.name, cmd.command);
+    } else {
+      await addRecentCommand(shellCommand, shellCommand);
+    }
+  }, [executeCommand, commands, addRecentCommand]);
+
   useGlobalShortcuts({
     commands,
-    onExecute: executeCommand,
+    onExecute: handleExecuteWithRecent,
     enabled: !!currentProject,
     recording: isRecording,
   });
 
+  // Phase 12: system tray
+  useTray({
+    currentProject,
+    commands,
+    recentCommands,
+    visibility,
+    onExecute: handleExecuteWithRecent,
+    onShow: () => { showFromTray(); appWindow.show(); appWindow.setFocus(); },
+    onHide: () => { hideToTray(); appWindow.hide(); },
+    onQuit: async () => { await appWindow.close(); },
+    enabled: trayEnabled,
+  });
+
+  // Phase 12: onCloseRequested interception (per D-07)
+  useEffect(() => {
+    if (!closeToTray) return;
+    const unlisten = appWindow.onCloseRequested(async (event) => {
+      event.preventDefault();
+      hideToTray();
+      await appWindow.hide();
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, [closeToTray, hideToTray]);
+
+  // Phase 12: load tray settings from store on mount
+  useEffect(() => {
+    let mounted = true;
+    async function loadTraySettings() {
+      if (!store) return;
+      const saved = await store.get<boolean>("trayEnabled");
+      const savedCTT = await store.get<boolean>("closeToTray");
+      if (mounted) {
+        if (saved !== undefined && saved !== null) setTrayEnabled(saved);
+        if (savedCTT !== undefined && savedCTT !== null) setCloseToTray(savedCTT);
+      }
+    }
+    loadTraySettings();
+    return () => { mounted = false; };
+  }, [store]);
+
+  // Phase 12: persist tray settings on change
+  const handleTrayEnabledChange = useCallback(async (enabled: boolean) => {
+    setTrayEnabled(enabled);
+    if (!enabled) {
+      setCloseToTray(false);
+    }
+    await store?.set("trayEnabled", enabled);
+  }, [store]);
+
+  const handleCloseToTrayChange = useCallback(async (enabled: boolean) => {
+    setCloseToTray(enabled);
+    await store?.set("closeToTray", enabled);
+  }, [store]);
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
-      <TitleBar onSettingsOpen={() => {}} onCloseBehavior="close" />
+      <TitleBar
+        onSettingsOpen={() => setSettingsOpen(true)}
+        onCloseBehavior={closeToTray ? "hide" : "close"}
+      />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           projects={projects}
@@ -118,6 +206,14 @@ function App() {
           onRecordingChange={handleRecordingChange}
         />
       </div>
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        trayEnabled={trayEnabled}
+        onTrayEnabledChange={handleTrayEnabledChange}
+        closeToTray={closeToTray}
+        onCloseToTrayChange={handleCloseToTrayChange}
+      />
       <Toaster richColors position="bottom-right" duration={1500} />
     </div>
   );
