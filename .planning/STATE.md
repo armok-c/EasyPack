@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
 status: ready_to_plan
-stopped_at: Phase 12 context gathered
-last_updated: "2026-04-27T03:15:00Z"
+stopped_at: Phase 12 UI-SPEC approved
+last_updated: "2026-04-27T03:30:00Z"
 last_activity: 2026-04-27
 progress:
   total_phases: 4
@@ -24,8 +24,8 @@ progress:
 
 Phase: 12
 Plan: Not started
-Status: Phase 11 complete, Phase 12 context gathered
-Last activity: 2026-04-27 -- Phase 12 context captured
+Status: Phase 12 UI-SPEC approved
+Last activity: 2026-04-27 -- Phase 12 UI-SPEC approved
 
 Progress: [██████████] 100%
 
@@ -74,5 +74,5 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 ## Session Continuity
 
 Last session: 2026-04-27
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-系统托盘/12-CONTEXT.md
+Stopped at: Phase 12 UI-SPEC approved
+Resume file: .planning/phases/12-系统托盘/12-UI-SPEC.md
