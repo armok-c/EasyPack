@@ -34,7 +34,7 @@
 
 **Milestone Goal:** 让 EasyPack 从"点击执行"进化为"键盘驱动 + 随手可用"的桌面工具。
 
-- [ ] **Phase 11: 全局快捷键** — 每个指令可绑定快捷键，选中项目后按键直接执行
+- [x] **Phase 11: 全局快捷键** — 每个指令可绑定快捷键，选中项目后按键直接执行 -- completed 2026-04-27
 - [ ] **Phase 12: 系统托盘** — 关闭窗口最小化到托盘，托盘菜单支持完整操作
 - [ ] **Phase 13: 迷你悬浮窗** — 独立小窗口显示常用指令按钮，始终置顶，点击直接执行
 - [ ] **Phase 14: 边缘抽屉** — 主窗口吸附到屏幕边缘隐藏，鼠标接触自动滑出
@@ -54,8 +54,8 @@
 **Plans:** 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Tauri 插件安装 + 类型扩展 + 快捷键工具函数 + useGlobalShortcuts hook
-- [ ] 11-02-PLAN.md — useProject 扩展 + CommandCard 徽章状态机 + MainArea 录制管理 + App 集成
+- [x] 11-01-PLAN.md -- Tauri 插件安装 + 类型扩展 + 快捷键工具函数 + useGlobalShortcuts hook
+- [x] 11-02-PLAN.md -- useProject 扩展 + CommandCard 徽章状态机 + MainArea 录制管理 + App 集成
 
 **UI hint**: yes
 
@@ -114,7 +114,7 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
 | 9. 前端 UI 集成 | v1.1 | 1/1 | Complete | 2026-04-25 |
 | 10. 预设指令系统 | v1.1 | 3/3 | Complete | 2026-04-26 |
-| 11. 全局快捷键 | v1.2 | 0/2 | Not started | - |
+| 11. 全局快捷键 | v1.2 | 2/2 | Complete | 2026-04-27 |
 | 12. 系统托盘 | v1.2 | 0/? | Not started | - |
 | 13. 迷你悬浮窗 | v1.2 | 0/? | Not started | - |
 | 14. 边缘抽屉 | v1.2 | 0/? | Not started | - |

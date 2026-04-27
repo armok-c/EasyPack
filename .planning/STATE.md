@@ -2,30 +2,32 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
-status: phase_11_planned
-last_updated: "2026-04-27T00:30:00.000Z"
+status: executing
+stopped_at: Phase 11 complete (2/2 plans done)
+last_updated: "2026-04-27T02:53:51Z"
+last_activity: 2026-04-27
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
-  percent: 0
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
 
-**Status:** Phase 11 planned — ready to execute
-**Last Activity:** 2026-04-27 — Phase 11 planned (2 plans, 2 waves)
-**Current Focus:** Phase 11: 全局快捷键
+**Status:** Executing Phase 11
+**Last Activity:** 2026-04-27
+**Current Focus:** Phase 11 — 全局快捷键
 
 ## Current Position
 
-Phase: 11 of 14 (全局快捷键)
+Phase: 11 (全局快捷键) — COMPLETE
 Plan: 2 of 2
-Status: Planned, ready to execute
-Last activity: 2026-04-27 — Phase 11 planned (2 plans, 12/12 verification dimensions passed)
+Status: Phase 11 complete, ready for Phase 12
+Last activity: 2026-04-27 -- Phase 11 Plan 02 completed
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Project Reference
 
@@ -43,6 +45,8 @@ Recent decisions affecting current work:
 
 - v1.2 phase ordering: 快捷键 → 托盘 → 悬浮窗 → 边缘抽屉 (dependency chain)
 - 窗口可见性状态机必须在托盘阶段设计 (TRAY phase), 为边缘抽屉铺路
+- presetShortcutsMap separate state for preset shortcuts: presets are derived fresh, cannot persist shortcut field directly
+- group CSS class on CommandCard enables hover-based clear button visibility without JS state
 
 ### Pending Todos
 
@@ -67,5 +71,5 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 ## Session Continuity
 
 Last session: 2026-04-27
-Stopped at: Phase 11 planned (2 plans, 2 waves)
-Resume file: .planning/phases/11-全局快捷键/11-01-PLAN.md
+Stopped at: Phase 11 complete (2/2 plans done)
+Resume file: None - phase complete

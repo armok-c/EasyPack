@@ -7,12 +7,12 @@
 
 ### Keyboard Shortcuts (KB)
 
-- [ ] **KB-01**: User can assign a keyboard shortcut (e.g. Ctrl+Alt+G) to any command via command settings
-- [ ] **KB-02**: With a project selected, pressing a bound shortcut immediately executes the command in the system terminal
-- [ ] **KB-03**: When switching projects, all shortcuts are automatically re-registered based on the merged command set (global + project-level overrides)
-- [ ] **KB-04**: When assigning a shortcut, the system detects conflicts with existing bindings and warns the user
-- [ ] **KB-05**: User can clear a shortcut binding from any command
-- [ ] **KB-06**: Shortcut bindings persist across app restarts via tauri-plugin-store
+- [x] **KB-01**: User can assign a keyboard shortcut (e.g. Ctrl+Alt+G) to any command via command settings
+- [x] **KB-02**: With a project selected, pressing a bound shortcut immediately executes the command in the system terminal
+- [x] **KB-03**: When switching projects, all shortcuts are automatically re-registered based on the merged command set (global + project-level overrides)
+- [x] **KB-04**: When assigning a shortcut, the system detects conflicts with existing bindings and warns the user
+- [x] **KB-05**: User can clear a shortcut binding from any command
+- [x] **KB-06**: Shortcut bindings persist across app restarts via tauri-plugin-store
 
 ### System Tray (TRAY)
 
@@ -75,12 +75,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| KB-01 | Phase 11 | Pending |
-| KB-02 | Phase 11 | Pending |
-| KB-03 | Phase 11 | Pending |
-| KB-04 | Phase 11 | Pending |
-| KB-05 | Phase 11 | Pending |
-| KB-06 | Phase 11 | Pending |
+| KB-01 | Phase 11 | Complete |
+| KB-02 | Phase 11 | Complete |
+| KB-03 | Phase 11 | Complete |
+| KB-04 | Phase 11 | Complete |
+| KB-05 | Phase 11 | Complete |
+| KB-06 | Phase 11 | Complete |
 | TRAY-01 | Phase 12 | Pending |
 | TRAY-02 | Phase 12 | Pending |
 | TRAY-03 | Phase 12 | Pending |
@@ -110,4 +110,4 @@
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after roadmap creation*
+*Last updated: 2026-04-27 after Phase 11 completion*
