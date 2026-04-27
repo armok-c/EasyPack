@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
-status: ready_to_plan
-stopped_at: Phase 12 UI-SPEC approved
-last_updated: "2026-04-27T03:30:00Z"
+status: planning
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-04-27T06:19:46.256Z"
 last_activity: 2026-04-27
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 25
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -27,7 +27,7 @@ Plan: Not started
 Status: Phase 12 UI-SPEC approved
 Last activity: 2026-04-27 -- Phase 12 UI-SPEC approved
 
-Progress: [██████████] 100%
+Progress: [████████░░] 75%
 
 ## Project Reference
 
@@ -50,6 +50,9 @@ Recent decisions affecting current work:
 - Phase 12: 托盘菜单显示最近 8 个执行指令 + 项目名，关闭/Alt+F4→隐藏到托盘，最小化→任务栏
 - Phase 12: 单击托盘始终显示窗口，Tooltip 固定 "EasyPack"
 - Phase 12: TitleBar 齿轮按钮→通用设置弹窗，两个开关（启用托盘 + 关闭到托盘）
+- useRecentCommands 使用 functional setState 避免 stale closure
+- useTray 使用 TrayIcon action 回调统一处理事件，Tauri v2 无 setOnClick
+- 退出用 getCurrentWindow().destroy() 替代不存在的 exit()
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 
 ## Session Continuity
 
-Last session: 2026-04-27
-Stopped at: Phase 12 UI-SPEC approved
-Resume file: .planning/phases/12-系统托盘/12-UI-SPEC.md
+Last session: 2026-04-27T06:19:46.250Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None

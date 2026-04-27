@@ -16,13 +16,20 @@
 
 ### System Tray (TRAY)
 
-- [ ] **TRAY-01**: App icon appears in Windows system tray while the app is running
-- [ ] **TRAY-02**: Closing the main window (Alt+F4 or title bar close) hides to tray instead of quitting
-- [ ] **TRAY-03**: Single-clicking the tray icon toggles main window visibility
-- [ ] **TRAY-04**: Right-clicking the tray icon shows a context menu
-- [ ] **TRAY-05**: Tray context menu includes "Show/Hide Window" toggle option
-- [ ] **TRAY-06**: Tray context menu includes "Quit" option that fully exits the app
-- [ ] **TRAY-07**: Tray context menu can directly trigger execution of favorite commands on the selected project
+- [x] **TRAY-01
+**: App icon appears in Windows system tray while the app is running
+- [x] **TRAY-02
+**: Closing the main window (Alt+F4 or title bar close) hides to tray instead of quitting
+- [x] **TRAY-03
+**: Single-clicking the tray icon toggles main window visibility
+- [x] **TRAY-04
+**: Right-clicking the tray icon shows a context menu
+- [x] **TRAY-05
+**: Tray context menu includes "Show/Hide Window" toggle option
+- [x] **TRAY-06
+**: Tray context menu includes "Quit" option that fully exits the app
+- [x] **TRAY-07
+**: Tray context menu can directly trigger execution of favorite commands on the selected project
 - [ ] **TRAY-08**: Tray presence and close-to-tray behavior can be toggled in settings
 
 ### Mini Floating Window (FLOAT)
