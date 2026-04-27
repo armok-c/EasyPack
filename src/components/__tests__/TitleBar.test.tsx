@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
-const { mockMinimize, mockToggleMaximize, mockClose, mockHide, mockStartDragging } = vi.hoisted(() => ({
+const { mockMinimize, mockToggleMaximize, mockClose, mockHide, mockStartDragging, mockIsMaximized, mockOnResized } = vi.hoisted(() => ({
   mockMinimize: vi.fn().mockResolvedValue(undefined),
   mockToggleMaximize: vi.fn().mockResolvedValue(undefined),
   mockClose: vi.fn().mockResolvedValue(undefined),
   mockHide: vi.fn().mockResolvedValue(undefined),
   mockStartDragging: vi.fn().mockResolvedValue(undefined),
+  mockIsMaximized: vi.fn().mockResolvedValue(false),
+  mockOnResized: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
 const mockOnSettingsOpen = vi.fn();
@@ -19,6 +21,8 @@ vi.mock("@tauri-apps/api/window", () => ({
     close: mockClose,
     hide: mockHide,
     startDragging: mockStartDragging,
+    isMaximized: mockIsMaximized,
+    onResized: mockOnResized,
   }),
 }));
 

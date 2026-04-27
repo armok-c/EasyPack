@@ -1,5 +1,6 @@
+import { useState, useEffect, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, Package, Settings } from "lucide-react";
+import { Minus, Square, Copy, X, Package, Settings } from "lucide-react";
 
 const appWindow = getCurrentWindow();
 
@@ -16,13 +17,29 @@ function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
 }
 
 export function TitleBar({ onSettingsOpen, onCloseBehavior }: TitleBarProps) {
-  async function handleMinimize() {
-    await appWindow.minimize();
-  }
+  const [isMaximized, setIsMaximized] = useState(false);
 
-  async function handleMaximize() {
+  useEffect(() => {
+    let mounted = true;
+    appWindow.isMaximized().then((maximized) => {
+      if (mounted) setIsMaximized(maximized);
+    });
+    const unlisten = appWindow.onResized(async () => {
+      if (mounted) setIsMaximized(await appWindow.isMaximized());
+    });
+    return () => {
+      mounted = false;
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const handleMinimize = useCallback(async () => {
+    await appWindow.minimize();
+  }, []);
+
+  const handleMaximize = useCallback(async () => {
     await appWindow.toggleMaximize();
-  }
+  }, []);
 
   async function handleClose() {
     if (onCloseBehavior === "hide") {
@@ -67,9 +84,13 @@ export function TitleBar({ onSettingsOpen, onCloseBehavior }: TitleBarProps) {
         <button
           className="titlebar-button"
           onClick={handleMaximize}
-          aria-label="最大化"
+          aria-label={isMaximized ? "还原" : "最大化"}
         >
-          <Square className="w-[12px] h-[12px]" />
+          {isMaximized ? (
+            <Copy className="w-[12px] h-[12px]" />
+          ) : (
+            <Square className="w-[12px] h-[12px]" />
+          )}
         </button>
         <button
           className="titlebar-button close-button"
