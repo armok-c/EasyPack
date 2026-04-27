@@ -1,10 +1,11 @@
 ---
 phase: 12
 slug: 系统托盘
-status: draft
+status: approved
 shadcn_initialized: true
 preset: new-york / zinc / dark
 created: 2026-04-27
+reviewed_at: 2026-04-27
 ---
 
 # Phase 12 — UI Design Contract
