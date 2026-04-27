@@ -1,18 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, Package } from "lucide-react";
+import { Minus, Square, X, Package, Settings } from "lucide-react";
 
 const appWindow = getCurrentWindow();
 
-async function handleMinimize() {
-  await appWindow.minimize();
-}
-
-async function handleMaximize() {
-  await appWindow.toggleMaximize();
-}
-
-async function handleClose() {
-  await appWindow.close();
+interface TitleBarProps {
+  onSettingsOpen: () => void;
+  onCloseBehavior: "hide" | "close";
 }
 
 function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
@@ -22,7 +15,23 @@ function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
   appWindow.startDragging();
 }
 
-export function TitleBar() {
+export function TitleBar({ onSettingsOpen, onCloseBehavior }: TitleBarProps) {
+  async function handleMinimize() {
+    await appWindow.minimize();
+  }
+
+  async function handleMaximize() {
+    await appWindow.toggleMaximize();
+  }
+
+  async function handleClose() {
+    if (onCloseBehavior === "hide") {
+      await appWindow.hide();
+    } else {
+      await appWindow.close();
+    }
+  }
+
   return (
     <div
       data-tauri-drag-region
@@ -41,6 +50,13 @@ export function TitleBar() {
       </div>
       <div data-tauri-drag-region className="flex-1" />
       <div className="flex items-center h-full">
+        <button
+          className="titlebar-button"
+          onClick={onSettingsOpen}
+          aria-label="设置"
+        >
+          <Settings className="w-[14px] h-[14px]" />
+        </button>
         <button
           className="titlebar-button"
           onClick={handleMinimize}

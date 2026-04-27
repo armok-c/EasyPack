@@ -81,7 +81,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
-      <TitleBar />
+      <TitleBar onSettingsOpen={() => {}} onCloseBehavior="close" />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           projects={projects}
