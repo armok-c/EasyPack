@@ -67,10 +67,16 @@ function App() {
   });
 
   // Phase 11: OS-level global shortcuts (per KB-02, KB-03)
+  const [isRecording, setIsRecording] = useState(false);
+  const handleRecordingChange = useCallback((recording: boolean) => {
+    setIsRecording(recording);
+  }, []);
+
   useGlobalShortcuts({
     commands,
     onExecute: executeCommand,
     enabled: !!currentProject,
+    recording: isRecording,
   });
 
   return (
@@ -109,6 +115,7 @@ function App() {
           isProjectToggleDisabled={isProjectToggleDisabled}
           assignShortcut={assignShortcut}
           clearShortcut={clearShortcut}
+          onRecordingChange={handleRecordingChange}
         />
       </div>
       <Toaster richColors position="bottom-right" duration={1500} />

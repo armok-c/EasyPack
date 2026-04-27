@@ -34,6 +34,7 @@ interface MainAreaProps {
   // Phase 11: shortcut management
   assignShortcut: (commandId: string, shortcut: string) => Promise<boolean>;
   clearShortcut: (commandId: string) => Promise<void>;
+  onRecordingChange?: (recording: boolean) => void;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -61,6 +62,7 @@ export function MainArea({
   isProjectToggleDisabled,
   assignShortcut,
   clearShortcut,
+  onRecordingChange,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
@@ -109,6 +111,11 @@ export function MainArea({
       setConflictCommandId(null);
     }
   }, [editMode]);
+
+  // Sync recording state to parent (for disabling global shortcuts during recording)
+  useEffect(() => {
+    onRecordingChange?.(recordingCommandId !== null);
+  }, [recordingCommandId, onRecordingChange]);
 
   const handleDialogSubmit = useCallback(
     async (data: { name: string; command: string; icon: string; scope?: "global" | "project" }) => {

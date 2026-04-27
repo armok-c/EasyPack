@@ -7,6 +7,7 @@ interface UseGlobalShortcutsOptions {
   commands: CommandItem[];
   onExecute: (command: string) => void;
   enabled: boolean;
+  recording?: boolean;
 }
 
 /**
@@ -23,12 +24,13 @@ export function useGlobalShortcuts({
   commands,
   onExecute,
   enabled,
+  recording = false,
 }: UseGlobalShortcutsOptions) {
   const onExecuteRef = useRef(onExecute);
   onExecuteRef.current = onExecute;
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || recording) {
       unregisterAll().catch(console.error);
       return;
     }
@@ -64,5 +66,5 @@ export function useGlobalShortcuts({
       version++;
       unregisterAll().catch(console.error);
     };
-  }, [commands, enabled]);
+  }, [commands, enabled, recording]);
 }
