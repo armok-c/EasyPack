@@ -51,7 +51,7 @@
   3. 切换项目时，快捷键自动更新为当前项目的合并指令集（全局 + 项目级覆盖）
   4. 分配快捷键时，如果与已有绑定冲突，用户会看到警告提示
   5. 用户可以清除任意指令的快捷键绑定，且绑定在重启后仍然保留
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 11-01-PLAN.md -- Tauri 插件安装 + 类型扩展 + 快捷键工具函数 + useGlobalShortcuts hook
@@ -114,7 +114,7 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 8. Rust 后端扩展与快速 UI 修复 | v1.1 | 5/5 | Complete | 2026-04-25 |
 | 9. 前端 UI 集成 | v1.1 | 1/1 | Complete | 2026-04-25 |
 | 10. 预设指令系统 | v1.1 | 3/3 | Complete | 2026-04-26 |
-| 11. 全局快捷键 | v1.2 | 2/2 | Complete | 2026-04-27 |
+| 11. 全局快捷键 | v1.2 | 2/2 | Complete    | 2026-04-27 |
 | 12. 系统托盘 | v1.2 | 0/? | Not started | - |
 | 13. 迷你悬浮窗 | v1.2 | 0/? | Not started | - |
 | 14. 边缘抽屉 | v1.2 | 0/? | Not started | - |
