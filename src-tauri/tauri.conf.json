@@ -24,6 +24,11 @@
         "shadow": true
       }
     ],
+    "trayIcon": {
+      "id": "main-tray",
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": false
+    },
     "security": {
       "csp": null,
       "assetProtocol": {
