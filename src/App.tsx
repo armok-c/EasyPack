@@ -5,6 +5,7 @@ import { MainArea } from "@/components/MainArea";
 import { TitleBar } from "@/components/TitleBar";
 import { useProject } from "@/hooks/useProject";
 import { useKeyboard } from "@/hooks/useKeyboard";
+import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import "./index.css";
 
 function App() {
@@ -36,6 +37,9 @@ function App() {
     projectInfoError,
     // Phase 9: open folder
     openFolder,
+    // Phase 11: shortcut assignment
+    assignShortcut,
+    clearShortcut,
   } = useProject();
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
@@ -60,6 +64,13 @@ function App() {
     currentProject,
     onExecute: executeCommand,
     editMode,
+  });
+
+  // Phase 11: OS-level global shortcuts (per KB-02, KB-03)
+  useGlobalShortcuts({
+    commands,
+    onExecute: executeCommand,
+    enabled: !!currentProject,
   });
 
   return (
@@ -96,6 +107,8 @@ function App() {
           projectInfoError={projectInfoError}
           onOpenFolder={handleOpenFolder}
           isProjectToggleDisabled={isProjectToggleDisabled}
+          assignShortcut={assignShortcut}
+          clearShortcut={clearShortcut}
         />
       </div>
       <Toaster richColors position="bottom-right" duration={1500} />

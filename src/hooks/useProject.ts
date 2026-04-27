@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { CommandItem } from "@/lib/types";
 import { getDefaultsAsCommandItems } from "@/lib/presets";
 import { DEFAULT_ICON } from "@/lib/icons";
+import { shortcutToDisplay } from "@/lib/shortcutUtils";
 
 export interface ProjectItem {
   id: string;       // normalized path as ID (lowercase, forward slashes)
@@ -54,6 +55,10 @@ export function useProject() {
   const [projectCommandsMap, setProjectCommandsMap] = useState<Record<string, CommandItem[]>>({});
   const [editMode, setEditMode] = useState(false);
 
+  // Phase 11: preset shortcut overrides (persisted separately since presets are derived fresh)
+  const [presetShortcutsMap, setPresetShortcutsMap] = useState<Record<string, string>>({});
+  const PRESHORTCUTS_KEY = "presetShortcuts";
+
   // Phase 8: project info (folder size + Git branch)
   const [projectInfo, setProjectInfo] = useState<ProjectInfoResult | null>(null);
   const [projectInfoLoading, setProjectInfoLoading] = useState(false);
@@ -74,11 +79,16 @@ export function useProject() {
       }
       return [];
     }
-    // Global mode: presets + global custom commands
-    return [...getDefaultsAsCommandItems(), ...customCommands].sort(
-      (a, b) => a.addedAt - b.addedAt
-    );
-  }, [selectedId, customCommands, projectCommandsMap, commandMode]);
+    // Global mode: presets + global custom commands, inject preset shortcuts
+    return [...getDefaultsAsCommandItems(), ...customCommands]
+      .map((cmd) => {
+        if (presetShortcutsMap[cmd.id]) {
+          return { ...cmd, shortcut: presetShortcutsMap[cmd.id] };
+        }
+        return cmd;
+      })
+      .sort((a, b) => a.addedAt - b.addedAt);
+  }, [selectedId, customCommands, projectCommandsMap, commandMode, presetShortcutsMap]);
 
   // Auto-detect commandMode only when switching projects (not on every projectCommandsMap change)
   useEffect(() => {
@@ -126,6 +136,10 @@ export function useProject() {
         );
         const map = Object.fromEntries(projectCmdEntries);
         if (Object.keys(map).length > 0) setProjectCommandsMap(map);
+
+        // Phase 11: restore preset shortcut overrides
+        const savedPresetShortcuts = await s.get<Record<string, string>>(PRESHORTCUTS_KEY);
+        if (savedPresetShortcuts) setPresetShortcutsMap(savedPresetShortcuts);
 
         setStore(s);
       } catch (error) {
@@ -367,6 +381,72 @@ export function useProject() {
     [commandMode, selectedId, projectCommandsMap, customCommands, store]
   );
 
+  // --- Phase 11: Shortcut assignment ---
+
+  // Assign a global shortcut to a command (project, custom, or preset)
+  const assignShortcut = useCallback(
+    async (commandId: string, shortcut: string) => {
+      // Check for within-app conflict across current project's commands
+      const conflict = commands.find(
+        (c) => c.shortcut === shortcut && c.id !== commandId
+      );
+      if (conflict) {
+        toast.error("快捷键冲突", {
+          description: `快捷键 ${shortcutToDisplay(shortcut)} 已被指令 "${conflict.name}" 使用`,
+        });
+        return false;
+      }
+
+      if (commandMode === "project" && selectedId) {
+        const updated = (projectCommandsMap[selectedId] ?? []).map((c) =>
+          c.id === commandId ? { ...c, shortcut } : c
+        );
+        setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
+        await store?.set(projectCommandsKey(selectedId), updated);
+      } else if (customCommands.some((c) => c.id === commandId)) {
+        const updated = customCommands.map((c) =>
+          c.id === commandId ? { ...c, shortcut } : c
+        );
+        setCustomCommands(updated);
+        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+      } else {
+        // Preset command: store in presetShortcutsMap
+        const updatedMap = { ...presetShortcutsMap, [commandId]: shortcut };
+        setPresetShortcutsMap(updatedMap);
+        await store?.set(PRESHORTCUTS_KEY, updatedMap);
+      }
+      toast.success(`已绑定快捷键: ${shortcutToDisplay(shortcut)}`);
+      return true;
+    },
+    [commandMode, selectedId, projectCommandsMap, customCommands, store, commands, presetShortcutsMap]
+  );
+
+  // Clear a shortcut binding from a command
+  const clearShortcut = useCallback(
+    async (commandId: string) => {
+      if (commandMode === "project" && selectedId) {
+        const updated = (projectCommandsMap[selectedId] ?? []).map((c) =>
+          c.id === commandId ? { ...c, shortcut: undefined } : c
+        );
+        setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
+        await store?.set(projectCommandsKey(selectedId), updated);
+      } else if (customCommands.some((c) => c.id === commandId)) {
+        const updated = customCommands.map((c) =>
+          c.id === commandId ? { ...c, shortcut: undefined } : c
+        );
+        setCustomCommands(updated);
+        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+      } else if (presetShortcutsMap[commandId]) {
+        const updatedMap = { ...presetShortcutsMap };
+        delete updatedMap[commandId];
+        setPresetShortcutsMap(updatedMap);
+        await store?.set(PRESHORTCUTS_KEY, updatedMap);
+      }
+      toast.success("已清除快捷键");
+    },
+    [commandMode, selectedId, projectCommandsMap, customCommands, store, presetShortcutsMap]
+  );
+
   // --- Project-level command set management ---
 
   // Enable project-level commands: reuse existing set or create from presets (per D-08, D-22)
@@ -448,6 +528,10 @@ export function useProject() {
     addCommand, // (name: string, command: string, icon?: string, scope?: "global" | "project") => Promise<void>
     updateCommand, // (id: string, data: { name: string; command: string; icon: string }) => Promise<void>
     deleteCommand, // (id: string) => Promise<void>
+
+    // Phase 11: shortcut assignment
+    assignShortcut, // (commandId: string, shortcut: string) => Promise<boolean>
+    clearShortcut, // (commandId: string) => Promise<void>
 
     // Phase 4 Plan 03: project-level command override
     commandMode, // 'global' | 'project'
