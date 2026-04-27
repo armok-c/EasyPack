@@ -145,7 +145,7 @@ export function useTray({
           menu,
           showMenuOnLeftClick: false,
           action: (event) => {
-            if (event.type === "Click") {
+            if (event.type === "Click" && event.button === "Left") {
               onShowRef.current();
               getCurrentWindow().show().catch(console.error);
               getCurrentWindow().setFocus().catch(console.error);
