@@ -14,4 +14,5 @@ export interface CommandItem {
   type: "preset" | "custom";
   scope: "global" | "project";
   addedAt: number;
+  shortcut?: string;  // Phase 11: OS-level global shortcut in Tauri Accelerator format, e.g. "CommandOrControl+G"
 }
