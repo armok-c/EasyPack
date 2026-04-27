@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
 status: executing
-stopped_at: "12-02 Task 1 complete, checkpoint approved, Task 2 pending"
-last_updated: "2026-04-27T14:52:00Z"
+stopped_at: 12-02 complete — all plans done, phase 12 finished
+last_updated: "2026-04-27T07:04:26Z"
 last_activity: 2026-04-27
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
 
-**Status:** Executing — checkpoint approved
+**Status:** Executing Phase --phase
 **Last Activity:** 2026-04-27
-**Current Focus:** Phase 12 — 系统托盘
+**Current Focus:** Phase --phase — 12
 
 ## Current Position
 
-Phase: 12
-Plan: 12-02 (Task 2 pending)
-Status: 12-02 Task 1 complete + checkpoint approved, ready for Task 2 (App.tsx integration)
-Last activity: 2026-04-27 -- 12-02 checkpoint approved, fixes committed
+Phase: --phase (12) — EXECUTING
+Plan: 1 of --name
+Status: Executing Phase --phase
+Last activity: 2026-04-27 -- Phase --phase execution started
 
 Progress: [████████░░] 75%
 
@@ -33,25 +33,18 @@ Progress: [████████░░] 75%
 
 | Plan | Tasks | Status |
 |------|-------|--------|
-| 12-01 | 2/2 | ✓ Complete (SUMMARY.md written) |
-| 12-02 | 1/3 | ◆ Task 1 done, Task 2 checkpoint approved, Task 3 pending |
-
-### 12-02 Task 3 Details (App.tsx integration)
-
-Next task to execute: read `12-02-PLAN.md` Task 2 (the third task block, which is the App.tsx integration task).
-
-**What needs to be done:**
-1. Modify `src/hooks/useProject.ts` — export `store`
-2. Modify `src/App.tsx` — integrate useVisibilityState, useRecentCommands, useTray + onCloseRequested + tray settings persistence
-3. Commit and create 12-02-SUMMARY.md
+| 12-01 | 2/2 | Complete (SUMMARY.md written) |
+| 12-02 | 2/2 | Complete (SUMMARY.md written) |
 
 ### Commits so far (Phase 12)
+
 - `6013059` feat(12-01): add tray-icon config, useVisibilityState hook, useRecentCommands hook
 - `cc3fb1c` feat(12-01): create useTray hook with tray icon, menu building, and event handling
 - `25db837` docs(12-01): complete system tray infrastructure plan
 - `90ff1a9` feat(12-02): install Switch, create SettingsDialog, modify TitleBar
 - `aff8ff9` fix(12): remove invalid on-close-requested permission
 - `ceb1a70` fix(12): toggle maximize icon between Square and Copy on state change
+- `da89550` feat(12-02): integrate tray hooks, visibility state, and settings in App.tsx
 
 ## Project Reference
 
@@ -102,5 +95,5 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 ## Session Continuity
 
 Last session: 2026-04-27
-Stopped at: 12-02 Task 1 complete, checkpoint approved, Task 3 (App.tsx integration) pending
-Resume command: `/gsd-execute-phase 12`
+Stopped at: 12-02 complete - all Phase 12 plans finished
+Resume command: `/gsd-execute-phase 13`
