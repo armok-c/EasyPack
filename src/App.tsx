@@ -94,7 +94,8 @@ function App() {
 
   // Phase 12: execute with recent command tracking
   const handleExecuteWithRecent = useCallback(async (shellCommand: string) => {
-    await executeCommand(shellCommand);
+    const success = await executeCommand(shellCommand);
+    if (!success) return;
     const cmd = commands.find((c) => c.command === shellCommand);
     if (cmd) {
       await addRecentCommand(cmd.name, cmd.command);

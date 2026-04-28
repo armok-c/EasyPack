@@ -254,18 +254,20 @@ export function useProject() {
 
   // Execute command (inherits Phase 1 logic, uses derived currentProject)
   const executeCommand = useCallback(
-    async (shellCommand: string) => {
-      if (!currentProject) return;
+    async (shellCommand: string): Promise<boolean> => {
+      if (!currentProject) return false;
       try {
         await invoke("execute_command", {
           projectPath: currentProject.path,
           shellCommand,
         });
         toast.success(`已执行: ${shellCommand}`);
+        return true;
       } catch (error) {
         toast.error(
           `命令执行失败：${error}。请检查项目路径和命令是否正确。`
         );
+        return false;
       }
     },
     [currentProject]
@@ -513,7 +515,7 @@ export function useProject() {
     // Legacy interface (backward compatible until Plan 02 migration)
     currentProject, // ProjectItem | null (compatible with old Project | null)
     selectFolder, // () => Promise<void>
-    executeCommand, // (shellCommand: string) => Promise<void>
+    executeCommand, // (shellCommand: string) => Promise<boolean>
 
     // New multi-project interface
     projects, // ProjectItem[]
