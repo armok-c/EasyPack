@@ -155,6 +155,7 @@ function App() {
     setTrayEnabled(enabled);
     if (!enabled) {
       setCloseToTray(false);
+      await store?.set("closeToTray", false);
     }
     await store?.set("trayEnabled", enabled);
   }, [store]);

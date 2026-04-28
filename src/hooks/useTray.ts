@@ -42,7 +42,80 @@ export function useTray({
   onHideRef.current = onHide;
   const onQuitRef = useRef(onQuit);
   onQuitRef.current = onQuit;
+  const visibilityRef = useRef(visibility);
+  visibilityRef.current = visibility;
 
+  async function buildMenu(): Promise<Menu> {
+    const toggleText = visibilityRef.current === "VISIBLE" ? "隐藏窗口" : "显示窗口";
+    const toggleItem = await MenuItem.new({
+      id: "toggle-window",
+      text: toggleText,
+      action: () => {
+        if (visibilityRef.current === "VISIBLE") {
+          onHideRef.current();
+          getCurrentWindow().hide().catch(console.error);
+        } else {
+          onShowRef.current();
+          getCurrentWindow().show().catch(console.error);
+          getCurrentWindow().setFocus().catch(console.error);
+        }
+      },
+    });
+
+    const items: Array<MenuItem | PredefinedMenuItem | Menu> = [toggleItem];
+
+    const hasProject = currentProject !== null;
+    const hasCommands = recentCommands.length > 0;
+
+    if (hasProject || hasCommands) {
+      items.push(await PredefinedMenuItem.new({ item: { item: "Separator" } }));
+    }
+
+    if (hasProject) {
+      items.push(
+        await MenuItem.new({
+          id: "current-project",
+          text: `▸ EasyPack (${currentProject.name})`,
+          enabled: false,
+          action: () => {},
+        })
+      );
+    }
+
+    if (hasCommands) {
+      for (let i = 0; i < recentCommands.length; i++) {
+        const cmd = recentCommands[i];
+        items.push(
+          await MenuItem.new({
+            id: `cmd-${i}`,
+            text: `▸ 执行: ${cmd.name}`,
+            action: () => {
+              onExecuteRef.current(cmd.command);
+            },
+          })
+        );
+      }
+    }
+
+    if (hasProject || hasCommands) {
+      items.push(await PredefinedMenuItem.new({ item: { item: "Separator" } }));
+    }
+
+    items.push(
+      await MenuItem.new({
+        id: "quit",
+        text: "退出",
+        action: () => {
+          onQuitRef.current();
+          getCurrentWindow().destroy().catch(console.error);
+        },
+      })
+    );
+
+    return await Menu.new({ items });
+  }
+
+  // Effect 1: Tray icon lifecycle (create/destroy based on enabled)
   useEffect(() => {
     if (!enabled) {
       if (trayRef.current) {
@@ -53,76 +126,6 @@ export function useTray({
     }
 
     let cancelled = false;
-
-    async function buildMenu(): Promise<Menu> {
-      const toggleText = visibility === "VISIBLE" ? "隐藏窗口" : "显示窗口";
-      const toggleItem = await MenuItem.new({
-        id: "toggle-window",
-        text: toggleText,
-        action: () => {
-          if (visibility === "VISIBLE") {
-            onHideRef.current();
-            getCurrentWindow().hide().catch(console.error);
-          } else {
-            onShowRef.current();
-            getCurrentWindow().show().catch(console.error);
-            getCurrentWindow().setFocus().catch(console.error);
-          }
-        },
-      });
-
-      const items: Array<MenuItem | PredefinedMenuItem | Menu> = [toggleItem];
-
-      const hasProject = currentProject !== null;
-      const hasCommands = recentCommands.length > 0;
-
-      if (hasProject || hasCommands) {
-        items.push(await PredefinedMenuItem.new({ item: { item: "Separator" } }));
-      }
-
-      if (hasProject) {
-        items.push(
-          await MenuItem.new({
-            id: "current-project",
-            text: `▸ EasyPack (${currentProject.name})`,
-            enabled: false,
-            action: () => {},
-          })
-        );
-      }
-
-      if (hasCommands) {
-        for (let i = 0; i < recentCommands.length; i++) {
-          const cmd = recentCommands[i];
-          items.push(
-            await MenuItem.new({
-              id: `cmd-${i}`,
-              text: `▸ 执行: ${cmd.name}`,
-              action: () => {
-                onExecuteRef.current(cmd.command);
-              },
-            })
-          );
-        }
-      }
-
-      if (hasProject || hasCommands) {
-        items.push(await PredefinedMenuItem.new({ item: { item: "Separator" } }));
-      }
-
-      items.push(
-        await MenuItem.new({
-          id: "quit",
-          text: "退出",
-          action: () => {
-            onQuitRef.current();
-            getCurrentWindow().destroy().catch(console.error);
-          },
-        })
-      );
-
-      return await Menu.new({ items });
-    }
 
     async function createTray() {
       try {
@@ -159,28 +162,7 @@ export function useTray({
       }
     }
 
-    async function updateMenu() {
-      const tray = trayRef.current;
-      if (!tray) {
-        createTray();
-        return;
-      }
-
-      try {
-        const menu = await buildMenu();
-        if (!cancelled) {
-          await tray.setMenu(menu);
-        }
-      } catch (err) {
-        console.error("Failed to update tray menu:", err);
-      }
-    }
-
-    if (trayRef.current) {
-      updateMenu();
-    } else {
-      createTray();
-    }
+    createTray();
 
     return () => {
       cancelled = true;
@@ -189,5 +171,32 @@ export function useTray({
         trayRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
+
+  // Effect 2: Menu updates only (no tray recreation)
+  useEffect(() => {
+    if (!enabled) return;
+    if (!trayRef.current) return;
+
+    let cancelled = false;
+
+    async function updateMenu() {
+      try {
+        const menu = await buildMenu();
+        if (!cancelled && trayRef.current) {
+          await trayRef.current.setMenu(menu);
+        }
+      } catch (err) {
+        console.error("Failed to update tray menu:", err);
+      }
+    }
+
+    updateMenu();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, currentProject, recentCommands, visibility, commands]);
 }

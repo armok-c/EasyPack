@@ -33,18 +33,16 @@ export function useRecentCommands({ store }: UseRecentCommandsOptions) {
   const addRecentCommand = useCallback(
     async (name: string, command: string) => {
       const newItem: RecentCommand = { name, command };
-      let updated: RecentCommand[] = [];
 
       setRecentCommands((prev) => {
         const filtered = prev.filter((c) => c.command !== command);
-        updated = [newItem, ...filtered].slice(0, MAX_COMMANDS);
+        const updated = [newItem, ...filtered].slice(0, MAX_COMMANDS);
+        const currentStore = storeRef.current;
+        if (currentStore) {
+          currentStore.set(STORE_KEY, updated).catch(() => {});
+        }
         return updated;
       });
-
-      const currentStore = storeRef.current;
-      if (currentStore && updated.length > 0) {
-        await currentStore.set(STORE_KEY, updated);
-      }
     },
     []
   );
