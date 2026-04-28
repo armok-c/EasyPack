@@ -143,8 +143,12 @@ function App() {
       const saved = await store.get<boolean>("trayEnabled");
       const savedCTT = await store.get<boolean>("closeToTray");
       if (mounted) {
-        if (saved !== undefined && saved !== null) setTrayEnabled(saved);
-        if (savedCTT !== undefined && savedCTT !== null) setCloseToTray(savedCTT);
+        const effectiveTrayEnabled = saved !== undefined && saved !== null ? saved : true;
+        const effectiveCloseToTray = effectiveTrayEnabled
+          ? (savedCTT !== undefined && savedCTT !== null ? savedCTT : true)
+          : false;
+        setTrayEnabled(effectiveTrayEnabled);
+        setCloseToTray(effectiveCloseToTray);
       }
     }
     loadTraySettings();
