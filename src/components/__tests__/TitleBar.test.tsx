@@ -34,19 +34,19 @@ describe("TitleBar", () => {
   });
 
   it("renders EasyPack title", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     expect(screen.getByText("EasyPack")).toBeInTheDocument();
   });
 
   it("renders window control buttons", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     expect(screen.getByLabelText("最小化")).toBeInTheDocument();
     expect(screen.getByLabelText("最大化")).toBeInTheDocument();
     expect(screen.getByLabelText("关闭")).toBeInTheDocument();
   });
 
   it("window control buttons call correct APIs", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
 
     fireEvent.click(screen.getByLabelText("最小化"));
     expect(mockMinimize).toHaveBeenCalledOnce();
@@ -59,7 +59,7 @@ describe("TitleBar", () => {
   });
 
   it("drag region attributes", () => {
-    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
 
     // Container div has data-tauri-drag-region
     const outerDiv = container.firstElementChild as HTMLElement;
@@ -79,53 +79,46 @@ describe("TitleBar", () => {
   });
 
   it("title bar height", () => {
-    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     const outerDiv = container.firstElementChild as HTMLElement;
     expect(outerDiv.className).toContain("h-[28px]");
     expect(outerDiv.className).toContain("shrink-0");
   });
 
   it("double click toggles maximize", () => {
-    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     const outerDiv = container.firstElementChild as HTMLElement;
     fireEvent.doubleClick(outerDiv);
     expect(mockToggleMaximize).toHaveBeenCalled();
   });
 
   it("mouse down on drag region starts dragging", () => {
-    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     const outerDiv = container.firstElementChild as HTMLElement;
     fireEvent.mouseDown(outerDiv, { button: 0 });
     expect(mockStartDragging).toHaveBeenCalledOnce();
   });
 
   it("mouse down on button does not start dragging", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     const btn = screen.getByLabelText("最小化");
     fireEvent.mouseDown(btn, { button: 0 });
     expect(mockStartDragging).not.toHaveBeenCalled();
   });
 
   it("renders settings button", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     expect(screen.getByLabelText("设置")).toBeInTheDocument();
   });
 
   it("settings button calls onSettingsOpen", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     fireEvent.click(screen.getByLabelText("设置"));
     expect(mockOnSettingsOpen).toHaveBeenCalledOnce();
   });
 
-  it("close button calls hide when onCloseBehavior is hide", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="hide" />);
-    fireEvent.click(screen.getByLabelText("关闭"));
-    expect(mockHide).toHaveBeenCalledOnce();
-    expect(mockClose).not.toHaveBeenCalled();
-  });
-
-  it("close button calls close when onCloseBehavior is close", () => {
-    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onCloseBehavior="close" />);
+  it("close button calls appWindow.close", () => {
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     fireEvent.click(screen.getByLabelText("关闭"));
     expect(mockClose).toHaveBeenCalledOnce();
     expect(mockHide).not.toHaveBeenCalled();
