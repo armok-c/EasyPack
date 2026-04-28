@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { TrayIcon } from "@tauri-apps/api/tray";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { defaultWindowIcon } from "@tauri-apps/api/app";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Window } from "@tauri-apps/api/window";
 import type { ProjectItem } from "./useProject";
 import type { CommandItem } from "@/lib/types";
 import type { RecentCommand } from "./useRecentCommands";
@@ -18,6 +18,7 @@ interface UseTrayOptions {
   onHide: () => void;
   onQuit: () => void;
   enabled: boolean;
+  appWindow: Window;
 }
 
 const TRAY_ID = "main-tray";
@@ -32,6 +33,7 @@ export function useTray({
   onHide,
   onQuit,
   enabled,
+  appWindow,
 }: UseTrayOptions) {
   const trayRef = useRef<TrayIcon | null>(null);
   const onExecuteRef = useRef(onExecute);
@@ -57,11 +59,11 @@ export function useTray({
       action: () => {
         if (visibilityRef.current === "VISIBLE") {
           onHideRef.current();
-          getCurrentWindow().hide().catch(console.error);
+          appWindow.hide().catch(console.error);
         } else {
           onShowRef.current();
-          getCurrentWindow().show().catch(console.error);
-          getCurrentWindow().setFocus().catch(console.error);
+          appWindow.show().catch(console.error);
+          appWindow.setFocus().catch(console.error);
         }
       },
     });
@@ -156,8 +158,8 @@ export function useTray({
           action: (event) => {
             if (event.type === "Click" && event.button === "Left") {
               onShowRef.current();
-              getCurrentWindow().show().catch(console.error);
-              getCurrentWindow().setFocus().catch(console.error);
+              appWindow.show().catch(console.error);
+              appWindow.setFocus().catch(console.error);
             }
           },
         });

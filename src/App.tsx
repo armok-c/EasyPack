@@ -123,6 +123,7 @@ function App() {
     onHide: () => { hideToTray(); appWindow.hide().catch(console.error); },
     onQuit: async () => { await appWindow.destroy(); },
     enabled: trayEnabled,
+    appWindow,
   });
 
   // Phase 12: onCloseRequested interception (per D-07)
