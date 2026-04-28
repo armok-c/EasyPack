@@ -89,6 +89,7 @@ export function useTray({
           await MenuItem.new({
             id: `cmd-${i}`,
             text: `▸ 执行: ${cmd.name}`,
+            enabled: currentProject !== null,
             action: () => {
               onExecuteRef.current(cmd.command);
             },
