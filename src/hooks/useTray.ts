@@ -157,6 +157,13 @@ export function useTray({
         });
 
         trayRef.current = tray;
+
+        // Rebuild menu with latest data to cover any updates that Effect 2
+        // may have missed during the async tray creation window.
+        const latestMenu = await buildMenu();
+        if (!cancelled && trayRef.current) {
+          await trayRef.current.setMenu(latestMenu);
+        }
       } catch (err) {
         console.error("Failed to create tray icon:", err);
       }
