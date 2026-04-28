@@ -118,8 +118,8 @@ function App() {
     recentCommands,
     visibility,
     onExecute: handleExecuteWithRecent,
-    onShow: () => { showFromTray(); appWindow.show(); appWindow.setFocus(); },
-    onHide: () => { hideToTray(); appWindow.hide(); },
+    onShow: () => { showFromTray(); appWindow.show().catch(console.error); appWindow.setFocus().catch(console.error); },
+    onHide: () => { hideToTray(); appWindow.hide().catch(console.error); },
     onQuit: async () => { await appWindow.destroy(); },
     enabled: trayEnabled,
   });
