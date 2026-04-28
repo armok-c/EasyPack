@@ -33,26 +33,25 @@ export function useRecentCommands({ store }: UseRecentCommandsOptions) {
   const addRecentCommand = useCallback(
     async (name: string, command: string) => {
       const newItem: RecentCommand = { name, command };
+      let toPersist: RecentCommand[] = [];
 
-      // Pure state update — no side effects in the updater
       setRecentCommands((prev) => {
         const filtered = prev.filter((c) => c.command !== command);
-        return [newItem, ...filtered].slice(0, MAX_COMMANDS);
+        const updated = [newItem, ...filtered].slice(0, MAX_COMMANDS);
+        toPersist = updated;
+        return updated;
       });
 
-      // Store persistence is a side effect, done outside the updater
       const currentStore = storeRef.current;
-      if (currentStore) {
+      if (currentStore && toPersist.length > 0) {
         try {
-          const filtered = recentCommands.filter((c) => c.command !== command);
-          const updated = [newItem, ...filtered].slice(0, MAX_COMMANDS);
-          await currentStore.set(STORE_KEY, updated);
+          await currentStore.set(STORE_KEY, toPersist);
         } catch (err) {
           console.error("Failed to persist recent commands:", err);
         }
       }
     },
-    [recentCommands]
+    []
   );
 
   return {
