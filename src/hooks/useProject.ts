@@ -65,9 +65,10 @@ export function useProject() {
   const [projectInfoError, setProjectInfoError] = useState(false);
 
   // Derived state: current project from projects + selectedId
-  const currentProject = selectedId
-    ? projects.find((p) => p.id === selectedId) ?? null
-    : null;
+  const currentProject = useMemo(
+    () => selectedId ? projects.find((p) => p.id === selectedId) ?? null : null,
+    [selectedId, projects]
+  );
 
   // Merged command list: use commandMode to decide, sorted by addedAt
   const commands = useMemo(() => {
