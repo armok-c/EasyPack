@@ -6,7 +6,6 @@ const appWindow = getCurrentWindow();
 
 interface TitleBarProps {
   onSettingsOpen: () => void;
-  onCloseBehavior: "hide" | "close";
 }
 
 function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
@@ -16,7 +15,7 @@ function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
   appWindow.startDragging();
 }
 
-export function TitleBar({ onSettingsOpen, onCloseBehavior }: TitleBarProps) {
+export function TitleBar({ onSettingsOpen }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -42,11 +41,7 @@ export function TitleBar({ onSettingsOpen, onCloseBehavior }: TitleBarProps) {
   }, []);
 
   async function handleClose() {
-    if (onCloseBehavior === "hide") {
-      await appWindow.hide();
-    } else {
-      await appWindow.close();
-    }
+    await appWindow.close();
   }
 
   return (

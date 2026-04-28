@@ -177,7 +177,6 @@ function App() {
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <TitleBar
         onSettingsOpen={() => setSettingsOpen(true)}
-        onCloseBehavior={settingsLoaded ? (closeToTray ? "hide" : "close") : "hide"}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
