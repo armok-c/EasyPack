@@ -1,81 +1,63 @@
 ---
 phase: 12-系统托盘
-fixed_at: 2026-04-28T14:30:00Z
+fixed_at: 2026-04-28T03:34:03Z
 review_path: .planning/phases/12-系统托盘/12-REVIEW.md
-iteration: 1
-findings_in_scope: 6
-fixed: 6
+iteration: 2
+findings_in_scope: 5
+fixed: 5
 skipped: 0
 status: all_fixed
 ---
 
 # Phase 12: Code Review Fix Report
 
-**Fixed at:** 2026-04-28T14:30:00Z
+**Fixed at:** 2026-04-28T03:34:03Z
 **Source review:** .planning/phases/12-系统托盘/12-REVIEW.md
-**Iteration:** 1
+**Iteration:** 2
 
 **Summary:**
-- Findings in scope: 6 (2 Critical, 4 Warning)
-- Fixed: 6
+- Findings in scope: 5 (2 Critical, 3 Warning)
+- Fixed: 5
 - Skipped: 0
 
 ## Fixed Issues
 
-### CR-01: Stale closure over `updated` variable causes persistence skip in useRecentCommands
+### CR-01: Tray "Quit" action has race condition with onCloseRequested interceptor
 
-**Files modified:** `src/hooks/useRecentCommands.ts`
-**Verification:** TypeScript syntax check passed (no new errors), re-read confirmed correct code structure.
+**Files modified:** `src/App.tsx`, `src/hooks/useTray.ts`
+**Commit:** 5b225ee
+**Applied fix:** Changed `onQuit` in App.tsx from `appWindow.close()` to `appWindow.destroy()` to bypass the `onCloseRequested` interceptor entirely. Removed the redundant `getCurrentWindow().destroy().catch(console.error)` call from the quit menu item action in useTray.ts, since `onQuitRef.current()` now calls `destroy()` directly.
 
-**Applied fix:** Moved the `store.set()` persistence call inside the `setRecentCommands` updater callback. The `updated` array is now computed as a `const` inside the updater where it has the correct value, and persistence happens synchronously within that scope. This eliminates the React batched-update race condition where the outer `let updated` was read before the updater executed.
+**Status:** fixed: requires human verification (logic bug -- quit behavior change from close to destroy needs manual testing).
 
-**Status:** fixed: requires human verification (logic bug fix -- reviewer identified a React state timing issue that cannot be verified by syntax checking alone).
-
-### CR-02: Missing `core:window:allow-destroy` permission -- tray quit action fails at runtime
-
-**Files modified:** `src-tauri/capabilities/default.json`
-**Verification:** JSON syntax check passed, re-read confirmed permission added.
-
-**Applied fix:** Added `"core:window:allow-destroy"` to the permissions array, placed immediately after `"core:window:allow-close"`. This grants the tray menu's "quit" action the required permission to call `getCurrentWindow().destroy()`.
-
-### WR-01: Tray menu toggle uses stale `visibility` closure
-
-**Files modified:** `src/hooks/useTray.ts`
-**Verification:** TypeScript syntax check passed (only pre-existing errors), re-read confirmed ref usage.
-
-**Applied fix:** Added `visibilityRef` pattern (same pattern as existing `onShowRef`, `onHideRef`, etc.). The ref is updated on every render with `visibilityRef.current = visibility`. Inside `buildMenu`, both the toggle text computation and the action callback now read `visibilityRef.current` instead of the closure-captured `visibility`, ensuring they always read the latest value.
-
-### WR-02: useTray rebuilds entire tray icon on every dependency change instead of updating menu only
-
-**Files modified:** `src/hooks/useTray.ts`
-**Verification:** TypeScript syntax check passed (only pre-existing errors), re-read confirmed two-effect structure.
-
-**Applied fix:** Split the single monolithic effect into two effects:
-
-1. **Effect 1 (line 118-175):** Keyed on `[enabled]` only. Handles tray icon creation (with icon loading, menu building, left-click action binding) when `enabled=true`, and tray destruction when `enabled=false` or on cleanup. This effect does NOT re-run when data changes.
-
-2. **Effect 2 (line 177-201):** Keyed on `[enabled, currentProject, recentCommands, visibility, commands]`. Only updates the menu via `trayRef.current.setMenu(menu)` without recreating the tray icon. Guards against running when disabled or when tray does not exist.
-
-The `buildMenu` function was lifted out of both effects to be shared between them (it reads from refs for callback stability).
-
-**Status:** fixed: requires human verification (significant refactoring of effect structure -- verify tray behavior in development).
-
-### WR-03: handleTrayEnabledChange does not persist closeToTray when force-set to false
+### CR-02: MainArea UI commands bypass recent command tracking
 
 **Files modified:** `src/App.tsx`
-**Verification:** Re-read confirmed correct placement.
+**Commit:** 35c3e60
+**Applied fix:** Changed `MainArea`'s `onExecute` prop from `executeCommand` to `handleExecuteWithRecent`, so all command executions from the main UI are tracked in the recent commands list.
 
-**Applied fix:** Added `await store?.set("closeToTray", false)` inside the `if (!enabled)` block, before the `trayEnabled` persistence. This ensures both state changes are persisted together, preventing the inconsistent state where `closeToTray=true` would be loaded from store on restart while `trayEnabled=false`.
+### WR-01: Failed commands are added to recent history
 
-### WR-04: CSP set to null disables all Content Security Policy protections
+**Files modified:** `src/hooks/useProject.ts`, `src/App.tsx`
+**Commit:** dc77000
+**Applied fix:** Changed `executeCommand` return type from `Promise<void>` to `Promise<boolean>` -- returns `true` on success, `false` on failure or when no project is selected. Updated `handleExecuteWithRecent` to check the return value and skip recent command tracking when execution fails. Updated return type comment in the hook's return object.
 
-**Files modified:** `src-tauri/tauri.conf.json`
-**Verification:** JSON syntax check passed, re-read confirmed CSP policy set.
+**Status:** fixed: requires human verification (logic bug -- return value semantics need manual confirmation).
 
-**Applied fix:** Replaced `"csp": null` with a restrictive CSP policy: `"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"`. The `unsafe-inline` for styles is required by Tailwind CSS and shadcn/ui which inject inline style rules. All other directives are restricted to `'self'`.
+### WR-02: Unhandled promise rejections in tray onShow/onHide callbacks
+
+**Files modified:** `src/App.tsx`
+**Commit:** f075d07
+**Applied fix:** Added `.catch(console.error)` to all window API calls in `onShow` (`appWindow.show()`, `appWindow.setFocus()`) and `onHide` (`appWindow.hide()`) callbacks passed to useTray.
+
+### WR-03: Tray menu rebuilds on every render due to unmemoized currentProject reference
+
+**Files modified:** `src/hooks/useProject.ts`
+**Commit:** 9909258
+**Applied fix:** Wrapped `currentProject` derivation in `useMemo` with `[selectedId, projects]` dependency array, preventing new object references on every render and eliminating unnecessary tray menu rebuilds.
 
 ---
 
-_Fixed: 2026-04-28T14:30:00Z_
+_Fixed: 2026-04-28T03:34:03Z_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_
