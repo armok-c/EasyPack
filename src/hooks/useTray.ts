@@ -44,6 +44,10 @@ export function useTray({
   onQuitRef.current = onQuit;
   const visibilityRef = useRef(visibility);
   visibilityRef.current = visibility;
+  const currentProjectRef = useRef(currentProject);
+  currentProjectRef.current = currentProject;
+  const recentCommandsRef = useRef(recentCommands);
+  recentCommandsRef.current = recentCommands;
 
   async function buildMenu(): Promise<Menu> {
     const toggleText = visibilityRef.current === "VISIBLE" ? "隐藏窗口" : "显示窗口";
@@ -64,8 +68,8 @@ export function useTray({
 
     const items: Array<MenuItem | PredefinedMenuItem | Menu> = [toggleItem];
 
-    const hasProject = currentProject !== null;
-    const hasCommands = recentCommands.length > 0;
+    const hasProject = currentProjectRef.current !== null;
+    const hasCommands = recentCommandsRef.current.length > 0;
 
     if (hasProject || hasCommands) {
       items.push(await PredefinedMenuItem.new({ item: { item: "Separator" } }));
@@ -75,7 +79,7 @@ export function useTray({
       items.push(
         await MenuItem.new({
           id: "current-project",
-          text: `▸ EasyPack (${currentProject.name})`,
+          text: `▸ EasyPack (${currentProjectRef.current!.name})`,
           enabled: false,
           action: () => {},
         })
@@ -83,13 +87,14 @@ export function useTray({
     }
 
     if (hasCommands) {
-      for (let i = 0; i < recentCommands.length; i++) {
-        const cmd = recentCommands[i];
+      const cmds = recentCommandsRef.current;
+      for (let i = 0; i < cmds.length; i++) {
+        const cmd = cmds[i];
         items.push(
           await MenuItem.new({
             id: `cmd-${i}`,
             text: `▸ 执行: ${cmd.name}`,
-            enabled: currentProject !== null,
+            enabled: currentProjectRef.current !== null,
             action: () => {
               onExecuteRef.current(cmd.command);
             },
@@ -119,8 +124,9 @@ export function useTray({
   useEffect(() => {
     if (!enabled) {
       if (trayRef.current) {
-        trayRef.current.close().catch(console.error);
+        const tray = trayRef.current;
         trayRef.current = null;
+        tray.close().catch(console.error);
       }
       return;
     }
@@ -173,9 +179,10 @@ export function useTray({
 
     return () => {
       cancelled = true;
-      if (trayRef.current) {
-        trayRef.current.close().catch(console.error);
-        trayRef.current = null;
+      const tray = trayRef.current;
+      trayRef.current = null;
+      if (tray) {
+        tray.close().catch(console.error);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
