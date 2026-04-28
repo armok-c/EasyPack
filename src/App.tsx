@@ -85,6 +85,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [trayEnabled, setTrayEnabled] = useState(true);
   const [closeToTray, setCloseToTray] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // Phase 12: window visibility state machine
   const { visibility, hideToTray, showFromTray } = useVisibilityState();
@@ -126,14 +127,15 @@ function App() {
 
   // Phase 12: onCloseRequested interception (per D-07)
   useEffect(() => {
-    if (!closeToTray) return;
+    const shouldHide = settingsLoaded ? closeToTray : true;
+    if (!shouldHide) return;
     const unlisten = appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
       hideToTray();
       await appWindow.hide();
     });
     return () => { unlisten.then((fn) => fn()); };
-  }, [closeToTray, hideToTray]);
+  }, [closeToTray, hideToTray, settingsLoaded]);
 
   // Phase 12: load tray settings from store on mount
   useEffect(() => {
@@ -149,6 +151,7 @@ function App() {
           : false;
         setTrayEnabled(effectiveTrayEnabled);
         setCloseToTray(effectiveCloseToTray);
+        setSettingsLoaded(true);
       }
     }
     loadTraySettings();
@@ -174,7 +177,7 @@ function App() {
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <TitleBar
         onSettingsOpen={() => setSettingsOpen(true)}
-        onCloseBehavior={closeToTray ? "hide" : "close"}
+        onCloseBehavior={settingsLoaded ? (closeToTray ? "hide" : "close") : "hide"}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
