@@ -2,27 +2,26 @@
 phase: 12-系统托盘
 reviewed: 2026-04-28T12:00:00Z
 depth: standard
-files_reviewed: 14
+files_reviewed: 13
 files_reviewed_list:
   - src/App.tsx
   - src/components/SettingsDialog.tsx
   - src/components/TitleBar.tsx
-  - src/components/__tests__/TitleBar.test.tsx
   - src/components/ui/switch.tsx
+  - src/hooks/__tests__/useRecentCommands.test.ts
+  - src/hooks/__tests__/useVisibilityState.test.ts
   - src/hooks/useProject.ts
   - src/hooks/useRecentCommands.ts
   - src/hooks/useTray.ts
   - src/hooks/useVisibilityState.ts
-  - src/hooks/__tests__/useRecentCommands.test.ts
-  - src/hooks/__tests__/useVisibilityState.test.ts
   - src-tauri/Cargo.toml
   - src-tauri/capabilities/default.json
   - src-tauri/tauri.conf.json
 findings:
   critical: 2
-  warning: 4
+  warning: 3
   info: 3
-  total: 9
+  total: 8
 status: issues_found
 ---
 
@@ -30,159 +29,154 @@ status: issues_found
 
 **Reviewed:** 2026-04-28T12:00:00Z
 **Depth:** standard
-**Files Reviewed:** 14
+**Files Reviewed:** 13
 **Status:** issues_found
 
 ## Summary
 
-Reviewed 14 files comprising Phase 12 (system tray integration) for EasyPack, a Tauri + React desktop app. The phase adds tray icon management, visibility state machine, recent commands tracking, settings dialog, and close-to-tray behavior.
-
-Found 2 critical issues, 4 warnings, and 3 info items. The critical issues are (1) a React state update race condition in `useRecentCommands` that silently loses persisted data, and (2) a missing Tauri capability permission (`core:window:allow-destroy`) that causes the tray "quit" action to fail silently at runtime. Four warnings cover stale closure bugs in the tray menu toggle, unnecessary tray recreation churn, a missing store persist call, and a disabled CSP policy. Three info items cover console.error usage, an unused parameter, and a redundant static tray config.
+Reviewed all 13 files in scope for Phase 12 (system tray support). The implementation covers tray icon lifecycle, visibility state machine, recent command tracking, settings dialog, and window close interception. Found 2 critical bugs and 3 warnings. The critical issues are: (1) the tray "Quit" action has a race condition between `close()` being intercepted by `onCloseRequested` and a subsequent `destroy()` call, causing unpredictable quit behavior; (2) `MainArea` uses `executeCommand` directly, bypassing recent command tracking for all UI-initiated command executions -- only global shortcuts and tray menu executions are tracked. Warnings include unhandled promise rejections in tray callbacks, unnecessary menu rebuilds on every render due to unmemoized `currentProject`, and a logic error where failed commands are still added to recent history.
 
 ## Critical Issues
 
-### CR-01: Stale closure over `updated` variable causes persistence skip in useRecentCommands
+### CR-01: Tray "Quit" action has race condition with onCloseRequested interceptor
 
-**File:** `src/hooks/useRecentCommands.ts:36-46`
-**Issue:** The `addRecentCommand` function captures the `updated` local variable before React processes the `setRecentCommands` state updater. In React 18/19, state updates from within an event handler are batched -- the updater function `(prev) => { ... return updated; }` is not guaranteed to execute synchronously before line 44 runs. The outer `let updated: RecentCommand[] = []` initializer remains the value observed on line 45 if the updater is deferred. This means `updated.length > 0` evaluates to `false` (the initial `[]`), and the `store.set(STORE_KEY, updated)` call is skipped. The in-memory React state updates correctly, but the persistence to disk silently fails. On app restart, recent commands are lost.
-
-This is a classic React batched-update race: mutating a closure variable from inside a state updater and then reading it immediately after is unreliable.
+**File:** `src/hooks/useTray.ts:108-110`
+**Issue:** The tray menu "Quit" action calls `onQuitRef.current()` (which calls `appWindow.close()`) **without await**, then immediately calls `getCurrentWindow().destroy()`. When `closeToTray` is enabled, `appWindow.close()` triggers the `onCloseRequested` handler in `App.tsx:129-132`, which calls `event.preventDefault()` and hides the window instead of closing it. The subsequent `destroy()` call then forces destruction. This creates a race: `hideToTray()` sets visibility state to `TRAY_HIDDEN` before the window is destroyed by `destroy()`. The two operations (`close` intercepted as hide, then `destroy`) are contradictory and their ordering is non-deterministic. When `closeToTray` is false, `close()` destroys the window first, then `destroy()` operates on a destroyed window, potentially throwing errors.
 
 **Fix:**
 ```typescript
-const addRecentCommand = useCallback(
-  async (name: string, command: string) => {
-    const newItem: RecentCommand = { name, command };
+// In App.tsx, change onQuit to use destroy() instead of close() to bypass the interceptor:
+onQuit: async () => { await appWindow.destroy(); }
 
-    setRecentCommands((prev) => {
-      const filtered = prev.filter((c) => c.command !== command);
-      const updated = [newItem, ...filtered].slice(0, MAX_COMMANDS);
-      // Persist inside the updater where we have the correct computed state
-      const currentStore = storeRef.current;
-      if (currentStore) {
-        currentStore.set(STORE_KEY, updated).catch(() => {});
-      }
-      return updated;
-    });
-  },
-  []
+// In useTray.ts buildMenu(), the quit item action should only call onQuit, not also destroy:
+items.push(
+  await MenuItem.new({
+    id: "quit",
+    text: "退出",
+    action: () => {
+      onQuitRef.current();
+    },
+  })
 );
 ```
 
-### CR-02: Missing `core:window:allow-destroy` permission -- tray quit action fails at runtime
+### CR-02: MainArea UI commands bypass recent command tracking
 
-**File:** `src-tauri/capabilities/default.json` (missing permission), `src/hooks/useTray.ts:119`
-**Issue:** The tray menu's "quit" action calls `getCurrentWindow().destroy()` (line 119 of `useTray.ts`), but the capabilities file only grants `core:window:allow-close`. The `destroy` permission (`core:window:allow-destroy`) is not listed. When a user clicks "quit" from the tray menu, the Tauri runtime will reject the IPC call with a permission denied error. The `.catch(console.error)` on line 119 silently swallows this, so the app does not exit and the user sees nothing happen.
+**File:** `src/App.tsx:188`
+**Issue:** `MainArea` receives `onExecute={executeCommand}` (line 188), which is the raw `executeCommand` from `useProject`. The recent command tracking wrapper `handleExecuteWithRecent` is only wired to `useGlobalShortcuts` (line 108) and `useTray` (line 119). This means commands executed by clicking the command cards in the main UI -- the primary user interaction -- are never recorded in recent commands. The tray menu's recent commands list will always be empty or stale because the most common execution path is excluded.
 
-Note: The previous review (CR-01) flagged the missing `core:app:allow-default-window-icon` permission, which was subsequently fixed in commit `a3224da`. However, the `destroy` permission was not added at that time.
-
-**Fix:** Add the missing permission to `src-tauri/capabilities/default.json`:
-```json
-"permissions": [
-  "core:default",
-  "core:window:allow-minimize",
-  "core:window:allow-toggle-maximize",
-  "core:window:allow-close",
-  "core:window:allow-destroy",
-  "core:window:allow-start-dragging",
-  "dialog:default",
-  "store:default",
-  "global-shortcut:allow-register",
-  "global-shortcut:allow-unregister",
-  "global-shortcut:allow-is-registered",
-  "global-shortcut:allow-unregister-all",
-  "core:window:allow-show",
-  "core:window:allow-hide",
-  "core:window:allow-set-focus",
-  "core:app:allow-default-window-icon"
-]
+**Fix:**
+```typescript
+// In App.tsx, change MainArea's onExecute prop:
+<MainArea
+  // ... other props
+  onExecute={handleExecuteWithRecent}  // was: executeCommand
+  // ... other props
+/>
 ```
 
 ## Warnings
 
-### WR-01: Tray menu toggle uses stale `visibility` closure -- wrong toggle behavior after rapid state changes
+### WR-01: Failed commands are added to recent history
 
-**File:** `src/hooks/useTray.ts:58-71`
-**Issue:** The `buildMenu` function closes over the `visibility` variable from the effect's dependency array. Each menu item's `action` callback also closes over this `visibility` value. While the effect re-runs when `visibility` changes (it is in the dependency array on line 192), there is a window between a visibility change and the async menu rebuild completing. During this window, clicking the tray icon executes the old action closure with the stale `visibility` value. If the user rapidly toggles visibility, the menu text and behavior can become inconsistent with the actual window state.
-
-The code already uses refs (`onShowRef`, `onHideRef`) for callback stability -- the same pattern should be applied to `visibility`.
-
-**Fix:** Add a `visibilityRef` and use it inside the action callbacks:
-```typescript
-const visibilityRef = useRef(visibility);
-visibilityRef.current = visibility;
-
-// In buildMenu action callback:
-action: () => {
-  if (visibilityRef.current === "VISIBLE") {
-    onHideRef.current();
-    getCurrentWindow().hide().catch(console.error);
-  } else {
-    onShowRef.current();
-    getCurrentWindow().show().catch(console.error);
-    getCurrentWindow().setFocus().catch(console.error);
-  }
-},
-```
-
-### WR-02: `useTray` rebuilds entire tray icon on every dependency change instead of updating menu only
-
-**File:** `src/hooks/useTray.ts:179-183`
-**Issue:** When `trayRef.current` is null (e.g., during initial mount or after cleanup), `createTray()` is called. But `createTray` calls `TrayIcon.getById(TRAY_ID)` and closes any existing tray with the same ID (line 136-137). If the effect re-runs while a previous `createTray` async call is still in-flight, the race between the old and new `createTray` calls can cause the tray to flicker or be closed prematurely. The `cancelled` flag helps but only within a single effect run -- two concurrent effect runs can interleave.
-
-Additionally, every change to `currentProject`, `recentCommands`, `visibility`, or `commands` triggers a full effect re-run, destroying and recreating the tray icon. For a desktop app that runs for hours, this causes unnecessary system tray churn.
-
-**Fix:** Separate tray creation (run once) from menu updates (run on data changes). Use two effects: one for the tray icon lifecycle keyed on `enabled`, and one for menu updates keyed on data dependencies.
-
-### WR-03: `handleTrayEnabledChange` does not persist `closeToTray` when it is force-set to false
-
-**File:** `src/App.tsx:154-160`
-**Issue:** When `trayEnabled` is set to `false`, `closeToTray` is also set to `false` (line 157), but only `trayEnabled` is persisted to the store (line 159). The `closeToTray` state change is not persisted. On restart, `closeToTray` would be loaded from the store with its old `true` value while `trayEnabled` is `false`, creating an inconsistent state where the app tries to hide to tray on close but the tray is disabled.
+**File:** `src/App.tsx:96-103`
+**Issue:** `handleExecuteWithRecent` calls `await executeCommand(shellCommand)` on line 97, then unconditionally adds the command to recent history on lines 98-103. However, `executeCommand` catches its own errors internally (`useProject.ts:265-268`) and does **not** re-throw. This means `handleExecuteWithRecent` always proceeds to the tracking logic, even when command execution failed. Users will see failed commands in their "recent" tray menu, which is misleading.
 
 **Fix:**
 ```typescript
-const handleTrayEnabledChange = useCallback(async (enabled: boolean) => {
-  setTrayEnabled(enabled);
-  if (!enabled) {
-    setCloseToTray(false);
-    await store?.set("closeToTray", false);
+// Option A: Refactor executeCommand to return success/failure boolean
+// In useProject.ts:
+const executeCommand = useCallback(
+  async (shellCommand: string): Promise<boolean> => {
+    if (!currentProject) return false;
+    try {
+      await invoke("execute_command", {
+        projectPath: currentProject.path,
+        shellCommand,
+      });
+      toast.success(`已执行: ${shellCommand}`);
+      return true;
+    } catch (error) {
+      toast.error(
+        `命令执行失败：${error}。请检查项目路径和命令是否正确。`
+      );
+      return false;
+    }
+  },
+  [currentProject]
+);
+
+// Then in handleExecuteWithRecent:
+const handleExecuteWithRecent = useCallback(async (shellCommand: string) => {
+  const success = await executeCommand(shellCommand);
+  if (!success) return;
+  const cmd = commands.find((c) => c.command === shellCommand);
+  if (cmd) {
+    await addRecentCommand(cmd.name, cmd.command);
+  } else {
+    await addRecentCommand(shellCommand, shellCommand);
   }
-  await store?.set("trayEnabled", enabled);
-}, [store]);
+}, [executeCommand, commands, addRecentCommand]);
 ```
 
-### WR-04: CSP set to null disables all Content Security Policy protections
+### WR-02: Unhandled promise rejections in tray onShow/onHide callbacks
 
-**File:** `src-tauri/tauri.conf.json:33`
-**Issue:** `"csp": null` in the security configuration disables Content Security Policy entirely. While Tauri apps are less exposed than web apps (assets are loaded locally), CSP provides defense-in-depth against potential XSS via injected content, loaded HTML, or compromised plugins. This app uses `store`, `dialog`, and `global-shortcut` plugins -- a CSP policy could restrict script sources and prevent inline script execution if an attacker found a way to inject HTML.
+**File:** `src/App.tsx:120-121`
+**Issue:** The `onShow` and `onHide` callbacks passed to `useTray` call `appWindow.show()`, `appWindow.setFocus()`, and `appWindow.hide()` without `await` or `.catch()`. These functions return `Promise<void>`. If any of these calls fail (e.g., window already destroyed), the rejected promise is unhandled. While `useTray.ts` itself properly catches errors in its internal `show`/`hide` calls (lines 56, 59-60), the callbacks from `App.tsx` are called first, and their failures go unhandled.
 
-**Fix:** Set a restrictive CSP rather than disabling it:
-```json
-"security": {
-  "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-}
+**Fix:**
+```typescript
+onShow: async () => {
+  showFromTray();
+  await appWindow.show().catch(console.error);
+  await appWindow.setFocus().catch(console.error);
+},
+onHide: async () => {
+  hideToTray();
+  await appWindow.hide().catch(console.error);
+},
 ```
-Adjust as needed for any specific resource loading requirements.
+
+### WR-03: Tray menu rebuilds on every render due to unmemoized currentProject reference
+
+**File:** `src/hooks/useTray.ts:201`, `src/hooks/useProject.ts:68-70`
+**Issue:** Effect 2's dependency array includes `currentProject`, which is derived via `.find()` in `useProject.ts:68-70` without memoization. This creates a new object reference on every render of the parent component, causing Effect 2 to fire on every render. Each Effect 2 execution calls `buildMenu()` which creates multiple `await MenuItem.new()` calls -- an async operation that rebuilds the entire tray menu unnecessarily. This affects every keystroke, state update, or re-render in the app.
+
+**Fix:**
+```typescript
+// In useProject.ts, memoize currentProject:
+const currentProject = useMemo(
+  () => selectedId ? projects.find((p) => p.id === selectedId) ?? null : null,
+  [selectedId, projects]
+);
+```
 
 ## Info
 
-### IN-01: Multiple `console.error` calls in useTray.ts
+### IN-01: Unused `commands` dependency in tray menu update effect
 
-**File:** `src/hooks/useTray.ts:49,65,68,69,119,150,151,158,175,188`
-**Issue:** Ten `console.error` calls exist in the tray hook. While most are error-catch handlers for Tauri API calls, the project coding rules discourage `console.log`/`console.error` in production code. These should ideally use a structured logger or at least be wrapped in a `__DEV__` guard.
-**Fix:** Replace with a project-level logging utility, or wrap in `if (import.meta.env.DEV)` for development-only output.
+**File:** `src/hooks/useTray.ts:201`
+**Issue:** The `commands` prop is included in Effect 2's dependency array but is never read inside `buildMenu()` or the effect body. This causes unnecessary effect re-triggering when commands change. Combined with WR-03, this further increases unnecessary menu rebuilds.
 
-### IN-02: `commands` parameter in useTray is declared but never read
+**Fix:** Remove `commands` from the dependency array: `}, [enabled, currentProject, recentCommands, visibility]);`
 
-**File:** `src/hooks/useTray.ts:28`
-**Issue:** The `commands` parameter is accepted in the hook options interface and destructured, but is never used inside the hook body. It is listed in the effect dependency array (line 192) which means changes to `commands` trigger unnecessary tray rebuilds without any actual effect on the tray menu.
-**Fix:** Remove `commands` from the `UseTrayOptions` interface, the destructured parameters, and the effect dependency array. Only `recentCommands` is needed for the menu.
+### IN-02: Redundant null check for store values
 
-### IN-03: `tauri.conf.json` declares static `trayIcon` config while code creates tray programmatically
+**File:** `src/App.tsx:145-146`
+**Issue:** `saved !== undefined && saved !== null` is redundant -- checking both is equivalent to `saved != null` (loose equality covers both `null` and `undefined`). The double check is verbose but not harmful.
 
-**File:** `src-tauri/tauri.conf.json:27-31`
-**Issue:** The `trayIcon` configuration in `tauri.conf.json` declares a tray icon with id `"main-tray"` that is created at app startup by Tauri itself. Meanwhile, `useTray.ts` also creates a tray icon with the same id via `TrayIcon.new({ id: TRAY_ID, ... })`. The code handles this by calling `TrayIcon.getById(TRAY_ID)` and closing any existing one (line 135-137), but this creates a brief duplicate or flicker at startup. The static config is redundant if the tray is always managed programmatically.
-**Fix:** Either remove the static `trayIcon` config from `tauri.conf.json` (preferred, since the code manages the full lifecycle), or remove the programmatic creation and only update the static tray's menu.
+**Fix:**
+```typescript
+if (saved != null) setTrayEnabled(saved);
+if (savedCTT != null) setCloseToTray(savedCTT);
+```
+
+### IN-03: Test uses type assertion to bypass type checking
+
+**File:** `src/hooks/__tests__/useVisibilityState.test.ts:63`
+**Issue:** Line 63 uses `state as "TRAY_HIDDEN"` to cast a `string` variable to the `VisibilityState` type. This test appears to be verifying that `setVisibility` accepts string-typed values (the comment says "Phase 14 extension interface"), but it uses a type assertion that defeats the purpose of the test. If the goal is to test runtime string acceptance, the assertion masks what would otherwise be a type error.
+
+**Fix:** If the intent is to test that `setVisibility` accepts dynamic strings at runtime (a future requirement), consider testing with the actual type rather than a cast, or add a comment explaining this is intentionally testing runtime flexibility at the cost of compile-time safety.
 
 ---
 
