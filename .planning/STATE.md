@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
 status: executing
-stopped_at: "Phase 12 complete, ready for verification"
-last_updated: "2026-04-27T15:30:00Z"
-last_activity: 2026-04-27
+stopped_at: "Phase 12 gap closure complete, ready for verification"
+last_updated: "2026-04-28T06:05:00Z"
+last_activity: 2026-04-28
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 5
+  completed_plans: 5
   percent: 100
 ---
 
 # Project State
 
-**Status:** Executing — Phase 12 complete, verification pending
-**Last Activity:** 2026-04-27
-**Current Focus:** Phase 12 — 系统托盘 (complete)
+**Status:** Executing — Phase 12 gap closure complete, verification pending
+**Last Activity:** 2026-04-28
+**Current Focus:** Phase 12 — 系统托盘 (gap closure complete)
 
 ## Current Position
 
 Phase: 12 (COMPLETE)
-Plan: All plans complete
-Status: Phase 12 execution finished, verification pending
-Last activity: 2026-04-27 -- Phase 12 all plans executed
+Plan: All plans complete (including gap closure)
+Status: Phase 12 all plans executed, verification pending
+Last activity: 2026-04-28 -- Phase 12 gap closure (12-03) executed
 
 Progress: [████████░░] 75%
 
@@ -35,6 +35,7 @@ Progress: [████████░░] 75%
 |------|-------|--------|
 | 12-01 | 2/2 | Complete (SUMMARY.md written) |
 | 12-02 | 2/2 | Complete (SUMMARY.md written) |
+| 12-03 | 3/3 | Complete (SUMMARY.md written) |
 
 ### Commits so far (Phase 12)
 
@@ -45,6 +46,9 @@ Progress: [████████░░] 75%
 - `aff8ff9` fix(12): remove invalid on-close-requested permission
 - `ceb1a70` fix(12): toggle maximize icon between Square and Copy on state change
 - `da89550` feat(12-02): integrate tray hooks, visibility state, and settings in App.tsx
+- `cd59281` fix(12-03): fix useTray stale closure and tray cleanup race condition
+- `fab7696` fix(12-03): enhance Switch unchecked state visual contrast
+- `c6c8ccd` fix(12-03): add settingsLoaded guard for closeToTray timing safety
 
 ## Project Reference
 
@@ -71,6 +75,10 @@ Recent decisions affecting current work:
 - useTray 使用 TrayIcon action 回调统一处理事件，Tauri v2 无 setOnClick
 - 退出用 getCurrentWindow().destroy() 替代不存在的 exit()
 - 最大化图标需要根据 isMaximized 状态切换 (Square ↔ Copy)
+- buildMenu 从 ref 读取 currentProject/recentCommands 而非闭包变量
+- tray cleanup 先 null ref 再 async close 防止竞态
+- Switch unchecked 色用 muted-foreground/30+40 替代 bg-input
+- settingsLoaded 状态守卫确保 store 加载前关闭行为为 hide
 
 ### Pending Todos
 
@@ -94,6 +102,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 
 ## Session Continuity
 
-Last session: 2026-04-27
-Stopped at: 12-02 complete - all Phase 12 plans finished
+Last session: 2026-04-28
+Stopped at: 12-03 complete - Phase 12 gap closure finished
 Resume command: `/gsd-execute-phase 13`

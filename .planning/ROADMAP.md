@@ -69,11 +69,12 @@ Plans:
   3. 右键托盘图标弹出上下文菜单，包含"显示/隐藏窗口"和"退出"选项
   4. 托盘菜单可以直接对当前选中项目执行收藏指令
   5. 用户可以在设置中开关托盘常驻和关闭到托盘行为
-**Plans:** 2/2 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 12-01-PLAN.md -- Tauri tray-icon 配置 + useVisibilityState 状态机 + useRecentCommands Hook + useTray Hook
 - [x] 12-02-PLAN.md -- TitleBar 改造 + SettingsDialog 设置弹窗 + App 集成全部托盘 Hook
+- [x] 12-03-PLAN.md -- Gap closure: 闭包过期修复 + Switch 视觉增强 + closeToTray 时序安全
 
 **UI hint**: yes
 
@@ -120,6 +121,6 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 9. 前端 UI 集成 | v1.1 | 1/1 | Complete | 2026-04-25 |
 | 10. 预设指令系统 | v1.1 | 3/3 | Complete | 2026-04-26 |
 | 11. 全局快捷键 | v1.2 | 2/2 | Complete    | 2026-04-27 |
-| 12. 系统托盘 | v1.2 | 2/2 | Complete | 2026-04-27 |
+| 12. 系统托盘 | v1.2 | 3/3 | Complete | 2026-04-28 |
 | 13. 迷你悬浮窗 | v1.2 | 0/? | Not started | - |
 | 14. 边缘抽屉 | v1.2 | 0/? | Not started | - |

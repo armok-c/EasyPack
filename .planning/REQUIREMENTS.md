@@ -88,13 +88,13 @@
 | KB-04 | Phase 11 | Complete |
 | KB-05 | Phase 11 | Complete |
 | KB-06 | Phase 11 | Complete |
-| TRAY-01 | Phase 12 | Pending |
+| TRAY-01 | Phase 12 | Complete |
 | TRAY-02 | Phase 12 | Pending |
-| TRAY-03 | Phase 12 | Pending |
-| TRAY-04 | Phase 12 | Pending |
+| TRAY-03 | Phase 12 | Complete |
+| TRAY-04 | Phase 12 | Complete |
 | TRAY-05 | Phase 12 | Pending |
 | TRAY-06 | Phase 12 | Pending |
-| TRAY-07 | Phase 12 | Pending |
+| TRAY-07 | Phase 12 | Complete |
 | TRAY-08 | Phase 12 | Pending |
 | FLOAT-01 | Phase 13 | Pending |
 | FLOAT-02 | Phase 13 | Pending |
