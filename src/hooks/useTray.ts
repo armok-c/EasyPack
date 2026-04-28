@@ -190,6 +190,14 @@ export function useTray({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
+  // Effect 1 vs Effect 2 responsibility split:
+  // - Effect 1 handles tray icon creation/destruction (only when `enabled` changes).
+  //   It builds the initial menu as part of tray creation and once more after setup
+  //   to cover updates that may have occurred during the async creation window.
+  // - Effect 2 handles menu content updates (when project, commands, visibility, etc.
+  //   change). It does NOT create or destroy the tray icon itself.
+  //   Effect 2 depends on trayRef.current existing, so it skips if the tray is not ready.
+
   // Effect 2: Menu updates only (no tray recreation)
   useEffect(() => {
     if (!enabled) return;
