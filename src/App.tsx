@@ -185,7 +185,7 @@ function App() {
         />
         <MainArea
           currentProject={currentProject}
-          onExecute={executeCommand}
+          onExecute={handleExecuteWithRecent}
           commands={commands}
           commandMode={commandMode}
           editMode={editMode}
