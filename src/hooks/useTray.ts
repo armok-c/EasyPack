@@ -107,7 +107,6 @@ export function useTray({
         text: "退出",
         action: () => {
           onQuitRef.current();
-          getCurrentWindow().destroy().catch(console.error);
         },
       })
     );

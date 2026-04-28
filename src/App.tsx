@@ -119,7 +119,7 @@ function App() {
     onExecute: handleExecuteWithRecent,
     onShow: () => { showFromTray(); appWindow.show(); appWindow.setFocus(); },
     onHide: () => { hideToTray(); appWindow.hide(); },
-    onQuit: async () => { await appWindow.close(); },
+    onQuit: async () => { await appWindow.destroy(); },
     enabled: trayEnabled,
   });
 
