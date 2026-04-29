@@ -13,6 +13,14 @@ export default defineConfig({
     },
   },
   clearScreen: false,
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        float: path.resolve(__dirname, "float.html"),
+      },
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,
