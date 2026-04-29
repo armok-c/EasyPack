@@ -2,32 +2,44 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
-status: executing
-stopped_at: Phase 13 context gathered
-last_updated: "2026-04-29T04:04:11.635Z"
+status: Executing
+stopped_at: Phase 13 Plan 01 complete, Plan 02 next
+last_updated: "2026-04-29T07:00:00.000Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_plans: 7
+  completed_plans: 6
+  percent: 85
 ---
 
 # Project State
 
-**Status:** Executing — Phase 12 UAT verified, ready for Phase 13
+**Status:** Executing -- Phase 13 Plan 01 complete, Plan 02 next
 **Last Activity:** 2026-04-29
-**Current Focus:** Phase 13 — 迷你悬浮窗 (next)
+**Current Focus:** Phase 13 -- 迷你悬浮窗 (Plan 01 done)
 
 ## Current Position
 
-Phase: 12 (VERIFIED)
-Plan: All plans complete (including gap closure)
-Status: Phase 12 UAT verified — all 5 tests passed
-Last activity: 2026-04-29 -- Phase 12 UAT complete
+Phase: 13 (IN PROGRESS)
+Plan: 13-01 COMPLETE, 13-02 next
+Status: Plan 01 executed (2/2 tasks), Plan 02 pending
+Last activity: 2026-04-29 -- Plan 01 infrastructure + UI + hook done
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 85%
+
+## Phase 13 Execution Status
+
+| Plan | Tasks | Status |
+|------|-------|--------|
+| 13-01 | 2/2 | Complete (SUMMARY.md written) |
+| 13-02 | -- | Pending (next) |
+
+### Commits so far (Phase 13)
+
+- `04b4bf6` feat(13-01): add Vite multi-page build, float HTML entry, and window capabilities
+- `46b2f6c` feat(13-01): implement FloatApp component and useFloatWindow hook
 
 ## Phase 12 Execution Status
 
@@ -79,6 +91,10 @@ Recent decisions affecting current work:
 - tray cleanup 先 null ref 再 async close 防止竞态
 - Switch unchecked 色用 muted-foreground/30+40 替代 bg-input
 - settingsLoaded 状态守卫确保 store 加载前关闭行为为 hide
+- Phase 13 Plan 01: Vite 多页构建输出 index.html + float.html
+- Phase 13 Plan 01: FloatApp 通过 Tauri 事件系统接收项目/指令，200ms 绿色闪烁反馈
+- Phase 13 Plan 01: useFloatWindow 动态创建 WebviewWindow，alwaysOnTop + skipTaskbar + 右上角初始位置
+- Phase 13 Plan 01: capabilities/default.json 添加 float 窗口和 webview/event 权限
 
 ### Pending Todos
 
@@ -87,7 +103,7 @@ None yet.
 ### Blockers/Concerns
 
 - Phase 14 (边缘抽屉) "thin sliver" 方案需要原型验证 — 在不同 DPI 和 Windows 版本下行为未知
-- Phase 13 (悬浮窗) Vite 多页构建与 Tauri 集成需要确认 HMR 和打包行为
+- Phase 13 (悬浮窗) Vite 多页构建与 Tauri 集成需要确认 HMR 和打包行为 -- Plan 01 已验证 Vite 构建成功输出 float.html
 
 ## Deferred Items
 
@@ -102,6 +118,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 
 ## Session Continuity
 
-Last session: 2026-04-29T04:04:11.586Z
-Stopped at: Phase 13 context gathered
-Resume command: `/gsd-execute-phase 13`
+Last session: 2026-04-29T07:00:00.000Z
+Stopped at: Phase 13 Plan 01 complete
+Resume command: `/gsd-execute-phase 13` (continue with Plan 02)
