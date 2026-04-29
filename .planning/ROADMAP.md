@@ -36,7 +36,7 @@
 
 - [x] **Phase 11: 全局快捷键** — 每个指令可绑定快捷键，选中项目后按键直接执行 -- completed 2026-04-27
 - [x] **Phase 12: 系统托盘** — 关闭窗口最小化到托盘，托盘菜单支持完整操作 -- completed 2026-04-27
-- [ ] **Phase 13: 迷你悬浮窗** — 独立小窗口显示常用指令按钮，始终置顶，点击直接执行
+- [x] **Phase 13: 迷你悬浮窗** — 独立小窗口显示常用指令按钮，始终置顶，点击直接执行 -- completed 2026-04-29
 - [ ] **Phase 14: 边缘抽屉** — 主窗口吸附到屏幕边缘隐藏，鼠标接触自动滑出
 
 ## Phase Details
@@ -88,11 +88,11 @@ Plans:
   3. 点击悬浮窗中的指令按钮直接在系统终端执行该指令
   4. 主窗口切换项目时，悬浮窗的指令按钮实时更新
   5. 用户可以独立关闭悬浮窗，不影响主窗口
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 13-01-PLAN.md -- Vite 多页构建 + capabilities + FloatApp 组件 + useFloatWindow hook
-- [ ] 13-02-PLAN.md -- TitleBar 按钮 + useTray 菜单项 + App.tsx 集成
+- [x] 13-01-PLAN.md -- Vite 多页构建 + capabilities + FloatApp 组件 + useFloatWindow hook
+- [x] 13-02-PLAN.md -- TitleBar 按钮 + useTray 菜单项 + App.tsx 集成
 
 **UI hint**: yes
 
@@ -127,5 +127,5 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 10. 预设指令系统 | v1.1 | 3/3 | Complete | 2026-04-26 |
 | 11. 全局快捷键 | v1.2 | 2/2 | Complete    | 2026-04-27 |
 | 12. 系统托盘 | v1.2 | 3/3 | Complete | 2026-04-28 |
-| 13. 迷你悬浮窗 | v1.2 | 0/2 | Not started | - |
+| 13. 迷你悬浮窗 | v1.2 | 2/2 | Complete | 2026-04-29 |
 | 14. 边缘抽屉 | v1.2 | 0/? | Not started | - |
