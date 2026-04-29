@@ -3,43 +3,45 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
 status: Executing
-stopped_at: Phase 13 Plan 01 complete, Plan 02 next
-last_updated: "2026-04-29T07:00:00.000Z"
+stopped_at: Phase 13 complete
+last_updated: "2026-04-29T08:00:00.000Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
-  percent: 85
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
 
-**Status:** Executing -- Phase 13 Plan 01 complete, Plan 02 next
+**Status:** Executing -- Phase 13 complete
 **Last Activity:** 2026-04-29
-**Current Focus:** Phase 13 -- 迷你悬浮窗 (Plan 01 done)
+**Current Focus:** Phase 13 -- 迷你悬浮窗 (All plans done)
 
 ## Current Position
 
-Phase: 13 (IN PROGRESS)
-Plan: 13-01 COMPLETE, 13-02 next
-Status: Plan 01 executed (2/2 tasks), Plan 02 pending
-Last activity: 2026-04-29 -- Plan 01 infrastructure + UI + hook done
+Phase: 13 (COMPLETE)
+Plan: All plans executed
+Status: Plan 01 + Plan 02 both complete (4/4 tasks total)
+Last activity: 2026-04-29 -- Plan 02 integration done
 
-Progress: [█████████░] 85%
+Progress: [██████████] 100%
 
 ## Phase 13 Execution Status
 
 | Plan | Tasks | Status |
 |------|-------|--------|
 | 13-01 | 2/2 | Complete (SUMMARY.md written) |
-| 13-02 | -- | Pending (next) |
+| 13-02 | 2/2 | Complete (SUMMARY.md written) |
 
 ### Commits so far (Phase 13)
 
 - `04b4bf6` feat(13-01): add Vite multi-page build, float HTML entry, and window capabilities
 - `46b2f6c` feat(13-01): implement FloatApp component and useFloatWindow hook
+- `bf7b361` feat(13-02): add float window toggle to TitleBar and tray menu
+- `1432b28` feat(13-02): integrate useFloatWindow hook in App.tsx
 
 ## Phase 12 Execution Status
 
@@ -94,7 +96,8 @@ Recent decisions affecting current work:
 - Phase 13 Plan 01: Vite 多页构建输出 index.html + float.html
 - Phase 13 Plan 01: FloatApp 通过 Tauri 事件系统接收项目/指令，200ms 绿色闪烁反馈
 - Phase 13 Plan 01: useFloatWindow 动态创建 WebviewWindow，alwaysOnTop + skipTaskbar + 右上角初始位置
-- Phase 13 Plan 01: capabilities/default.json 添加 float 窗口和 webview/event 权限
+- Phase 13 Plan 02: TitleBar PanelTop 按钮 + 托盘悬浮窗菜单项 + App.tsx 集成 useFloatWindow
+- Phase 13 Plan 02: onQuit 先 destroyFloat 再 appWindow.destroy，关闭到托盘不影响悬浮窗
 
 ### Pending Todos
 
@@ -104,6 +107,7 @@ None yet.
 
 - Phase 14 (边缘抽屉) "thin sliver" 方案需要原型验证 — 在不同 DPI 和 Windows 版本下行为未知
 - Phase 13 (悬浮窗) Vite 多页构建与 Tauri 集成需要确认 HMR 和打包行为 -- Plan 01 已验证 Vite 构建成功输出 float.html
+- Phase 14 (边缘抽屉) "thin sliver" 方案需要原型验证 -- 在不同 DPI 和 Windows 版本下行为未知
 
 ## Deferred Items
 
@@ -118,6 +122,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 
 ## Session Continuity
 
-Last session: 2026-04-29T07:00:00.000Z
-Stopped at: Phase 13 Plan 01 complete
-Resume command: `/gsd-execute-phase 13` (continue with Plan 02)
+Last session: 2026-04-29T08:00:00.000Z
+Stopped at: Phase 13 complete
+Resume command: `/gsd-execute-phase 14` (start Phase 14 - 边缘抽屉)
