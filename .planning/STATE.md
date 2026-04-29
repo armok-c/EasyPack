@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: 快捷键、托盘与窗口增强
 status: executing
-stopped_at: "Phase 12 gap closure complete, ready for verification"
-last_updated: "2026-04-28T06:05:00Z"
-last_activity: 2026-04-28
+stopped_at: Phase 13 context gathered
+last_updated: "2026-04-29T04:04:11.635Z"
+last_activity: 2026-04-29
 progress:
   total_phases: 4
   completed_phases: 2
@@ -16,16 +16,16 @@ progress:
 
 # Project State
 
-**Status:** Executing — Phase 12 gap closure complete, verification pending
-**Last Activity:** 2026-04-28
-**Current Focus:** Phase 12 — 系统托盘 (gap closure complete)
+**Status:** Executing — Phase 12 UAT verified, ready for Phase 13
+**Last Activity:** 2026-04-29
+**Current Focus:** Phase 13 — 迷你悬浮窗 (next)
 
 ## Current Position
 
-Phase: 12 (COMPLETE)
+Phase: 12 (VERIFIED)
 Plan: All plans complete (including gap closure)
-Status: Phase 12 all plans executed, verification pending
-Last activity: 2026-04-28 -- Phase 12 gap closure (12-03) executed
+Status: Phase 12 UAT verified — all 5 tests passed
+Last activity: 2026-04-29 -- Phase 12 UAT complete
 
 Progress: [████████░░] 75%
 
@@ -102,6 +102,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-04-26:
 
 ## Session Continuity
 
-Last session: 2026-04-28
-Stopped at: 12-03 complete - Phase 12 gap closure finished
+Last session: 2026-04-29T04:04:11.586Z
+Stopped at: Phase 13 context gathered
 Resume command: `/gsd-execute-phase 13`
