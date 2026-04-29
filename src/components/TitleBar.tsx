@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, Copy, X, Package, Settings } from "lucide-react";
+import { Minus, Square, Copy, X, Package, Settings, PanelTop } from "lucide-react";
 
 const appWindow = getCurrentWindow();
 
 interface TitleBarProps {
   onSettingsOpen: () => void;
+  onFloatToggle: () => void;
+  floatVisible: boolean;
 }
 
 function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
@@ -15,7 +17,7 @@ function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
   appWindow.startDragging();
 }
 
-export function TitleBar({ onSettingsOpen }: TitleBarProps) {
+export function TitleBar({ onSettingsOpen, onFloatToggle, floatVisible }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -62,6 +64,15 @@ export function TitleBar({ onSettingsOpen }: TitleBarProps) {
       </div>
       <div data-tauri-drag-region className="flex-1" />
       <div className="flex items-center h-full">
+        <button
+          className={`titlebar-button ${floatVisible ? 'text-foreground' : ''}`}
+          onClick={onFloatToggle}
+          title="悬浮窗"
+          aria-label="切换悬浮窗"
+          aria-pressed={floatVisible}
+        >
+          <PanelTop className="w-[14px] h-[14px]" />
+        </button>
         <button
           className="titlebar-button"
           onClick={onSettingsOpen}

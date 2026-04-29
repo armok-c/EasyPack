@@ -19,6 +19,9 @@ interface UseTrayOptions {
   onQuit: () => void;
   enabled: boolean;
   appWindow: Window;
+  // Phase 13: 悬浮窗
+  onToggleFloat: () => void;
+  floatVisible: boolean;
 }
 
 const TRAY_ID = "main-tray";
@@ -34,6 +37,8 @@ export function useTray({
   onQuit,
   enabled,
   appWindow,
+  onToggleFloat,
+  floatVisible,
 }: UseTrayOptions) {
   const trayRef = useRef<TrayIcon | null>(null);
   const onExecuteRef = useRef(onExecute);
@@ -50,6 +55,11 @@ export function useTray({
   currentProjectRef.current = currentProject;
   const recentCommandsRef = useRef(recentCommands);
   recentCommandsRef.current = recentCommands;
+  // Phase 13: 悬浮窗 ref
+  const onToggleFloatRef = useRef(onToggleFloat);
+  onToggleFloatRef.current = onToggleFloat;
+  const floatVisibleRef = useRef(floatVisible);
+  floatVisibleRef.current = floatVisible;
 
   async function buildMenu(): Promise<Menu> {
     const toggleText = visibilityRef.current === "VISIBLE" ? "隐藏窗口" : "显示窗口";
@@ -70,11 +80,22 @@ export function useTray({
 
     const items: Array<MenuItem | PredefinedMenuItem | Menu> = [toggleItem];
 
+    // Phase 13: 悬浮窗 toggle 菜单项
+    const floatText = floatVisibleRef.current ? "关闭悬浮窗" : "打开悬浮窗";
+    const floatItem = await MenuItem.new({
+      id: "toggle-float",
+      text: floatText,
+      action: () => {
+        onToggleFloatRef.current();
+      },
+    });
+    items.push(floatItem);
+
     const hasProject = currentProjectRef.current !== null;
     const hasCommands = recentCommandsRef.current.length > 0;
 
     if (hasProject || hasCommands) {
-      items.push(await PredefinedMenuItem.new({ item: { item: "Separator" } }));
+      items.push(await PredefinedMenuItem.new({ item: "Separator" }));
     }
 
     if (hasProject) {
@@ -106,7 +127,7 @@ export function useTray({
     }
 
     if (hasProject || hasCommands) {
-      items.push(await PredefinedMenuItem.new({ item: { item: "Separator" } }));
+      items.push(await PredefinedMenuItem.new({ item: "Separator" }));
     }
 
     items.push(
@@ -222,5 +243,5 @@ export function useTray({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, currentProject, recentCommands, visibility, commands]);
+  }, [enabled, currentProject, recentCommands, visibility, commands, floatVisible]);
 }
