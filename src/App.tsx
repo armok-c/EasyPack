@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/Sidebar";
 import { MainArea } from "@/components/MainArea";
@@ -10,6 +10,7 @@ import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { useVisibilityState } from "@/hooks/useVisibilityState";
 import { useRecentCommands } from "@/hooks/useRecentCommands";
 import { useTray } from "@/hooks/useTray";
+import { useFloatWindow } from "@/hooks/useFloatWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./index.css";
 
@@ -86,6 +87,10 @@ function App() {
   const [trayEnabled, setTrayEnabled] = useState(true);
   const [closeToTray, setCloseToTray] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const closeToTrayRef = useRef(closeToTray);
+  closeToTrayRef.current = closeToTray;
+  const settingsLoadedRef = useRef(settingsLoaded);
+  settingsLoadedRef.current = settingsLoaded;
 
   // Phase 12: window visibility state machine
   const { visibility, hideToTray, showFromTray } = useVisibilityState();
@@ -112,6 +117,14 @@ function App() {
     recording: isRecording,
   });
 
+  // Phase 13: 悬浮窗
+  const { floatVisible, toggleFloat, destroyFloat } = useFloatWindow({
+    currentProject,
+    commands,
+    onExecute: handleExecuteWithRecent,
+    appWindow,
+  });
+
   // Phase 12: system tray
   useTray({
     currentProject,
@@ -121,22 +134,31 @@ function App() {
     onExecute: handleExecuteWithRecent,
     onShow: () => { showFromTray(); appWindow.show().catch(console.error); appWindow.setFocus().catch(console.error); },
     onHide: () => { hideToTray(); appWindow.hide().catch(console.error); },
-    onQuit: async () => { await appWindow.destroy(); },
+    onQuit: async () => {
+      await destroyFloat();
+      await appWindow.destroy();
+    },
     enabled: trayEnabled,
     appWindow,
+    onToggleFloat: toggleFloat,
+    floatVisible,
   });
 
-  // Phase 12: onCloseRequested interception (per D-07)
+  // Phase 12: onCloseRequested — always registered, reads state from refs
   useEffect(() => {
-    const shouldHide = settingsLoaded ? closeToTray : true;
-    if (!shouldHide) return;
     const unlisten = appWindow.onCloseRequested(async (event) => {
+      const shouldHide = settingsLoadedRef.current ? closeToTrayRef.current : true;
+      if (!shouldHide) return;
       event.preventDefault();
       hideToTray();
-      await appWindow.hide();
+      try {
+        await appWindow.hide();
+      } catch (err) {
+        console.error("Failed to hide window:", err);
+      }
     });
     return () => { unlisten.then((fn) => fn()); };
-  }, [closeToTray, hideToTray, settingsLoaded]);
+  }, [hideToTray]);
 
   // Phase 12: load tray settings from store on mount
   useEffect(() => {
@@ -178,6 +200,8 @@ function App() {
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <TitleBar
         onSettingsOpen={() => setSettingsOpen(true)}
+        onFloatToggle={toggleFloat}
+        floatVisible={floatVisible}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
