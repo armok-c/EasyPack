@@ -59,7 +59,7 @@ function FloatApp() {
     <div
       role="dialog"
       aria-label="EasyPack 悬浮窗"
-      className="w-[280px] h-auto max-h-[600px] flex flex-col bg-background border border-white/10 rounded-lg overflow-hidden"
+      className="w-[220px] h-auto max-h-[400px] flex flex-col bg-background border border-white/10 rounded-lg overflow-hidden"
     >
       {/* 拖拽区域 / Header */}
       <div
@@ -67,7 +67,7 @@ function FloatApp() {
         onMouseDown={handleDragStart}
       >
         <span
-          className="text-xs font-semibold text-foreground/80 truncate max-w-[200px]"
+          className="text-xs font-semibold text-foreground/80 truncate max-w-[160px]"
           aria-live="polite"
         >
           {project ? project.name : "EasyPack"}

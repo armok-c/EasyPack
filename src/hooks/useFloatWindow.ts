@@ -34,7 +34,7 @@ async function positionFloatTopRight(win: WebviewWindow) {
       const scale = primary.scaleFactor;
       const logicalRight = (x + width) / scale;
       const posY = y / scale + 16;
-      const posX = logicalRight - 280 - 16;
+      const posX = logicalRight - 220 - 16;
       await win.setPosition(new LogicalPosition(posX, posY));
     }
   } catch (err) {
@@ -95,10 +95,10 @@ export function useFloatWindow({
 
     const floatWin = new WebviewWindow("float", {
       url,
-      width: 280,
-      minWidth: 280,
-      maxWidth: 280,
-      height: 400,
+      width: 220,
+      minWidth: 220,
+      maxWidth: 220,
+      height: 300,
       minHeight: 200,
       decorations: false,
       shadow: true,
@@ -133,7 +133,43 @@ export function useFloatWindow({
     // 设置初始位置
     await positionFloatTopRight(floatWin);
 
-    // 监听悬浮窗发来的执行请求
+    // 监听悬浮窗发来的执行请求 + 关闭事件
+    try {
+      const unlistenExecute = await listen<{ command: string }>(
+        "float:execute",
+        (event) => {
+          const { command } = event.payload;
+          if (typeof command === "string" && command.length > 0) {
+            onExecuteRef.current(command);
+          }
+        }
+      );
+      unlistenersRef.current.push(unlistenExecute);
+
+      const unlistenClose = await floatWin.onCloseRequested(() => {
+        floatWindowRef.current = null;
+        setFloatVisible(false);
+        cleanupListeners();
+      });
+      unlistenersRef.current.push(unlistenClose);
+    } catch (err) {
+      // 监听器注册失败 -- 回滚：销毁已创建的窗口
+      try { await floatWin.destroy(); } catch { /* ignore */ }
+      throw err;
+    }
+
+    return floatWin;
+  }, [cleanupListeners]);
+
+  // 当窗口存在但 ref 失效时，重新领养该窗口
+  async function adoptFloatWindow(win: WebviewWindow): Promise<void> {
+    const unlistenClose = await win.onCloseRequested(() => {
+      floatWindowRef.current = null;
+      setFloatVisible(false);
+      cleanupListeners();
+    });
+    unlistenersRef.current.push(unlistenClose);
+
     const unlistenExecute = await listen<{ command: string }>(
       "float:execute",
       (event) => {
@@ -145,22 +181,15 @@ export function useFloatWindow({
     );
     unlistenersRef.current.push(unlistenExecute);
 
-    // 监听悬浮窗关闭事件（清理引用）
-    const unlistenClose = await floatWin.onCloseRequested(() => {
-      floatWindowRef.current = null;
-      setFloatVisible(false);
-      cleanupListeners();
-    });
-    unlistenersRef.current.push(unlistenClose);
-
-    return floatWin;
-  }, [cleanupListeners]);
+    floatWindowRef.current = win;
+  }
 
   // toggle 显示/隐藏
   const toggleFloat = useCallback(async () => {
-    // 检查窗口是否存活
     const existing = await WebviewWindow.getByLabel("float");
+
     if (existing && floatWindowRef.current) {
+      // 正常 toggle：ref 有效，窗口存在
       if (floatVisible) {
         await existing.hide();
         setFloatVisible(false);
@@ -169,20 +198,40 @@ export function useFloatWindow({
         await positionFloatTopRight(existing);
         await existing.setFocus();
         setFloatVisible(true);
-        // 重新同步最新状态（窗口可能错过了 hide 期间的变化）
         await syncState(existing);
       }
       return;
     }
 
-    // 窗口不存在（首次创建或已关闭后重新创建）
+    if (existing && !floatWindowRef.current) {
+      // Adopt：窗口存在但 ref 失效
+      try {
+        await adoptFloatWindow(existing);
+        if (floatVisible) {
+          await existing.hide();
+          setFloatVisible(false);
+        } else {
+          await existing.show();
+          await positionFloatTopRight(existing);
+          await existing.setFocus();
+          setFloatVisible(true);
+          await syncState(existing);
+        }
+        return;
+      } catch (err) {
+        // adopt 失败，销毁残留窗口后走创建路径
+        console.warn("Adopt float window failed, destroying and recreating:", err);
+        try { await existing.destroy(); } catch { /* ignore */ }
+      }
+    }
+
+    // 窗口不存在，首次创建
     if (isCreatingRef.current) return;
     isCreatingRef.current = true;
     try {
       const floatWin = await createFloat();
       floatWindowRef.current = floatWin;
       setFloatVisible(true);
-      // 首次创建后同步当前状态
       await syncState(floatWin);
     } catch (err) {
       console.error("Failed to create float window:", err);
