@@ -106,7 +106,11 @@ Plans:
   2. 鼠标接触隐藏窗口所在的屏幕边缘时，窗口平滑滑出
   3. 鼠标离开滑出的窗口后，窗口自动平滑收回隐藏
   4. 用户可以通过拖拽将窗口从边缘拉出，取消吸附状态
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 14-01-PLAN.md -- 几何工具 + 动画工具 + 三态状态机扩展 + 单元测试
+- [ ] 14-02-PLAN.md -- useEdgeDrawer 核心 hook + Rust 鼠标轮询 + capabilities 权限
+- [ ] 14-03-PLAN.md -- App.tsx 集成 + SettingsDialog + TitleBar + SnapIndicator + 人工验证
 **UI hint**: yes
 
 ## Progress
@@ -129,4 +133,4 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 11. 全局快捷键 | v1.2 | 2/2 | Complete    | 2026-04-27 |
 | 12. 系统托盘 | v1.2 | 3/3 | Complete | 2026-04-28 |
 | 13. 迷你悬浮窗 | v1.2 | 3/3 | Gap closure | - |
-| 14. 边缘抽屉 | v1.2 | 0/? | Not started | - |
+| 14. 边缘抽屉 | v1.2 | 0/3 | Planned | - |
