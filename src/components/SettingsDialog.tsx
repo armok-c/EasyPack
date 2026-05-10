@@ -15,6 +15,9 @@ interface SettingsDialogProps {
   onTrayEnabledChange: (enabled: boolean) => void;
   closeToTray: boolean;
   onCloseToTrayChange: (enabled: boolean) => void;
+  // Phase 14: 边缘抽屉
+  drawerEnabled: boolean;
+  onDrawerEnabledChange: (enabled: boolean) => void;
 }
 
 export function SettingsDialog({
@@ -24,6 +27,8 @@ export function SettingsDialog({
   onTrayEnabledChange,
   closeToTray,
   onCloseToTrayChange,
+  drawerEnabled,
+  onDrawerEnabledChange,
 }: SettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -71,6 +76,27 @@ export function SettingsDialog({
                   checked={closeToTray}
                   onCheckedChange={onCloseToTrayChange}
                   disabled={!trayEnabled}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: 边缘抽屉 */}
+          <div>
+            <div className="border-b border-white/10 pb-2 mb-4">
+              <Label>边缘抽屉</Label>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">启用边缘抽屉</p>
+                  <p className="text-xs text-muted-foreground">
+                    拖拽窗口到屏幕边缘自动隐藏，鼠标滑过边缘快速唤出
+                  </p>
+                </div>
+                <Switch
+                  checked={drawerEnabled}
+                  onCheckedChange={onDrawerEnabledChange}
                 />
               </div>
             </div>

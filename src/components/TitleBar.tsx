@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, Square, Copy, X, Package, Settings, PanelTop } from "lucide-react";
 
@@ -8,16 +8,20 @@ interface TitleBarProps {
   onSettingsOpen: () => void;
   onFloatToggle: () => void;
   floatVisible: boolean;
+  // Phase 14: 边缘抽屉
+  onDragEnd?: (() => Promise<void>) | null;
+  onDragWhileSnapped?: ((deltaX: number, deltaY: number) => void) | null;
+  drawerSnapEdge?: string | null;
 }
 
-function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
-  if (e.button !== 0) return;
-  const target = e.target as HTMLElement;
-  if (target.closest("button")) return;
-  appWindow.startDragging();
-}
-
-export function TitleBar({ onSettingsOpen, onFloatToggle, floatVisible }: TitleBarProps) {
+export function TitleBar({
+  onSettingsOpen,
+  onFloatToggle,
+  floatVisible,
+  onDragEnd,
+  onDragWhileSnapped,
+  drawerSnapEdge,
+}: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -41,6 +45,54 @@ export function TitleBar({ onSettingsOpen, onFloatToggle, floatVisible }: TitleB
   const handleMaximize = useCallback(async () => {
     await appWindow.toggleMaximize();
   }, []);
+
+  // Phase 14: 拖拽开始，记录起始位置用于吸附检测
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement;
+      if (target.closest("button")) return;
+
+      // Phase 14: 如果已处于吸附状态，记录拖拽起始位置
+      if (drawerSnapEdge) {
+        dragStartPosRef.current = { x: e.clientX, y: e.clientY };
+      } else {
+        dragStartPosRef.current = null;
+      }
+
+      appWindow.startDragging();
+
+      // Phase 14: 拖拽结束时检测吸附
+      if (onDragEnd) {
+        const handleUp = () => {
+          onDragEnd();
+          window.removeEventListener("mouseup", handleUp);
+        };
+        window.addEventListener("mouseup", handleUp);
+      }
+    },
+    [onDragEnd, drawerSnapEdge]
+  );
+
+  // Phase 14: 吸附状态下拖拽时检测位移
+  useEffect(() => {
+    if (!drawerSnapEdge || !onDragWhileSnapped) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      if (!dragStartPosRef.current) return;
+      const deltaX = e.clientX - dragStartPosRef.current.x;
+      const deltaY = e.clientY - dragStartPosRef.current.y;
+      const totalDelta = Math.abs(deltaX) + Math.abs(deltaY);
+      if (totalDelta > 5) {
+        onDragWhileSnapped(deltaX, deltaY);
+      }
+    }
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [drawerSnapEdge, onDragWhileSnapped]);
 
   async function handleClose() {
     await appWindow.close();
