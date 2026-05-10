@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import type { VisibilityState } from "../useVisibilityState";
 
 // ---- Mocks ----
@@ -54,6 +54,10 @@ vi.mock("@tauri-apps/api/event", () => ({
   emit: (...args: unknown[]) => mockEmit(...args),
 }));
 
+// ---- Static import after vi.mock (hoisted) ----
+
+import { useEdgeDrawer } from "../useEdgeDrawer";
+
 // ---- Helpers ----
 
 /** 默认主显示器 workArea (逻辑像素) */
@@ -100,7 +104,6 @@ describe("useEdgeDrawer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    // Default: no listener callback stored
     mockListen.mockResolvedValue(mockUnlisten);
   });
 
@@ -111,13 +114,11 @@ describe("useEdgeDrawer", () => {
   // ---- handleDragEnd: 吸附检测 ----
 
   it("handleDragEnd 在窗口左边缘距 workArea 5px 时触发吸附", async () => {
-    // 窗口左边缘 x=5, workArea 左边缘 x=0, 距离 5px <= 10px
     setupWindowAtPosition(5, 100, 720, 480);
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -139,8 +140,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -161,8 +161,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -183,8 +182,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -197,18 +195,16 @@ describe("useEdgeDrawer", () => {
     });
 
     // 应该先移除 minWidth 限制
-    expect(mockSetMinSize).toHaveBeenCalled();
-    // 应该调用 setPosition 和 setSize 进行动画
-    expect(mockSetPosition).toHaveBeenCalled();
-    expect(mockSetSize).toHaveBeenCalled();
-    // 应该触发 hideToDrawer
+    expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 0, height: 0 }));
+    // 应该触发 hideToDrawer（设置 DRAWER_HIDDEN 状态）
     expect(vis.hideToDrawer).toHaveBeenCalled();
+    // 应该通知 Rust 启动轮询
+    expect(mockEmit).toHaveBeenCalledWith("drawer:start-polling", expect.any(Object));
   });
 
   // ---- drawer:mouse-near-edge 事件触发滑出 ----
 
   it("收到 drawer:mouse-near-edge 事件时触发滑出动画", async () => {
-    // 先吸附
     setupWindowAtPosition(0, 100, 720, 480);
 
     let eventHandler: ((event: { payload: unknown }) => void) | null = null;
@@ -221,8 +217,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -235,11 +230,6 @@ describe("useEdgeDrawer", () => {
       await result.current.handleDragEnd();
     });
 
-    // 模拟进入 DRAWER_HIDDEN 状态
-    // (hideToDrawer mock 已更新 vis 但 hook 读的是传入的 visibility prop)
-    // 需要重新 render 让 hook 读到新 visibility
-    // 为测试简便，直接通过事件触发
-    // eventHandler 应该被设置了
     expect(eventHandler).not.toBeNull();
 
     // 模拟鼠标接近边缘
@@ -258,8 +248,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -277,14 +266,12 @@ describe("useEdgeDrawer", () => {
       result.current.handleMouseLeave();
     });
 
-    // 定时器到期前不应有额外操作
     // 推进时间 400ms
     await act(async () => {
       vi.advanceTimersByTime(400);
     });
 
-    // 应该再次调用 hideToDrawer（从滑出态收回）
-    // hideToDrawer 已被调用过一次（吸附时），收回时再调一次
+    // hideToDrawer 应至少调用 2 次（吸附 + 收回）
     expect(vis.hideToDrawer.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -293,8 +280,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -335,8 +321,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -351,12 +336,11 @@ describe("useEdgeDrawer", () => {
 
     expect(result.current.snapEdge).toBe("left");
 
-    // 拖拽超过 20px
+    // 拖拽超过 20px (delta = 15 + 10 = 25 > 20)
     act(() => {
       result.current.handleDragWhileSnapped(15, 10);
     });
 
-    // 总 delta = 15 + 10 = 25 > 20
     expect(result.current.snapEdge).toBeNull();
     expect(mockEmit).toHaveBeenCalledWith("drawer:stop-polling");
     // 恢复 minWidth
@@ -370,8 +354,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -390,12 +373,12 @@ describe("useEdgeDrawer", () => {
   // ---- 吸附时记录原始位置 ----
 
   it("吸附时记录原始窗口位置和尺寸", async () => {
-    setupWindowAtPosition(50, 100, 720, 480);
+    // 窗口紧贴左边缘 (x=3 <= 10px 阈值)
+    setupWindowAtPosition(3, 100, 720, 480);
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -407,8 +390,7 @@ describe("useEdgeDrawer", () => {
       await result.current.handleDragEnd();
     });
 
-    // 在吸附后取消吸附时应该恢复到原始位置
-    // 先验证吸附成功（snapEdge 不为 null）
+    // 吸附成功（snapEdge 不为 null）
     expect(result.current.snapEdge).not.toBeNull();
   });
 
@@ -419,8 +401,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -432,7 +413,7 @@ describe("useEdgeDrawer", () => {
       await result.current.handleDragEnd();
     });
 
-    // 应该先调用 setMinSize(0, 0) 移除限制
+    // 应该调用 setMinSize(0, 0) 移除限制
     expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 0, height: 0 }));
   });
 
@@ -441,8 +422,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
@@ -457,7 +437,7 @@ describe("useEdgeDrawer", () => {
 
     mockSetMinSize.mockClear();
 
-    // 取消吸附
+    // 取消吸附 (delta = 15 + 10 = 25 > 20)
     act(() => {
       result.current.handleDragWhileSnapped(15, 10);
     });
@@ -473,8 +453,7 @@ describe("useEdgeDrawer", () => {
 
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../useEdgeDrawer").useEdgeDrawer({
+      useEdgeDrawer({
         visibility: vis.visibility,
         hideToDrawer: vis.hideToDrawer,
         showFromDrawer: vis.showFromDrawer,
