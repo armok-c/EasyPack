@@ -11,7 +11,12 @@ import { useVisibilityState } from "@/hooks/useVisibilityState";
 import { useRecentCommands } from "@/hooks/useRecentCommands";
 import { useTray } from "@/hooks/useTray";
 import { useFloatWindow } from "@/hooks/useFloatWindow";
+import { useEdgeDrawer } from "@/hooks/useEdgeDrawer";
+import { SnapIndicator } from "@/components/SnapIndicator";
+import { detectSnapEdge } from "@/lib/drawer-geometry";
+import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import "./index.css";
 
 const appWindow = getCurrentWindow();
@@ -87,13 +92,21 @@ function App() {
   const [trayEnabled, setTrayEnabled] = useState(true);
   const [closeToTray, setCloseToTray] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  // Phase 14: drawer settings state
+  const [drawerEnabled, setDrawerEnabled] = useState(false);
+  // Phase 14: 拖拽中实时吸附预览状态 (D-04)
+  const [snapPreviewEdge, setSnapPreviewEdge] = useState<SnapEdge | null>(null);
+  const [snapPreviewWorkArea, setSnapPreviewWorkArea] = useState<Rect | null>(null);
   const closeToTrayRef = useRef(closeToTray);
   closeToTrayRef.current = closeToTray;
   const settingsLoadedRef = useRef(settingsLoaded);
   settingsLoadedRef.current = settingsLoaded;
+  // Phase 14: visibility ref for stale-closure prevention
+  const visibilityRef = useRef(visibility);
+  visibilityRef.current = visibility;
 
-  // Phase 12: window visibility state machine
-  const { visibility, hideToTray, showFromTray } = useVisibilityState();
+  // Phase 12: window visibility state machine (Phase 14: three-state)
+  const { visibility, hideToTray, showFromTray, hideToDrawer, showFromDrawer, isDrawerHidden } = useVisibilityState();
 
   // Phase 12: recent commands tracking
   const { recentCommands, addRecentCommand } = useRecentCommands({ store });
@@ -122,7 +135,14 @@ function App() {
     currentProject,
     commands,
     onExecute: handleExecuteWithRecent,
-    appWindow,
+  });
+
+  // Phase 14: 边缘抽屉
+  const { handleDragEnd, handleMouseEnter, handleMouseLeave, handleDragWhileSnapped, restoreFromDrawer, isDrawerAnimating, snapEdge } = useEdgeDrawer({
+    visibility,
+    hideToDrawer,
+    showFromDrawer,
+    drawerEnabled,
   });
 
   // Phase 12: system tray
@@ -132,7 +152,16 @@ function App() {
     recentCommands,
     visibility,
     onExecute: handleExecuteWithRecent,
-    onShow: () => { showFromTray(); appWindow.show().catch(console.error); appWindow.setFocus().catch(console.error); },
+    onShow: () => {
+      if (isDrawerHidden || visibility === "DRAWER_HIDDEN") {
+        restoreFromDrawer();
+        showFromDrawer();
+      } else {
+        showFromTray();
+      }
+      appWindow.show().catch(console.error);
+      appWindow.setFocus().catch(console.error);
+    },
     onHide: () => { hideToTray(); appWindow.hide().catch(console.error); },
     onQuit: async () => {
       await destroyFloat();
@@ -142,7 +171,24 @@ function App() {
     appWindow,
     onToggleFloat: toggleFloat,
     floatVisible,
+    onRestoreFromDrawer: restoreFromDrawer,
   });
+
+  // 监听 Rust 端发出的窗口可见性变更事件。
+  // Rust 端在全局菜单/托盘事件处理器中直接操作窗口，
+  // 然后通过这些事件通知前端同步 React 状态。
+  useEffect(() => {
+    const unlistenShown = listen("main:shown-from-rust", () => {
+      showFromTray();
+    });
+    const unlistenHidden = listen("main:hidden-from-rust", () => {
+      hideToTray();
+    });
+    return () => {
+      unlistenShown.then((fn) => fn());
+      unlistenHidden.then((fn) => fn());
+    };
+  }, [showFromTray, hideToTray]);
 
   // Phase 12: onCloseRequested — always registered, reads state from refs
   useEffect(() => {
@@ -150,6 +196,11 @@ function App() {
       const shouldHide = settingsLoadedRef.current ? closeToTrayRef.current : true;
       if (!shouldHide) return;
       event.preventDefault();
+      // Phase 14: DRAWER_HIDDEN 状态下先恢复窗口位置
+      if (visibilityRef.current === "DRAWER_HIDDEN") {
+        restoreFromDrawer();
+        showFromDrawer();
+      }
       hideToTray();
       try {
         await appWindow.hide();
@@ -158,7 +209,7 @@ function App() {
       }
     });
     return () => { unlisten.then((fn) => fn()); };
-  }, [hideToTray]);
+  }, [hideToTray, restoreFromDrawer, showFromDrawer]);
 
   // Phase 12: load tray settings from store on mount
   useEffect(() => {
@@ -167,6 +218,7 @@ function App() {
       if (!store) return;
       const saved = await store.get<boolean>("trayEnabled");
       const savedCTT = await store.get<boolean>("closeToTray");
+      const savedDrawer = await store.get<boolean>("drawerEnabled");
       if (mounted) {
         const effectiveTrayEnabled = saved !== undefined && saved !== null ? saved : true;
         const effectiveCloseToTray = effectiveTrayEnabled
@@ -174,6 +226,7 @@ function App() {
           : false;
         setTrayEnabled(effectiveTrayEnabled);
         setCloseToTray(effectiveCloseToTray);
+        setDrawerEnabled(savedDrawer !== undefined && savedDrawer !== null ? savedDrawer : false);
         setSettingsLoaded(true);
       }
     }
@@ -196,12 +249,86 @@ function App() {
     await store?.set("closeToTray", enabled);
   }, [store]);
 
+  // Phase 14: drawer enabled persistence
+  const handleDrawerEnabledChange = useCallback(async (enabled: boolean) => {
+    setDrawerEnabled(enabled);
+    await store?.set("drawerEnabled", enabled);
+  }, [store]);
+
+  // Phase 14: D-04 拖拽中实时窗口位置检测驱动 SnapIndicator
+  useEffect(() => {
+    if (!drawerEnabled) return;
+    let unlisten: (() => void) | null = null;
+
+    async function setupMoveListener() {
+      const currentWindow = getCurrentWindow();
+      unlisten = await currentWindow.onMoved(async () => {
+        // 只在未吸附且未在动画中时检测（即用户正在拖拽）
+        if (snapEdge !== null || isDrawerAnimating) {
+          setSnapPreviewEdge(null);
+          return;
+        }
+        try {
+          const pos = await currentWindow.outerPosition();
+          const size = await currentWindow.innerSize();
+          const monitor = await currentWindow.primaryMonitor();
+          if (!monitor) return;
+
+          const scaleFactor = monitor.scaleFactor;
+          const workArea: Rect = {
+            x: monitor.workArea.position.x / scaleFactor,
+            y: monitor.workArea.position.y / scaleFactor,
+            w: monitor.workArea.size.width / scaleFactor,
+            h: monitor.workArea.size.height / scaleFactor,
+          };
+          const windowInfo: WindowInfo = {
+            x: pos.x / scaleFactor,
+            y: pos.y / scaleFactor,
+            w: size.width / scaleFactor,
+            h: size.height / scaleFactor,
+            isMaximized: false,
+          };
+
+          const snapResult = detectSnapEdge(windowInfo, { workArea, scaleFactor, isPrimary: true });
+          if (snapResult) {
+            setSnapPreviewEdge(snapResult.edge);
+            setSnapPreviewWorkArea(workArea);
+          } else {
+            setSnapPreviewEdge(null);
+            setSnapPreviewWorkArea(null);
+          }
+        } catch {
+          // 窗口操作可能失败（窗口已销毁等），静默忽略
+        }
+      });
+    }
+    setupMoveListener();
+
+    return () => {
+      unlisten?.();
+    };
+  }, [drawerEnabled, snapEdge, isDrawerAnimating]);
+
+  // Phase 14: 拖拽结束时清除预览
+  const handleDragEndWithCleanup = useCallback(async () => {
+    setSnapPreviewEdge(null);
+    setSnapPreviewWorkArea(null);
+    await handleDragEnd();
+  }, [handleDragEnd]);
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden">
+    <div
+      className="flex flex-col h-screen w-screen overflow-hidden"
+      onMouseEnter={snapEdge ? handleMouseEnter : undefined}
+      onMouseLeave={snapEdge ? handleMouseLeave : undefined}
+    >
       <TitleBar
         onSettingsOpen={() => setSettingsOpen(true)}
         onFloatToggle={toggleFloat}
         floatVisible={floatVisible}
+        onDragEnd={drawerEnabled ? handleDragEndWithCleanup : null}
+        onDragWhileSnapped={drawerEnabled ? handleDragWhileSnapped : null}
+        drawerSnapEdge={snapEdge}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
@@ -246,7 +373,10 @@ function App() {
         onTrayEnabledChange={handleTrayEnabledChange}
         closeToTray={closeToTray}
         onCloseToTrayChange={handleCloseToTrayChange}
+        drawerEnabled={drawerEnabled}
+        onDrawerEnabledChange={handleDrawerEnabledChange}
       />
+      <SnapIndicator edge={snapPreviewEdge} workArea={snapPreviewWorkArea} />
       <Toaster richColors position="bottom-right" duration={1500} />
     </div>
   );

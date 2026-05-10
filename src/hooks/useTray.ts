@@ -22,6 +22,8 @@ interface UseTrayOptions {
   // Phase 13: 悬浮窗
   onToggleFloat: () => void;
   floatVisible: boolean;
+  // Phase 14: 边缘抽屉
+  onRestoreFromDrawer?: () => void;
 }
 
 const TRAY_ID = "main-tray";
@@ -39,6 +41,7 @@ export function useTray({
   appWindow,
   onToggleFloat,
   floatVisible,
+  onRestoreFromDrawer,
 }: UseTrayOptions) {
   const trayRef = useRef<TrayIcon | null>(null);
   const onExecuteRef = useRef(onExecute);
@@ -60,6 +63,9 @@ export function useTray({
   onToggleFloatRef.current = onToggleFloat;
   const floatVisibleRef = useRef(floatVisible);
   floatVisibleRef.current = floatVisible;
+  // Phase 14: 边缘抽屉 ref
+  const onRestoreFromDrawerRef = useRef(onRestoreFromDrawer);
+  onRestoreFromDrawerRef.current = onRestoreFromDrawer;
 
   async function buildMenu(): Promise<Menu> {
     const toggleText = visibilityRef.current === "VISIBLE" ? "隐藏窗口" : "显示窗口";
@@ -71,6 +77,10 @@ export function useTray({
           onHideRef.current();
           appWindow.hide().catch(console.error);
         } else {
+          // Phase 14: 如果从 DRAWER_HIDDEN 恢复，需要先恢复窗口位置
+          if (visibilityRef.current === "DRAWER_HIDDEN" && onRestoreFromDrawerRef.current) {
+            onRestoreFromDrawerRef.current();
+          }
           onShowRef.current();
           appWindow.show().catch(console.error);
           appWindow.setFocus().catch(console.error);
@@ -178,6 +188,10 @@ export function useTray({
           showMenuOnLeftClick: false,
           action: (event) => {
             if (event.type === "Click" && event.button === "Left") {
+              // Phase 14: 如果从 DRAWER_HIDDEN 恢复，需要先恢复窗口位置
+              if (visibilityRef.current === "DRAWER_HIDDEN" && onRestoreFromDrawerRef.current) {
+                onRestoreFromDrawerRef.current();
+              }
               onShowRef.current();
               appWindow.show().catch(console.error);
               appWindow.setFocus().catch(console.error);
