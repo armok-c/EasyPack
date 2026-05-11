@@ -178,8 +178,13 @@ function App() {
   // Rust 端在全局菜单/托盘事件处理器中直接操作窗口，
   // 然后通过这些事件通知前端同步 React 状态。
   useEffect(() => {
-    const unlistenShown = listen("main:shown-from-rust", () => {
-      showFromTray();
+    const unlistenShown = listen("main:shown-from-rust", async () => {
+      if (isDrawerHidden || visibilityRef.current === "DRAWER_HIDDEN") {
+        await restoreFromDrawer();
+        showFromDrawer();
+      } else {
+        showFromTray();
+      }
     });
     const unlistenHidden = listen("main:hidden-from-rust", () => {
       hideToTray();
@@ -188,7 +193,7 @@ function App() {
       unlistenShown.then((fn) => fn());
       unlistenHidden.then((fn) => fn());
     };
-  }, [showFromTray, hideToTray]);
+  }, [showFromTray, hideToTray, showFromDrawer, restoreFromDrawer, isDrawerHidden]);
 
   // Phase 12: onCloseRequested — always registered, reads state from refs
   useEffect(() => {
