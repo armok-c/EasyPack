@@ -242,14 +242,6 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       if (visibilityRef.current !== "VISIBLE") return;
       if (!originalRectRef.current) return;
 
-      const sliverRect = calculateSliverRect(
-        snapEdgeRef.current,
-        originalRectRef.current, // 使用原始位置作为 workArea 近似
-        1 // 逻辑像素
-      );
-
-      // 注意：这里需要准确的 workArea，暂时用 originalRectRef 近似
-      // 在实际集成时可通过 primaryMonitor 获取准确 workArea
       try {
         const monitor = await appWindow.primaryMonitor();
         if (!monitor) return;
@@ -262,9 +254,6 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         };
 
         const actualSliverRect = calculateSliverRect(snapEdgeRef.current, workArea, scale);
-        const from = await getCurrentWindowState();
-        if (!from) return;
-
         const to: AnimState = {
           x: actualSliverRect.x,
           y: actualSliverRect.y,
@@ -273,6 +262,13 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         };
 
         operationLock.current = operationLock.current.then(async () => {
+          // 在 lock 内重新检查状态（可能已变化）
+          if (snapEdgeRef.current === null) return;
+          if (visibilityRef.current !== "VISIBLE") return;
+
+          const from = await getCurrentWindowState();
+          if (!from) return;
+
           setIsAnimating(true);
           try {
             await animateWindow(from, to, ANIMATION_DURATION_MS, (state) => {
