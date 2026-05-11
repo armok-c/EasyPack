@@ -183,12 +183,12 @@ pub fn run() {
 
                         if in_x && in_y {
                             let _ = ah.emit("drawer:mouse-near-edge", ());
-                            // 停止自身
+                            // 停止自身：先释放 pr 再获取 sr，避免与 start-polling
+                            // handler（先 sr 后 pr）形成 ABBA 死锁
                             {
                                 let mut running = pr2.lock().unwrap_or_else(|e| e.into_inner());
                                 *running = false;
-                            }
-                            // 清空 sliver rect
+                            } // release pr BEFORE acquiring sr
                             {
                                 let mut rect = sr2.lock().unwrap_or_else(|e| e.into_inner());
                                 *rect = None;
