@@ -9,7 +9,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { listen, emit } from "@tauri-apps/api/event";
 import { detectSnapEdge, calculateSliverRect } from "@/lib/drawer-geometry";
@@ -98,7 +98,7 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       const pos = await appWindow.outerPosition();
       const size = await appWindow.innerSize();
       const isMax = await appWindow.isMaximized();
-      const monitor = await appWindow.primaryMonitor();
+      const monitor = await primaryMonitor();
 
       if (!monitor) return;
 
@@ -243,7 +243,7 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       if (!originalRectRef.current) return;
 
       try {
-        const monitor = await appWindow.primaryMonitor();
+        const monitor = await primaryMonitor();
         if (!monitor) return;
         const scale = monitor.scaleFactor;
         const workArea = {
@@ -297,7 +297,7 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
   // ---- handleDragWhileSnapped: 取消吸附检测 ----
 
   const handleDragWhileSnapped = useCallback(
-    (deltaX: number, deltaY: number) => {
+    async (deltaX: number, deltaY: number) => {
       if (snapEdgeRef.current === null) return;
 
       const delta = Math.abs(deltaX) + Math.abs(deltaY);
@@ -306,22 +306,28 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       // 取消吸附
       emit("drawer:stop-polling");
 
-      // 恢复 minWidth
-      appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-
       // 恢复到原始位置（如果有）
       const orig = originalRectRef.current;
       if (orig) {
         const to: AnimState = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
         operationLock.current = operationLock.current.then(async () => {
           await applyAnimState(to);
-        });
-      }
 
-      // 清除吸附状态
-      snapEdgeRef.current = null;
-      setCurrentSnapEdge(null);
-      originalRectRef.current = null;
+          // 恢复 minWidth AFTER animation
+          await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+
+          // 清除吸附状态 AFTER animation
+          snapEdgeRef.current = null;
+          setCurrentSnapEdge(null);
+          originalRectRef.current = null;
+        });
+      } else {
+        // 没有原始位置，直接恢复 minWidth 和清除状态
+        await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+        snapEdgeRef.current = null;
+        setCurrentSnapEdge(null);
+        originalRectRef.current = null;
+      }
 
       // 如果不是 VISIBLE 状态，恢复
       if (visibilityRef.current !== "VISIBLE") {
@@ -353,24 +359,20 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       operationLock.current = operationLock.current.then(async () => {
         setIsAnimating(true);
         try {
-          await animateWindow(to, to, 0, (state) => {
-            applyAnimState(state);
-          });
-          // 直接设置到目标位置（0ms 动画等于瞬移）
           await applyAnimState(to);
         } finally {
           setIsAnimating(false);
         }
+
+        // 恢复 minWidth AFTER animation
+        await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+
+        // 清除吸附状态 AFTER animation
+        snapEdgeRef.current = null;
+        setCurrentSnapEdge(null);
+        originalRectRef.current = null;
       });
     }
-
-    // 恢复 minWidth
-    await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-
-    // 清除吸附状态
-    snapEdgeRef.current = null;
-    setCurrentSnapEdge(null);
-    originalRectRef.current = null;
 
     // 注意：不调用 showFromDrawer() 或改变 visibility 状态
     // 由调用方（App.tsx 中的 onShow / onCloseRequested）负责
@@ -403,7 +405,7 @@ async function getCurrentWindowState(): Promise<AnimState | null> {
     const win = getCurrentWindow();
     const pos = await win.outerPosition();
     const size = await win.innerSize();
-    const monitor = await win.primaryMonitor();
+    const monitor = await primaryMonitor();
     if (!monitor) return null;
 
     const scale = monitor.scaleFactor;

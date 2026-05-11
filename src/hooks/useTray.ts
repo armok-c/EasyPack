@@ -77,10 +77,6 @@ export function useTray({
           onHideRef.current();
           appWindow.hide().catch(console.error);
         } else {
-          // Phase 14: 如果从 DRAWER_HIDDEN 恢复，需要先恢复窗口位置
-          if (visibilityRef.current === "DRAWER_HIDDEN" && onRestoreFromDrawerRef.current) {
-            await onRestoreFromDrawerRef.current();
-          }
           onShowRef.current();
           appWindow.show().catch(console.error);
           appWindow.setFocus().catch(console.error);
@@ -188,10 +184,6 @@ export function useTray({
           showMenuOnLeftClick: false,
           action: async (event) => {
             if (event.type === "Click" && event.button === "Left") {
-              // Phase 14: 如果从 DRAWER_HIDDEN 恢复，需要先恢复窗口位置
-              if (visibilityRef.current === "DRAWER_HIDDEN" && onRestoreFromDrawerRef.current) {
-                await onRestoreFromDrawerRef.current();
-              }
               onShowRef.current();
               appWindow.show().catch(console.error);
               appWindow.setFocus().catch(console.error);

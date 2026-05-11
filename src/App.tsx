@@ -15,7 +15,7 @@ import { useEdgeDrawer } from "@/hooks/useEdgeDrawer";
 import { SnapIndicator } from "@/components/SnapIndicator";
 import { detectSnapEdge } from "@/lib/drawer-geometry";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import "./index.css";
 
@@ -96,17 +96,16 @@ function App() {
   const [drawerEnabled, setDrawerEnabled] = useState(false);
   // Phase 14: 拖拽中实时吸附预览状态 (D-04)
   const [snapPreviewEdge, setSnapPreviewEdge] = useState<SnapEdge | null>(null);
-  const [snapPreviewWorkArea, setSnapPreviewWorkArea] = useState<Rect | null>(null);
   const closeToTrayRef = useRef(closeToTray);
   closeToTrayRef.current = closeToTray;
   const settingsLoadedRef = useRef(settingsLoaded);
   settingsLoadedRef.current = settingsLoaded;
+  // Phase 12: window visibility state machine (Phase 14: three-state)
+  const { visibility, hideToTray, showFromTray, hideToDrawer, showFromDrawer, isDrawerHidden } = useVisibilityState();
+
   // Phase 14: visibility ref for stale-closure prevention
   const visibilityRef = useRef(visibility);
   visibilityRef.current = visibility;
-
-  // Phase 12: window visibility state machine (Phase 14: three-state)
-  const { visibility, hideToTray, showFromTray, hideToDrawer, showFromDrawer, isDrawerHidden } = useVisibilityState();
 
   // Phase 12: recent commands tracking
   const { recentCommands, addRecentCommand } = useRecentCommands({ store });
@@ -278,7 +277,7 @@ function App() {
         try {
           const pos = await currentWindow.outerPosition();
           const size = await currentWindow.innerSize();
-          const monitor = await currentWindow.primaryMonitor();
+          const monitor = await primaryMonitor();
           if (!monitor) return;
 
           const scaleFactor = monitor.scaleFactor;
@@ -299,10 +298,8 @@ function App() {
           const snapResult = detectSnapEdge(windowInfo, { workArea, scaleFactor, isPrimary: true });
           if (snapResult) {
             setSnapPreviewEdge(snapResult.edge);
-            setSnapPreviewWorkArea(workArea);
           } else {
             setSnapPreviewEdge(null);
-            setSnapPreviewWorkArea(null);
           }
         } catch {
           // 窗口操作可能失败（窗口已销毁等），静默忽略
@@ -322,7 +319,6 @@ function App() {
   // Phase 14: 拖拽结束时清除预览
   const handleDragEndWithCleanup = useCallback(async () => {
     setSnapPreviewEdge(null);
-    setSnapPreviewWorkArea(null);
     await handleDragEnd();
   }, [handleDragEnd]);
 
@@ -386,7 +382,7 @@ function App() {
         drawerEnabled={drawerEnabled}
         onDrawerEnabledChange={handleDrawerEnabledChange}
       />
-      <SnapIndicator edge={snapPreviewEdge} workArea={snapPreviewWorkArea} />
+      <SnapIndicator edge={snapPreviewEdge} />
       <Toaster richColors position="bottom-right" duration={1500} />
     </div>
   );

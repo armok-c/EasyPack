@@ -24,6 +24,7 @@ const mockWindow = {
 
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => mockWindow,
+  primaryMonitor: () => mockPrimaryMonitor(),
 }));
 
 vi.mock("@tauri-apps/api/dpi", () => ({
@@ -52,6 +53,15 @@ const mockEmit = vi.fn().mockResolvedValue(undefined);
 vi.mock("@tauri-apps/api/event", () => ({
   listen: (...args: unknown[]) => mockListen(...args),
   emit: (...args: unknown[]) => mockEmit(...args),
+}));
+
+const mockAnimateWindow = vi.fn().mockImplementation(async (_from: unknown, to: unknown, _duration: unknown, onUpdate?: (state: unknown, t: number) => void) => {
+  if (onUpdate) onUpdate(to, 1);
+});
+
+vi.mock("@/lib/drawer-animation", () => ({
+  animateWindow: (...args: unknown[]) => mockAnimateWindow(...args),
+  easeInOut: (t: number) => t,
 }));
 
 // ---- Static import after vi.mock (hoisted) ----
@@ -337,8 +347,9 @@ describe("useEdgeDrawer", () => {
     expect(result.current.snapEdge).toBe("left");
 
     // 拖拽超过 20px (delta = 15 + 10 = 25 > 20)
-    act(() => {
+    await act(async () => {
       result.current.handleDragWhileSnapped(15, 10);
+      await Promise.resolve();
     });
 
     expect(result.current.snapEdge).toBeNull();
@@ -438,8 +449,9 @@ describe("useEdgeDrawer", () => {
     mockSetMinSize.mockClear();
 
     // 取消吸附 (delta = 15 + 10 = 25 > 20)
-    act(() => {
+    await act(async () => {
       result.current.handleDragWhileSnapped(15, 10);
+      await Promise.resolve();
     });
 
     // 应该恢复 minWidth 到 600x400
@@ -474,6 +486,8 @@ describe("useEdgeDrawer", () => {
     // 调用 restoreFromDrawer
     await act(async () => {
       await result.current.restoreFromDrawer();
+      // Flush the operationLock promise chain
+      await Promise.resolve();
     });
 
     // 应该停止轮询
