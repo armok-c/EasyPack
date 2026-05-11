@@ -239,6 +239,7 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
     hideTimeoutRef.current = setTimeout(async () => {
       hideTimeoutRef.current = null;
       if (snapEdgeRef.current === null) return;
+      if (visibilityRef.current !== "VISIBLE") return;
       if (!originalRectRef.current) return;
 
       const sliverRect = calculateSliverRect(
