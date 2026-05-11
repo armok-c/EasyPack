@@ -155,16 +155,16 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         } finally {
           setIsAnimating(false);
         }
+
+        // 设置吸附边 AFTER animation completes
+        snapEdgeRef.current = edge;
+        setCurrentSnapEdge(edge);
+
+        // 触发 DRAWER_HIDDEN 状态 AFTER animation completes
+        hideToDrawerRef.current();
       });
 
-      // 设置吸附边
-      snapEdgeRef.current = edge;
-      setCurrentSnapEdge(edge);
-
-      // 触发 DRAWER_HIDDEN 状态
-      hideToDrawerRef.current();
-
-      // 通知 Rust 启动鼠标轮询
+      // 通知 Rust 启动鼠标轮询 (event-driven, not state-dependent)
       emit("drawer:start-polling", { sliverRect });
     } catch (err) {
       console.error("handleDragEnd failed:", err);
@@ -180,14 +180,14 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       const unlisten = await listen<{ sliverRect?: Rect }>(
         "drawer:mouse-near-edge",
         async () => {
-          // 停止 Rust 轮询
-          emit("drawer:stop-polling");
-
           operationLock.current = operationLock.current.then(async () => {
             // 所有 state 读取在 lock 内完成，避免 stale capture
             if (visibilityRef.current !== "DRAWER_HIDDEN") return;
             if (!originalRectRef.current) return;
             if (cancelled) return;
+
+            // 停止 Rust 轮询（在 lock 内防止重入）
+            emit("drawer:stop-polling");
 
             const orig = originalRectRef.current;
             const from = await getCurrentWindowState();
@@ -322,8 +322,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           originalRectRef.current = null;
         });
       } else {
-        // 没有原始位置，直接恢复 minWidth 和清除状态
+        // 没有原始位置，使用默认尺寸并居中
         await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+        await appWindow.setSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+        await appWindow.center();
         snapEdgeRef.current = null;
         setCurrentSnapEdge(null);
         originalRectRef.current = null;
@@ -353,26 +355,32 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
 
     // 恢复到原始位置
     const orig = originalRectRef.current;
-    if (orig) {
-      const to: AnimState = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
-
-      operationLock.current = operationLock.current.then(async () => {
-        setIsAnimating(true);
-        try {
-          await applyAnimState(to);
-        } finally {
-          setIsAnimating(false);
-        }
-
-        // 恢复 minWidth AFTER animation
-        await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-
-        // 清除吸附状态 AFTER animation
-        snapEdgeRef.current = null;
-        setCurrentSnapEdge(null);
-        originalRectRef.current = null;
-      });
+    if (!orig) {
+      // 没有原始位置，恢复默认尺寸并清除吸附状态
+      await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+      snapEdgeRef.current = null;
+      setCurrentSnapEdge(null);
+      return;
     }
+
+    const to: AnimState = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
+
+    operationLock.current = operationLock.current.then(async () => {
+      setIsAnimating(true);
+      try {
+        await applyAnimState(to);
+      } finally {
+        setIsAnimating(false);
+      }
+
+      // 恢复 minWidth AFTER animation
+      await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+
+      // 清除吸附状态 AFTER animation
+      snapEdgeRef.current = null;
+      setCurrentSnapEdge(null);
+      originalRectRef.current = null;
+    });
 
     // 注意：不调用 showFromDrawer() 或改变 visibility 状态
     // 由调用方（App.tsx 中的 onShow / onCloseRequested）负责
