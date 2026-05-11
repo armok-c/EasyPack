@@ -350,8 +350,8 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
     if (orig) {
       const to: AnimState = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
 
-      setIsAnimating(true);
       operationLock.current = operationLock.current.then(async () => {
+        setIsAnimating(true);
         try {
           await animateWindow(to, to, 0, (state) => {
             applyAnimState(state);
