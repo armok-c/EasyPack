@@ -129,15 +129,15 @@ pub fn run() {
                 let phys_w = sw * scale;
                 let phys_h = sh * scale;
 
-                // 存入共享状态
+                // 存入共享状态并原子地检查/设置 running flag（避免 TOCTOU 竞争）
                 {
-                    let mut rect = sr.lock().unwrap();
+                    let mut rect = sr.lock().unwrap_or_else(|e| e.into_inner());
                     *rect = Some((phys_x, phys_y, phys_w, phys_h));
-                }
-
-                // 设置 running flag
-                {
-                    let mut running = pr.lock().unwrap();
+                    let mut running = pr.lock().unwrap_or_else(|e| e.into_inner());
+                    if *running {
+                        // Thread already active; rect already updated above
+                        return;
+                    }
                     *running = true;
                 }
 
@@ -152,7 +152,7 @@ pub fn run() {
 
                         // 检查是否应该继续运行
                         {
-                            let running = pr2.lock().unwrap();
+                            let running = pr2.lock().unwrap_or_else(|e| e.into_inner());
                             if !*running {
                                 break;
                             }
@@ -160,7 +160,7 @@ pub fn run() {
 
                         // 检查是否还有 sliver rect
                         let rect_opt = {
-                            let rect = sr2.lock().unwrap();
+                            let rect = sr2.lock().unwrap_or_else(|e| e.into_inner());
                             *rect
                         };
                         let (rx, ry, rw, rh) = match rect_opt {
@@ -185,12 +185,12 @@ pub fn run() {
                             let _ = ah.emit("drawer:mouse-near-edge", ());
                             // 停止自身
                             {
-                                let mut running = pr2.lock().unwrap();
+                                let mut running = pr2.lock().unwrap_or_else(|e| e.into_inner());
                                 *running = false;
                             }
                             // 清空 sliver rect
                             {
-                                let mut rect = sr2.lock().unwrap();
+                                let mut rect = sr2.lock().unwrap_or_else(|e| e.into_inner());
                                 *rect = None;
                             }
                             break;
@@ -205,12 +205,12 @@ pub fn run() {
             app.listen("drawer:stop-polling", move |_| {
                 // 停止轮询
                 {
-                    let mut running = pr3.lock().unwrap();
+                    let mut running = pr3.lock().unwrap_or_else(|e| e.into_inner());
                     *running = false;
                 }
                 // 清空 sliver rect
                 {
-                    let mut rect = sr3.lock().unwrap();
+                    let mut rect = sr3.lock().unwrap_or_else(|e| e.into_inner());
                     *rect = None;
                 }
             });
