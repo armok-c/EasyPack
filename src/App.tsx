@@ -198,7 +198,7 @@ function App() {
       event.preventDefault();
       // Phase 14: DRAWER_HIDDEN 状态下先恢复窗口位置
       if (visibilityRef.current === "DRAWER_HIDDEN") {
-        restoreFromDrawer();
+        await restoreFromDrawer();
         showFromDrawer();
       }
       hideToTray();
@@ -258,11 +258,13 @@ function App() {
   // Phase 14: D-04 拖拽中实时窗口位置检测驱动 SnapIndicator
   useEffect(() => {
     if (!drawerEnabled) return;
+    let cancelled = false;
     let unlisten: (() => void) | null = null;
 
     async function setupMoveListener() {
       const currentWindow = getCurrentWindow();
-      unlisten = await currentWindow.onMoved(async () => {
+      const fn = await currentWindow.onMoved(async () => {
+        if (cancelled) return;
         // 只在未吸附且未在动画中时检测（即用户正在拖拽）
         if (snapEdge !== null || isDrawerAnimating) {
           setSnapPreviewEdge(null);
@@ -301,10 +303,13 @@ function App() {
           // 窗口操作可能失败（窗口已销毁等），静默忽略
         }
       });
+      if (cancelled) { fn(); return; }
+      unlisten = fn;
     }
     setupMoveListener();
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, [drawerEnabled, snapEdge, isDrawerAnimating]);
