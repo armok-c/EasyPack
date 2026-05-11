@@ -72,14 +72,14 @@ export function useTray({
     const toggleItem = await MenuItem.new({
       id: "toggle-window",
       text: toggleText,
-      action: () => {
+      action: async () => {
         if (visibilityRef.current === "VISIBLE") {
           onHideRef.current();
           appWindow.hide().catch(console.error);
         } else {
           // Phase 14: 如果从 DRAWER_HIDDEN 恢复，需要先恢复窗口位置
           if (visibilityRef.current === "DRAWER_HIDDEN" && onRestoreFromDrawerRef.current) {
-            onRestoreFromDrawerRef.current();
+            await onRestoreFromDrawerRef.current();
           }
           onShowRef.current();
           appWindow.show().catch(console.error);
@@ -186,11 +186,11 @@ export function useTray({
           tooltip: "EasyPack",
           menu,
           showMenuOnLeftClick: false,
-          action: (event) => {
+          action: async (event) => {
             if (event.type === "Click" && event.button === "Left") {
               // Phase 14: 如果从 DRAWER_HIDDEN 恢复，需要先恢复窗口位置
               if (visibilityRef.current === "DRAWER_HIDDEN" && onRestoreFromDrawerRef.current) {
-                onRestoreFromDrawerRef.current();
+                await onRestoreFromDrawerRef.current();
               }
               onShowRef.current();
               appWindow.show().catch(console.error);
