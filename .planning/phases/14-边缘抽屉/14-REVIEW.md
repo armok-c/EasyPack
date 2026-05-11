@@ -1,6 +1,6 @@
 ---
 phase: 14-边缘抽屉
-reviewed: 2026-05-11T11:49:49Z
+reviewed: 2026-05-11T14:22:00Z
 depth: standard
 files_reviewed: 16
 files_reviewed_list:
@@ -20,188 +20,173 @@ files_reviewed_list:
   - src-tauri/capabilities/default.json
   - src-tauri/src/lib.rs
 findings:
-  critical: 2
-  warning: 4
-  info: 2
-  total: 8
+  critical: 1
+  warning: 3
+  info: 3
+  total: 7
 status: issues_found
 ---
 
-# Phase 14: Code Review Report (Iteration 3)
+# Phase 14: Code Review Report (Iteration 4)
 
-**Reviewed:** 2026-05-11T11:49:49Z
+**Reviewed:** 2026-05-11T14:22:00Z
 **Depth:** standard
 **Files Reviewed:** 16
 **Status:** issues_found
 
 ## Summary
 
-Re-review (iteration 3) of Phase 14 edge drawer implementation after two rounds of fixes. Previous iteration fixes for ABBA deadlock, operationLock timing, and DRAWER_HIDDEN handling have been correctly applied. However, **two new critical runtime bugs** were discovered:
+Iteration 4 review of Phase 14 edge drawer. All 6 findings from iteration 3 have been verified and correctly fixed:
 
-1. `primaryMonitor()` is a standalone function in `@tauri-apps/api/window`, not a method on the `Window` class. All 4 call sites (3 in `useEdgeDrawer.ts`, 1 in `App.tsx`) call it as `window.primaryMonitor()`, which will throw `TypeError` at runtime. The unit tests pass only because the mock adds this method to the mock window object.
+- CR-01 (primaryMonitor as Window method) -- FIXED: now imported as standalone function
+- CR-02 (visibility used before declaration) -- FIXED: useVisibilityState() moved before visibilityRef
+- WR-01/02 (ref mutations outside operationLock in restoreFromDrawer/handleDragWhileSnapped) -- FIXED: all mutations moved inside lock
+- WR-03 (no-op animation in restoreFromDrawer) -- FIXED: replaced with direct applyAnimState
+- WR-04 (duplicate restoreFromDrawer call from tray) -- FIXED: useTray no longer calls onRestoreFromDrawer
+- IN-01 (unused workArea prop on SnapIndicator) -- FIXED: prop removed
+- IN-02 (console.error in production code) -- remains (pre-existing across codebase, not specific to Phase 14)
 
-2. `visibilityRef` is initialized from the `visibility` variable before its declaration (hoisting violation), causing a `ReferenceError` at runtime in `App.tsx`.
+One new BLOCKER was discovered: `handleDragEnd` sets `snapEdgeRef`, `currentSnapEdge`, and calls `hideToDrawer()` **outside** the operationLock while the sliver-shrink animation is still queued. This creates a race where the window appears as "snapped" in state but is not yet physically collapsed, breaking `handleMouseLeave` and the polling thread contract.
 
-Additionally, several state mutation ordering issues remain in `restoreFromDrawer` and `handleDragWhileSnapped` where ref mutations occur outside the operationLock, creating potential race conditions.
+Additionally, the `handleDragWhileSnapped` else-branch and the `handleDragEnd` state mutation ordering present correctness risks.
 
-TypeScript compilation confirms these errors: `tsc --noEmit -p tsconfig.app.json` reports `TS2448` (used before declaration), `TS2339` (Property does not exist), and `TS2322` (Type mismatch on SnapIndicator workArea prop).
-
-## Verification of Previous Iteration Fixes
+## Verification of Iteration 3 Fixes
 
 | Fix | Status | Notes |
 |-----|--------|-------|
-| CR-01 (iter2): ABBA deadlock | VERIFIED | Lock ordering in Rust is now safe: `start-polling` holds sr+pr simultaneously but no other path reverses this order; polling thread and `stop-polling` never hold both locks at once |
-| CR-02 (iter2): DRAWER_HIDDEN in shown-from-rust | VERIFIED | Lines 182-184 in App.tsx handle DRAWER_HIDDEN state correctly |
-| WR-01 (iter2): handleMouseLeave captures state outside lock | VERIFIED | getCurrentWindowState now called inside operationLock (line 269) |
-| WR-02 (iter2): setIsAnimating outside lock | VERIFIED | setIsAnimating moved inside lock callback (line 272) |
-| WR-03 (iter2): useTray await restoreFromDrawer | VERIFIED | Line 82 awaits restoreFromDrawer |
+| CR-01: primaryMonitor standalone function | VERIFIED | `import { primaryMonitor } from "@tauri-apps/api/window"` at line 12, called correctly at lines 101, 246, 408 |
+| CR-02: visibility before declaration | VERIFIED | `useVisibilityState()` at line 104, `visibilityRef` at lines 107-108 |
+| WR-01: restoreFromDrawer mutations inside lock | VERIFIED | Lines 359-374: setMinSize + ref clears inside lock callback |
+| WR-02: handleDragWhileSnapped mutations inside lock | VERIFIED | Lines 313-323: all mutations inside lock; else branch (no orig) at lines 326-329 is correct for the no-animation path |
+| WR-03: no-op animation removed | VERIFIED | Line 362: direct `await applyAnimState(to)` |
+| WR-04: duplicate restoreFromDrawer call | VERIFIED | useTray.ts stores onRestoreFromDrawer in ref but never calls it; onShow callback in App.tsx handles drawer restore |
+| IN-01: unused workArea prop | VERIFIED | Line 385: `<SnapIndicator edge={snapPreviewEdge} />` -- no workArea prop |
 
 ## Critical Issues
 
-### CR-01: `primaryMonitor()` called as Window method -- TypeError at runtime (4 call sites)
+### CR-01: `handleDragEnd` mutates snap state outside operationLock -- race condition with shrink animation
 
-**File:** `src/hooks/useEdgeDrawer.ts:101,246,406` and `src/App.tsx:281`
-**Issue:** `primaryMonitor()` is a standalone exported function from `@tauri-apps/api/window`, NOT a method on the `Window` class. All four call sites invoke it as `appWindow.primaryMonitor()` or `currentWindow.primaryMonitor()`, which will throw `TypeError: ... .primaryMonitor is not a function` at runtime. The unit tests pass because the mock object in `useEdgeDrawer.test.ts` (line 19) adds `primaryMonitor` as a property -- masking the real API mismatch.
+**File:** `src/hooks/useEdgeDrawer.ts:160-165`
+**Issue:** After queuing the shrink-to-sliver animation inside `operationLock` (line 149), the function immediately sets `snapEdgeRef`, `currentSnapEdge`, and calls `hideToDrawer()` on lines 160-165 **outside** the lock. Since `operationLock.current = operationLock.current.then(...)` does not await the inner callback, these state changes take effect while the window is still at its original size (animation has not started yet).
 
-Confirmed by `tsc --noEmit -p tsconfig.app.json`:
-```
-src/App.tsx(281,47): error TS2339: Property 'primaryMonitor' does not exist on type 'Window'.
-```
-(Only App.tsx reports because useEdgeDrawer.ts is not directly compiled in the app tsconfig due to test mocks, but the same error applies.)
+This creates two concrete race conditions:
 
-**Fix:**
+1. **Mouse-leave during shrink animation**: If the user's mouse leaves the window during the 200ms shrink animation, `handleMouseLeave` fires, sees `snapEdgeRef.current !== null` (already set on line 161), and starts a 400ms delayed retraction timer. When the timer fires, `visibilityRef.current` is `"DRAWER_HIDDEN"` (set on line 165), so the retraction skips (line 267). But the polling thread was never started because `emit("drawer:start-polling")` fires on line 168 -- this actually works, but the window ends up in a liminal state where `snapEdge` is set but no polling is active.
+
+2. **Concurrent handleDragEnd calls**: Two rapid drag-end events could both pass the `visibilityRef.current !== "VISIBLE"` guard (line 95) before either animation completes, resulting in two animations queued but only one `snapEdge` state.
+
+The core issue is the same pattern that iteration 3 fixed in `restoreFromDrawer` and `handleDragWhileSnapped` -- state mutations must happen inside the lock to maintain consistency with the window's physical state.
+
+**Fix:** Move the state mutations inside the lock callback:
 ```typescript
-// In useEdgeDrawer.ts -- add import at top:
-import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
+operationLock.current = operationLock.current.then(async () => {
+  setIsAnimating(true);
+  try {
+    await animateWindow(from, to, ANIMATION_DURATION_MS, (state) => {
+      applyAnimState(state);
+    });
+  } finally {
+    setIsAnimating(false);
+  }
 
-// Replace all appWindow.primaryMonitor() calls:
-// Line 101:
-const monitor = await primaryMonitor();
-// Line 246:
-const monitor = await primaryMonitor();
-// Line 406:
-const monitor = await primaryMonitor();
+  // 设置吸附边 AFTER animation completes
+  snapEdgeRef.current = edge;
+  setCurrentSnapEdge(edge);
 
-// In App.tsx line 281:
-import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
-// Then:
-const monitor = await primaryMonitor();
-```
+  // 触发 DRAWER_HIDDEN 状态 AFTER animation completes
+  hideToDrawerRef.current();
+});
 
-### CR-02: `visibility` used before declaration in App.tsx
-
-**File:** `src/App.tsx:105-106`
-**Issue:** `visibilityRef` is initialized from the `visibility` variable on line 105, but `visibility` is not declared until line 109 (via `useVisibilityState()` destructuring). `const` declarations are not hoisted, so this causes a `ReferenceError: Cannot access 'visibility' before initialization` at runtime.
-
-Confirmed by `tsc`:
-```
-src/App.tsx(105,32): error TS2448: Block-scoped variable 'visibility' used before its declaration.
-```
-
-**Fix:** Move the `useVisibilityState()` call (line 109) to before the `visibilityRef` initialization (lines 105-106):
-```typescript
-// Phase 12: window visibility state machine (Phase 14: three-state)
-const { visibility, hideToTray, showFromTray, hideToDrawer, showFromDrawer, isDrawerHidden } = useVisibilityState();
-
-// Phase 14: visibility ref for stale-closure prevention
-const visibilityRef = useRef(visibility);
-visibilityRef.current = visibility;
+// 通知 Rust 启动鼠标轮询 (can remain outside -- event-driven, not state-dependent)
+emit("drawer:start-polling", { sliverRect });
 ```
 
 ## Warnings
 
-### WR-01: `restoreFromDrawer` mutates refs outside operationLock
+### WR-01: `handleDragWhileSnapped` else-branch does not restore window position
 
-**File:** `src/hooks/useEdgeDrawer.ts:367-373`
-**Issue:** After queuing the window position restore animation inside `operationLock` (line 353), the function immediately clears `snapEdgeRef`, `currentSnapEdge`, and `originalRectRef` on lines 371-373 **outside** the lock. Since `operationLock.current = operationLock.current.then(...)` does not await the inner async callback, these state mutations happen before the animation completes. If another operation (e.g., `handleMouseLeave` timer fires) checks these refs between the mutation and the animation completion, it will see inconsistent state (refs cleared but window still in sliver position).
+**File:** `src/hooks/useEdgeDrawer.ts:324-330`
+**Issue:** When `originalRectRef.current` is null (no original position saved), the else branch restores `minSize` and clears refs but does **not** move the window back to a usable position. The window remains at its sliver size (2px wide/tall) with no way to restore it. While `originalRectRef` should normally always be set when `snapEdgeRef` is set, this is a defensive gap -- if the ref is somehow cleared (e.g., by a concurrent `restoreFromDrawer`), the user is stuck with an invisible window.
 
-Additionally, `setMinSize(600, 400)` on line 368 is `await`ed outside the lock, which could resize the window while the animation is still shrinking it.
-
-**Fix:** Move all state mutations inside the lock callback, and either `await` the lock chain or restructure to avoid the race:
+**Fix:** In the else branch, either fall back to a default size or call `appWindow.center()`:
 ```typescript
-operationLock.current = operationLock.current.then(async () => {
-  setIsAnimating(true);
-  try {
-    const from = await getCurrentWindowState();
-    if (from) {
-      await animateWindow(from, to, ANIMATION_DURATION_MS, applyAnimState);
-    }
-  } finally {
-    setIsAnimating(false);
-  }
-  // Restore minWidth AFTER animation
+} else {
+  // 没有原始位置，使用默认尺寸并居中
   await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-  // Clear state AFTER animation
+  await appWindow.setSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+  await appWindow.center();
   snapEdgeRef.current = null;
   setCurrentSnapEdge(null);
   originalRectRef.current = null;
-});
-```
-
-### WR-02: `handleDragWhileSnapped` mutates refs outside operationLock
-
-**File:** `src/hooks/useEdgeDrawer.ts:310,322-324`
-**Issue:** Same pattern as WR-01. `setMinSize` on line 310 is fire-and-forget (not awaited), and refs are cleared on lines 322-324 outside the lock while the animation (line 316-318) runs asynchronously inside the lock. If the animation fails or is slow, the ref state is already cleared.
-
-**Fix:** Move `setMinSize` call and ref clearing inside the lock callback.
-
-### WR-03: `restoreFromDrawer` uses `animateWindow(to, to, 0, ...)` -- no-op animation
-
-**File:** `src/hooks/useEdgeDrawer.ts:356-360`
-**Issue:** The `animateWindow` call passes the same value for `from` and `to`, making it a complete no-op (interpolating from X to X yields X). The actual position restore then relies on the redundant `applyAnimState(to)` call on line 360. While this works, it's misleading -- the `animateWindow` call serves no purpose and should be replaced with just the direct `applyAnimState(to)`.
-
-**Fix:**
-```typescript
-operationLock.current = operationLock.current.then(async () => {
-  setIsAnimating(true);
-  try {
-    await applyAnimState(to);
-  } finally {
-    setIsAnimating(false);
-  }
-  // ... rest of cleanup
-});
-```
-
-### WR-04: Duplicate `restoreFromDrawer` call from tray context menu
-
-**File:** `src/hooks/useTray.ts:81-83` and `src/App.tsx:155-158`
-**Issue:** When restoring from DRAWER_HIDDEN via the tray context menu:
-1. `useTray.ts` line 82 calls `await onRestoreFromDrawerRef.current()` (which is `restoreFromDrawer`)
-2. Then line 84 calls `onShowRef.current()` (which is the `onShow` callback from App.tsx)
-3. App.tsx `onShow` callback (line 156) checks `isDrawerHidden` and calls `restoreFromDrawer()` again
-
-The second call is a no-op because `snapEdgeRef` is already null, but this creates confusing control flow and wastes an async cycle. The responsibility for calling `restoreFromDrawer` should be in exactly one place.
-
-**Fix:** Either:
-- Remove the `restoreFromDrawer` call from `useTray.ts` line 82 and let `onShow` handle everything, or
-- Remove the drawer check from `onShow` and let `useTray.ts` handle it before calling `onShow`
-
-## Info
-
-### IN-01: `SnapIndicator` receives unused `workArea` prop
-
-**File:** `src/App.tsx:389` and `src/components/SnapIndicator.tsx:3`
-**Issue:** `App.tsx` passes `workArea={snapPreviewWorkArea}` to `SnapIndicator`, but the `SnapIndicatorProps` interface only declares `edge: SnapEdge | null`. The `workArea` prop is not used. The `snapPreviewWorkArea` state variable and its setter are also unused.
-
-Confirmed by `tsc`: `src/App.tsx(389,45): error TS2322: Property 'workArea' does not exist on type 'IntrinsicAttributes & SnapIndicatorProps'`
-
-**Fix:** Remove `workArea={snapPreviewWorkArea}` from the JSX call. Optionally remove the `snapPreviewWorkArea` state and `setSnapPreviewWorkArea` setter if they are not used elsewhere.
-
-### IN-02: `console.error` statements in production code
-
-**File:** `src/hooks/useEdgeDrawer.ts:170,285`
-**Issue:** Two `console.error` calls in `useEdgeDrawer.ts` (`handleDragEnd` and `handleMouseLeave` slide-in). Per project coding style rules, `console.log/error` should not be in production code.
-
-**Fix:** Replace with a proper logging utility, or at minimum wrap in a development-only check:
-```typescript
-if (import.meta.env.DEV) {
-  console.error("handleDragEnd failed:", err);
 }
 ```
 
+### WR-02: `drawer:mouse-near-edge` listener callback calls `showFromDrawer` inside operationLock but emits `drawer:stop-polling` outside
+
+**File:** `src/hooks/useEdgeDrawer.ts:183-209`
+**Issue:** When the mouse-near-edge event fires:
+1. Line 184: `emit("drawer:stop-polling")` -- runs immediately, outside the lock
+2. Lines 186-209: animation + `showFromDrawer()` -- queued in the lock
+
+If another `drawer:start-polling` event arrives between step 1 and step 2 (e.g., `handleMouseLeave` fires and re-starts polling), the polling thread will be re-started even though a slide-out animation is queued but not yet running. The polling thread could then detect the mouse is near the (now outdated) sliver rect and emit another `drawer:mouse-near-edge` event, creating a duplicate slide-out attempt.
+
+The `visibilityRef.current !== "DRAWER_HIDDEN"` guard (line 188) partially mitigates this, but there is a window between `hideToDrawer()` (in handleMouseLeave) and the state update propagating where the guard could pass.
+
+**Fix:** Move `emit("drawer:stop-polling")` inside the lock callback, before the animation:
+```typescript
+operationLock.current = operationLock.current.then(async () => {
+  if (visibilityRef.current !== "DRAWER_HIDDEN") return;
+  if (!originalRectRef.current) return;
+  if (cancelled) return;
+
+  // Stop polling inside lock to prevent re-entry
+  emit("drawer:stop-polling");
+  // ... rest of animation
+});
+```
+
+### WR-03: `restoreFromDrawer` does not handle case when `orig` is null
+
+**File:** `src/hooks/useEdgeDrawer.ts:355-375`
+**Issue:** If `originalRectRef.current` is null (edge case: the ref was cleared by a concurrent operation), `restoreFromDrawer` silently does nothing besides emitting `drawer:stop-polling` and clearing the timeout. It does NOT clear `snapEdgeRef` or `currentSnapEdge`, so the UI remains in a "snapped" state with no way to recover. The early return on line 343 (`if (snapEdgeRef.current === null) return`) means this won't happen if `snapEdgeRef` is also cleared, but if only `originalRectRef` is null while `snapEdgeRef` is still set, the function exits without cleaning up.
+
+**Fix:** Add cleanup for the case when orig is null:
+```typescript
+const orig = originalRectRef.current;
+if (!orig) {
+  // No original position -- restore defaults and clear state
+  await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+  snapEdgeRef.current = null;
+  setCurrentSnapEdge(null);
+  return;
+}
+```
+
+## Info
+
+### IN-01: Test mock still has stale `primaryMonitor` property on mockWindow
+
+**File:** `src/hooks/__tests__/useEdgeDrawer.test.ts:19`
+**Issue:** Line 19 adds `primaryMonitor: mockPrimaryMonitor` to the `mockWindow` object. This was needed in the old code when `primaryMonitor` was called as `window.primaryMonitor()`. The production code now correctly uses the standalone `primaryMonitor()` import (mocked at line 27), so line 19 is dead code in the mock. It does not affect test correctness but could mislead future developers into thinking `primaryMonitor` is a Window method.
+
+**Fix:** Remove `primaryMonitor: mockPrimaryMonitor` from the `mockWindow` object on line 19.
+
+### IN-02: `onRestoreFromDrawer` prop accepted by useTray but never used
+
+**File:** `src/hooks/useTray.ts:26,44,67-68`
+**Issue:** The `UseTrayOptions` interface declares `onRestoreFromDrawer?: () => void` (line 26), it is destructured (line 44), and stored in a ref (lines 67-68), but the ref is never read or called anywhere in `useTray`. This is dead code left over from the iteration 3 fix for WR-04 (duplicate restoreFromDrawer call). The App.tsx still passes it (line 173), but useTray ignores it entirely.
+
+**Fix:** Remove `onRestoreFromDrawer` from `UseTrayOptions`, the destructuring, and the ref setup. Also remove the prop from the `useTray` call in App.tsx line 173.
+
+### IN-03: `console.error` statements in production code (pre-existing)
+
+**File:** `src/hooks/useEdgeDrawer.ts:170,285`, `src/App.tsx:212`, `src/hooks/useTray.ts:203,242`, `src/hooks/useFloatWindow.ts:39,240`
+**Issue:** Multiple `console.error` calls exist across the codebase. Per project TypeScript coding style rules, console statements should not be in production code. This was flagged as IN-02 in iteration 3 and is pre-existing across all phases. Not specific to Phase 14 changes but worth noting for consistency.
+
+**Fix:** Wrap in dev-only checks or replace with a logging utility.
+
 ---
 
-_Reviewed: 2026-05-11T11:49:49Z_
+_Reviewed: 2026-05-11T14:22:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
