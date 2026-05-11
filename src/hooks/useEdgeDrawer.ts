@@ -146,8 +146,8 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       const from: AnimState = { x: winX, y: winY, w: winW, h: winH };
       const to: AnimState = { x: sliverRect.x, y: sliverRect.y, w: sliverRect.w, h: sliverRect.h };
 
-      setIsAnimating(true);
       operationLock.current = operationLock.current.then(async () => {
+        setIsAnimating(true);
         try {
           await animateWindow(from, to, ANIMATION_DURATION_MS, (state) => {
             applyAnimState(state);
@@ -180,20 +180,22 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       const unlisten = await listen<{ sliverRect?: Rect }>(
         "drawer:mouse-near-edge",
         async () => {
-          if (visibilityRef.current !== "DRAWER_HIDDEN") return;
-          if (!originalRectRef.current) return;
-
           // 停止 Rust 轮询
           emit("drawer:stop-polling");
 
-          const orig = originalRectRef.current;
-          const from = await getCurrentWindowState();
-          if (!from || cancelled) return;
-
-          const to: AnimState = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
-
-          setIsAnimating(true);
           operationLock.current = operationLock.current.then(async () => {
+            // 所有 state 读取在 lock 内完成，避免 stale capture
+            if (visibilityRef.current !== "DRAWER_HIDDEN") return;
+            if (!originalRectRef.current) return;
+            if (cancelled) return;
+
+            const orig = originalRectRef.current;
+            const from = await getCurrentWindowState();
+            if (!from) return;
+
+            const to: AnimState = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
+
+            setIsAnimating(true);
             try {
               await animateWindow(from, to, ANIMATION_DURATION_MS, (state) => {
                 applyAnimState(state);
@@ -201,10 +203,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
             } finally {
               setIsAnimating(false);
             }
-          });
 
-          // 滑出完成，状态回到 VISIBLE（snapEdge 保持不变）
-          showFromDrawerRef.current();
+            // 滑出完成，状态回到 VISIBLE（snapEdge 保持不变）
+            showFromDrawerRef.current();
+          });
         }
       );
 
@@ -269,8 +271,8 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           h: actualSliverRect.h,
         };
 
-        setIsAnimating(true);
         operationLock.current = operationLock.current.then(async () => {
+          setIsAnimating(true);
           try {
             await animateWindow(from, to, ANIMATION_DURATION_MS, (state) => {
               applyAnimState(state);
