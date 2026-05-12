@@ -162,10 +162,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
 
         // 触发 DRAWER_HIDDEN 状态 AFTER animation completes
         hideToDrawerRef.current();
-      });
 
-      // 通知 Rust 启动鼠标轮询 (event-driven, not state-dependent)
-      emit("drawer:start-polling", { sliverRect });
+        // 通知 Rust 启动鼠标轮询 AFTER 动画完成（在 lock 内）
+        emit("drawer:start-polling", { sliverRect });
+      });
     } catch (err) {
       console.error("handleDragEnd failed:", err);
     }
