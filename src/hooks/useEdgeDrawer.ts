@@ -324,12 +324,14 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         });
       } else {
         // 没有原始位置，使用默认尺寸并居中
-        await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-        await appWindow.setSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-        await appWindow.center();
-        snapEdgeRef.current = null;
-        setCurrentSnapEdge(null);
-        originalRectRef.current = null;
+        operationLock.current = operationLock.current.then(async () => {
+          await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+          await appWindow.setSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+          await appWindow.center();
+          snapEdgeRef.current = null;
+          setCurrentSnapEdge(null);
+          originalRectRef.current = null;
+        });
       }
 
       // 如果不是 VISIBLE 状态，恢复
