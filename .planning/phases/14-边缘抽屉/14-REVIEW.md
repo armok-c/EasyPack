@@ -1,6 +1,6 @@
 ---
 phase: 14-边缘抽屉
-reviewed: 2026-05-12T11:30:00Z
+reviewed: 2026-05-12T12:00:00Z
 depth: standard
 files_reviewed: 18
 files_reviewed_list:
@@ -23,168 +23,111 @@ files_reviewed_list:
   - src-tauri/src/lib.rs
   - src-tauri/tauri.conf.json
 findings:
-  critical: 1
+  critical: 0
   warning: 3
-  info: 2
-  total: 6
+  info: 1
+  total: 4
 status: issues_found
 ---
 
-# Phase 14: Code Review Report (Iteration 8)
+# Phase 14: Code Review Report (Iteration 9)
 
-**Reviewed:** 2026-05-12T11:30:00Z
+**Reviewed:** 2026-05-12T12:00:00Z
 **Depth:** standard
 **Files Reviewed:** 18
 **Status:** issues_found
 
 ## Summary
 
-Reviewed all 18 source files for Phase 14 (Edge Drawer). This iteration focuses on verifying iteration 7 fixes and reviewing new uncommitted changes to FloatApp.tsx, useFloatWindow.ts, SnapIndicator.tsx, and tauri.conf.json.
+Iteration 9 re-review of all Phase 14 source files plus 3 uncommitted changes (tauri.conf.json trayIcon removal, SnapIndicator.tsx viewport-relative CSS fix, .claude/settings.local.json).
 
-**Iteration 7 verification:** All three iteration-7 fixes are confirmed in place:
-- CR-01: `core:window:allow-center` permission present in default.json (line 37).
-- WR-02: `originalRectRef` and `setMinSize` state mutations moved inside operationLock (useEdgeDrawer.ts lines 147-148).
-- WR-03: `console.error` gated behind `import.meta.env.DEV` in useEdgeDrawer.ts (lines 170, 289).
-
-**tauri.conf.json trayIcon removal:** Verified safe. The `tray-icon` feature flag remains enabled in `Cargo.toml` (line 16), and the tray icon is created programmatically in `useTray.ts` via `TrayIcon.new()`. The `tauri.conf.json` `trayIcon` section was only used for static tray creation at startup; since the app creates the tray dynamically based on settings, removing it is correct.
-
-**New findings in uncommitted changes:**
-
-## Verification of Prior Iteration Fixes
+**Prior iteration fixes verified as still in place:**
 
 | Fix (Iteration) | Status | Evidence |
 |-----|--------|----------|
-| CR-01 (iter 7): allow-center permission | VERIFIED | `src-tauri/capabilities/default.json:36` |
-| WR-02 (iter 7): state mutations inside lock | VERIFIED | `src/hooks/useEdgeDrawer.ts:147-148` |
-| WR-03 (iter 7): console.error DEV-gated | VERIFIED | `src/hooks/useEdgeDrawer.ts:170,289` |
+| CR-01 (iter 8): FloatApp emit+destroy race | VERIFIED | `FloatApp.tsx:55-56` sends `float:close-requested` only, no destroy. Main window owns destruction at `useFloatWindow.ts:112-121` |
+| WR-01 (iter 8): destroyFloat returns Promise\<void\> | VERIFIED | `useFloatWindow.ts:266` signature `(): Promise<void>`, caller at `App.tsx:166` uses `await` |
+| WR-02 (iter 8): toggleFloat error logging DEV-gated | VERIFIED | `useFloatWindow.ts:253` uses `if (import.meta.env.DEV)` |
+| WR-03 (iter 8): positionFloatTopRight console.error DEV-gated | VERIFIED | `useFloatWindow.ts:39` uses `if (import.meta.env.DEV)` |
+| IN-01 (iter 8): onMoved listener re-registration overhead | ACCEPTED | Minor overhead, no correctness impact |
+| IN-02 (iter 8): SnapIndicator viewport-relative CSS | VERIFIED | Now uses `0`/`100vh`/`100vw` correctly for `position:fixed` |
 
-## Critical Issues
+**Uncommitted changes reviewed:**
+- `tauri.conf.json`: Removal of declarative `trayIcon` section. Correct -- avoids duplicate tray creation since `useTray.ts` manages the full lifecycle programmatically with the same ID `"main-tray"`.
+- `SnapIndicator.tsx`: Changed from `workArea` coordinates to viewport-relative CSS (`100vh`/`100vw` and `0`). Removed unused `Rect` import and `workArea` prop. Correct -- `position:fixed` is viewport-relative, so using workArea coordinates was wrong.
 
-### CR-01: FloatApp.tsx emit+destroy race -- main window may never receive close event
-
-**File:** `src/components/FloatApp.tsx:57-60`
-**Issue:** `emit("float:close-requested")` is fire-and-forget (not awaited). `floatWindow.destroy()` executes on the next line. Tauri cross-window event delivery is asynchronous -- the float window may be destroyed before the main window's listener processes the event.
-
-When the event is lost, the main window's `useFloatWindow` never calls `cleanupFloatState()`, leaving React state inconsistent:
-- `floatVisible` stays `true` -- TitleBar shows wrong toggle state
-- `floatWindowRef` holds a dead `WebviewWindow` reference
-- The `float:close-requested` listener remains registered (leaked)
-
-The next `toggleFloat` call hits Branch A (existing window + valid ref), then `existing.isVisible()` may throw or return stale data for the destroyed window. Branch B recovery depends on `existing.isVisible()` succeeding, which is fragile.
-
-This is a correctness bug because the user closes the float window, but the main window believes it is still open. The TitleBar button stays in "float is visible" state and the next click attempts to hide a non-existent window.
-
-**Fix:**
-```typescript
-// FloatApp.tsx -- await emit to maximize delivery chance:
-async function handleClose() {
-  await emit("float:close-requested");
-  await floatWindow.destroy();
-}
-
-// More robust option: let the main window own destruction entirely.
-// In useFloatWindow.ts registerFloatListeners:
-const unlistenClose = await listen("float:close-requested", async () => {
-  const win = floatWindowRef.current;
-  cleanupFloatState();
-  if (win) {
-    try { await win.destroy(); } catch { /* already destroyed */ }
-  }
-});
-
-// Then FloatApp.tsx only emits, does NOT destroy:
-async function handleClose() {
-  emit("float:close-requested");
-  // Float window stays alive briefly; main window destroys it after cleanup.
-}
-```
+**New findings:** 3 warnings. No critical issues found. All prior fixes remain intact.
 
 ## Warnings
 
-### WR-01: `destroyFloat` return type is `void` but caller uses `await`, causing race on quit
+### WR-01: Unhandled promise rejection risk in useEdgeDrawer operationLock chain
 
-**File:** `src/hooks/useFloatWindow.ts:20,255-264` and `src/App.tsx:166-167`
-**Issue:** `destroyFloat` was refactored from `async () => Promise<void>` to a synchronous function that enqueues async work onto the operationLock. The return type in `UseFloatWindowReturn` is now `() => void` (line 20). However, `App.tsx` lines 166-167 still call:
-```typescript
-await destroyFloat();  // awaits undefined, resolves immediately
-await appWindow.destroy();  // runs concurrently with destroyFloat's lock work
-```
-Since `destroyFloat()` returns `undefined`, `await undefined` resolves on the next microtick, and `appWindow.destroy()` races with the float window destruction inside the operationLock. On app quit, the main window can be destroyed before the float window is cleaned up, leaving an orphaned float window process.
+**File:** `src/hooks/useEdgeDrawer.ts:142,185,267,319,330,363,373`
+**Issue:** The `operationLock` mutex pattern chains 7 `.then()` calls without any `.catch()` handler. If any operation inside the lock throws (e.g., `animateWindow`, `applyAnimState`, Tauri API call failures), the error propagates to the promise chain as an unhandled rejection. In contrast, `useFloatWindow.ts` (same pattern) correctly attaches `.catch()` handlers at lines 252-256 and 275-279.
+
+While the outer `handleDragEnd` and `handleMouseLeave` functions have their own `try/catch` blocks, these only cover the synchronous portion before the lock. Once work is queued via `operationLock.current = operationLock.current.then(async () => {...})`, the queued work runs asynchronously and its rejections escape the outer try/catch.
 
 **Fix:**
 ```typescript
-// Return the lock promise so callers can await completion:
-const destroyFloat = useCallback((): Promise<void> => {
-  return operationLock.current = operationLock.current.then(async () => {
-    const existing = await WebviewWindow.getByLabel("float");
-    if (existing) {
-      try { await existing.destroy(); } catch { /* already destroyed */ }
-    }
-    floatWindowRef.current = null;
-    setFloatVisible(false);
-    cleanupListeners();
-  });
-}, [cleanupListeners]);
-
-// Update interface:
-interface UseFloatWindowReturn {
-  floatVisible: boolean;
-  toggleFloat: () => void;
-  destroyFloat: () => Promise<void>;
-}
-```
-
-### WR-02: `.catch(() => {})` on toggleFloat/destroyFloat silently swallows all errors
-
-**File:** `src/hooks/useFloatWindow.ts:245,264`
-**Issue:** Both `toggleFloat` (line 245) and `destroyFloat` (line 264) chain `.catch(() => {})` on the operationLock promise. This silently discards errors from:
-- `adoptFloatWindow` failures (Branch B)
-- `WebviewWindow.getByLabel` failures
-- `existing.destroy()` failures in destroyFloat
-- Any unexpected errors indicating real bugs
-
-The Branch C `createFloat` failure already has a try/catch with `toast.error`, so the `.catch(() => {})` does not help the user -- it only hides bugs from the developer.
-
-**Fix:**
-```typescript
-// Replace with DEV-gated logging:
+// Add .catch() to each operationLock chain, e.g. line 142:
+operationLock.current = operationLock.current.then(async () => {
+  // ... existing lock body ...
 }).catch((err) => {
   if (import.meta.env.DEV) {
-    console.error("useFloatWindow operation failed:", err);
+    console.error("useEdgeDrawer operation failed:", err);
   }
 });
 ```
 
-### WR-03: `positionFloatTopRight` console.error not gated behind DEV
+Apply the same `.catch()` pattern to all 7 `.then()` chains in the file (lines 142, 185, 267, 319, 330, 363, 373), consistent with how `useFloatWindow.ts` handles the same pattern.
 
-**File:** `src/hooks/useFloatWindow.ts:39`
-**Issue:** `console.error("Failed to set float window position:", err)` is not gated behind `import.meta.env.DEV`, inconsistent with the iteration 7 WR-03 fix applied to `useEdgeDrawer.ts` (lines 170, 289). This file is actively modified in the current changeset and should follow the established pattern.
+### WR-02: console.error in onCloseRequested not gated behind DEV mode
+
+**File:** `src/App.tsx:212`
+**Issue:** `console.error("Failed to hide window:", err)` is not gated behind `import.meta.env.DEV`. This is inconsistent with the WR-02/WR-03 fixes from iterations 7-8, which added DEV gating to equivalent error logging in `useFloatWindow.ts` and `useEdgeDrawer.ts`. While this code path originated in Phase 12 (pre-existing), it is within the reviewed file set and should follow the established convention.
 
 **Fix:**
 ```typescript
 } catch (err) {
   if (import.meta.env.DEV) {
-    console.error("Failed to set float window position:", err);
+    console.error("Failed to hide window:", err);
   }
 }
 ```
 
+### WR-03: restoreFromDrawer() called without await in tray onShow callback
+
+**File:** `src/App.tsx:156`
+**Issue:** In the tray `onShow` callback, `restoreFromDrawer()` is called without `await`, while the same call in `main:shown-from-rust` listener (line 182) and `onCloseRequested` handler (line 205) both use `await restoreFromDrawer()`. The inconsistency reduces code clarity.
+
+Note: `await` on `restoreFromDrawer()` does not wait for the restore animation to complete (the function queues work on `operationLock` and returns immediately). However, the `await` at least ensures the synchronous portion (stopping polling, clearing timeout) completes before `showFromDrawer()` and `appWindow.show()` run. Without `await`, there is a brief window where visibility is set to "VISIBLE" by `showFromDrawer()` before `restoreFromDrawer` has even started its synchronous cleanup.
+
+**Fix:**
+```typescript
+onShow: async () => {
+  if (isDrawerHidden || visibility === "DRAWER_HIDDEN") {
+    await restoreFromDrawer();
+    showFromDrawer();
+  } else {
+    showFromTray();
+  }
+  appWindow.show().catch(console.error);
+  appWindow.setFocus().catch(console.error);
+},
+```
+
 ## Info
 
-### IN-01: onMoved listener re-registers on every snapEdge/isDrawerAnimating change
+### IN-01: Pre-existing .catch(console.error) patterns in App.tsx not DEV-gated
 
-**File:** `src/App.tsx:317`
-**Issue:** The `onMoved` effect depends on `[drawerEnabled, snapEdge, isDrawerAnimating]`. Since `snapEdge` changes when snapping/unsnapping and `isDrawerAnimating` toggles during animations, this effect tears down and recreates the `onMoved` listener on every state transition. Not a correctness issue but adds unnecessary overhead during drawer operations.
+**File:** `src/App.tsx:161,162,164`
+**Issue:** Lines `appWindow.show().catch(console.error)`, `appWindow.setFocus().catch(console.error)`, and `appWindow.hide().catch(console.error)` use bare `console.error` in `.catch()` handlers without DEV gating. These are pre-existing patterns from Phase 12, outside the strict scope of Phase 14 iteration fixes. Flagged for awareness -- these should be gated behind `import.meta.env.DEV` to match the convention established in iterations 7-8.
 
-**Fix:** Use refs for `snapEdge` and `isDrawerAnimating` to stabilize the effect, or accept the overhead as minor.
-
-### IN-02: SnapIndicator viewport-relative CSS change is correct
-
-**File:** `src/components/SnapIndicator.tsx`
-**Issue:** The uncommitted change replacing `workArea` prop with viewport-relative CSS (`0`, `100vh`, `100vw`) is correct. The previous implementation passed screen-absolute `workArea` coordinates to `position: fixed` (which is viewport-relative) -- a mismatch that would cause incorrect positioning on systems with taskbar offsets. The new implementation correctly uses viewport-relative values. No issue found.
+**Fix:** No immediate action required. Consider a project-wide pass to gate all `console.error` behind DEV mode in a future cleanup phase.
 
 ---
 
-_Reviewed: 2026-05-12T11:30:00Z_
+_Reviewed: 2026-05-12T12:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Iteration: 9_
