@@ -256,6 +256,14 @@ describe("useEdgeDrawer", () => {
   it("滑出后 onMouseLeave 触发延迟收回定时器（400ms 后收回）", async () => {
     setupWindowAtPosition(0, 100, 720, 480);
 
+    let eventHandler: ((event: { payload: unknown }) => void) | null = null;
+    mockListen.mockImplementation(async (event: string, handler: (e: unknown) => void) => {
+      if (event === "drawer:mouse-near-edge") {
+        eventHandler = handler;
+      }
+      return mockUnlisten;
+    });
+
     const vis = createMockVisibility();
     const { result } = renderHook(() =>
       useEdgeDrawer({
@@ -266,22 +274,31 @@ describe("useEdgeDrawer", () => {
       })
     );
 
-    // 先吸附
+    // 1. 先吸附 → visibility = DRAWER_HIDDEN
     await act(async () => {
       await result.current.handleDragEnd();
     });
 
-    // 触发 onMouseLeave
+    expect(eventHandler).not.toBeNull();
+
+    // 2. 触发滑出 → visibility = VISIBLE，snapEdge 仍保持
+    await act(async () => {
+      eventHandler!({ payload: {} });
+    });
+
+    expect(vis.showFromDrawer).toHaveBeenCalled();
+
+    // 3. 触发 onMouseLeave（此时 visibility 为 VISIBLE，snapEdge 非空）
     act(() => {
       result.current.handleMouseLeave();
     });
 
-    // 推进时间 400ms
+    // 4. 推进时间 400ms，触发延迟收回
     await act(async () => {
       vi.advanceTimersByTime(400);
     });
 
-    // hideToDrawer 应至少调用 2 次（吸附 + 收回）
+    // hideToDrawer 应调用 2 次（吸附时 1 次 + 延迟收回 1 次）
     expect(vis.hideToDrawer.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
