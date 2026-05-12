@@ -1,8 +1,7 @@
-import type { SnapEdge, Rect } from "@/lib/drawer-geometry";
+import type { SnapEdge } from "@/lib/drawer-geometry";
 
 interface SnapIndicatorProps {
   edge: SnapEdge | null;
-  workArea: Rect | null;
 }
 
 /**
@@ -11,43 +10,44 @@ interface SnapIndicatorProps {
  * 当窗口拖拽过程中接近 workArea 边缘 <=10px 时，显示半透明蓝色条
  * 提示"即将吸附"。edge 为 null 时不渲染。
  */
-export function SnapIndicator({ edge, workArea }: SnapIndicatorProps) {
-  if (!edge || !workArea) return null;
+export function SnapIndicator({ edge }: SnapIndicatorProps) {
+  if (!edge) return null;
 
   // 根据吸附边计算指示器位置和尺寸
+  // CSS position:fixed is viewport-relative, so use 0/100vh/100vw instead of workArea coordinates
   const style: React.CSSProperties = (() => {
     switch (edge) {
       case "left":
         return {
           position: "fixed",
           left: 0,
-          top: workArea.y,
+          top: 0,
           width: 4,
-          height: workArea.h,
+          height: "100vh",
         };
       case "right":
         return {
           position: "fixed",
           right: 0,
-          top: workArea.y,
+          top: 0,
           width: 4,
-          height: workArea.h,
+          height: "100vh",
         };
       case "top":
         return {
           position: "fixed",
           top: 0,
-          left: workArea.x,
+          left: 0,
           height: 4,
-          width: workArea.w,
+          width: "100vw",
         };
       case "bottom":
         return {
           position: "fixed",
           bottom: 0,
-          left: workArea.x,
+          left: 0,
           height: 4,
-          width: workArea.w,
+          width: "100vw",
         };
     }
   })();
