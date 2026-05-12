@@ -165,6 +165,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
 
         // 通知 Rust 启动鼠标轮询 AFTER 动画完成（在 lock 内）
         emit("drawer:start-polling", { sliverRect });
+      }).catch((err) => {
+        if (import.meta.env.DEV) {
+          console.error("useEdgeDrawer operation failed:", err);
+        }
       });
     } catch (err) {
       if (import.meta.env.DEV) {
@@ -209,6 +213,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
 
             // 滑出完成，状态回到 VISIBLE（snapEdge 保持不变）
             showFromDrawerRef.current();
+          }).catch((err) => {
+            if (import.meta.env.DEV) {
+              console.error("useEdgeDrawer operation failed:", err);
+            }
           });
         }
       );
@@ -284,6 +292,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           // 状态转换 AFTER 动画完成（在 lock 内）
           hideToDrawerRef.current();
           emit("drawer:start-polling", { sliverRect: actualSliverRect });
+        }).catch((err) => {
+          if (import.meta.env.DEV) {
+            console.error("useEdgeDrawer operation failed:", err);
+          }
         });
       } catch (err) {
         if (import.meta.env.DEV) {
@@ -325,6 +337,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           if (visibilityRef.current !== "VISIBLE") {
             showFromDrawerRef.current();
           }
+        }).catch((err) => {
+          if (import.meta.env.DEV) {
+            console.error("useEdgeDrawer operation failed:", err);
+          }
         });
       } else {
         operationLock.current = operationLock.current.then(async () => {
@@ -336,6 +352,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           originalRectRef.current = null;
           if (visibilityRef.current !== "VISIBLE") {
             showFromDrawerRef.current();
+          }
+        }).catch((err) => {
+          if (import.meta.env.DEV) {
+            console.error("useEdgeDrawer operation failed:", err);
           }
         });
       }
@@ -364,6 +384,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
         snapEdgeRef.current = null;
         setCurrentSnapEdge(null);
+      }).catch((err) => {
+        if (import.meta.env.DEV) {
+          console.error("useEdgeDrawer operation failed:", err);
+        }
       });
       return;
     }
@@ -385,6 +409,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       snapEdgeRef.current = null;
       setCurrentSnapEdge(null);
       originalRectRef.current = null;
+    }).catch((err) => {
+      if (import.meta.env.DEV) {
+        console.error("useEdgeDrawer operation failed:", err);
+      }
     });
 
     // 注意：不调用 showFromDrawer() 或改变 visibility 状态
