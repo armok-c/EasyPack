@@ -133,20 +133,20 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
       const edge = snapResult.edge;
       const workArea = monitorInfo.workArea;
 
-      // 保存原始位置和尺寸 (D-15)
-      originalRectRef.current = { x: winX, y: winY, w: winW, h: winH };
-
-      // 移除 minWidth 限制 (Pitfall 2)
-      await appWindow.setMinSize(new LogicalSize(0, 0));
-
-      // 计算 sliver 位置
+      // 捕获值供 operationLock 闭包使用
+      const origRect = { x: winX, y: winY, w: winW, h: winH };
       const sliverRect = calculateSliverRect(edge, workArea, scale);
-
-      // 动画：从当前位置收缩到 sliver
       const from: AnimState = { x: winX, y: winY, w: winW, h: winH };
       const to: AnimState = { x: sliverRect.x, y: sliverRect.y, w: sliverRect.w, h: sliverRect.h };
 
       operationLock.current = operationLock.current.then(async () => {
+        // 重入保护：若另一操作已设置 snapEdge，跳过
+        if (snapEdgeRef.current !== null) return;
+
+        // 状态变更全部在 lock 内完成 (WR-02 fix)
+        originalRectRef.current = origRect;
+        await appWindow.setMinSize(new LogicalSize(0, 0));
+
         setIsAnimating(true);
         try {
           await animateWindow(from, to, ANIMATION_DURATION_MS, (state) => {
@@ -167,7 +167,9 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         emit("drawer:start-polling", { sliverRect });
       });
     } catch (err) {
-      console.error("handleDragEnd failed:", err);
+      if (import.meta.env.DEV) {
+        console.error("handleDragEnd failed:", err);
+      }
     }
   }, [drawerEnabled, appWindow, applyAnimState]);
 
@@ -284,7 +286,9 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           emit("drawer:start-polling", { sliverRect: actualSliverRect });
         });
       } catch (err) {
-        console.error("handleMouseLeave slide-in failed:", err);
+        if (import.meta.env.DEV) {
+          console.error("handleMouseLeave slide-in failed:", err);
+        }
       }
     }, HIDE_DELAY_MS);
   }, [appWindow, applyAnimState]);

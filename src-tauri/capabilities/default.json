@@ -32,6 +32,7 @@
     "core:window:allow-inner-size",
     "core:window:allow-set-min-size",
     "core:window:allow-primary-monitor",
-    "core:window:allow-current-monitor"
+    "core:window:allow-current-monitor",
+    "core:window:allow-center"
   ]
 }
