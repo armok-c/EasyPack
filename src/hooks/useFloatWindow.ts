@@ -17,7 +17,7 @@ interface UseFloatWindowOptions {
 interface UseFloatWindowReturn {
   floatVisible: boolean;
   toggleFloat: () => void;
-  destroyFloat: () => void;
+  destroyFloat: () => Promise<void>;
 }
 
 /**
@@ -257,8 +257,8 @@ export function useFloatWindow({
   }, [currentProject, commands, floatVisible, syncState]);
 
   // D-12: 主窗口退出时销毁悬浮窗（通过 mutex 序列化）
-  const destroyFloat = useCallback(() => {
-    operationLock.current = operationLock.current.then(async () => {
+  const destroyFloat = useCallback((): Promise<void> => {
+    return operationLock.current = operationLock.current.then(async () => {
       const existing = await WebviewWindow.getByLabel("float");
       if (existing) {
         try { await existing.destroy(); } catch { /* already destroyed */ }
@@ -266,7 +266,11 @@ export function useFloatWindow({
       floatWindowRef.current = null;
       setFloatVisible(false);
       cleanupListeners();
-    }).catch(() => {});
+    }).catch((err) => {
+      if (import.meta.env.DEV) {
+        console.error("useFloatWindow destroyFloat failed:", err);
+      }
+    });
   }, [cleanupListeners]);
 
   // 组件卸载时清理事件监听器
