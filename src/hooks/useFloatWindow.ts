@@ -247,7 +247,11 @@ export function useFloatWindow({
       } finally {
         isCreatingRef.current = false;
       }
-    }).catch(() => {});
+    }).catch((err) => {
+        if (import.meta.env.DEV) {
+          console.error("useFloatWindow toggleFloat failed:", err);
+        }
+      });
   }, [createFloat, syncState]);
 
   // 自动同步：当项目/指令变化时推送
