@@ -106,10 +106,15 @@ export function useFloatWindow({
     unlistenersRef.current.push(unlistenExecute);
 
     // 监听悬浮窗主动发来的关闭请求（用户点击关闭按钮）
+    // 主窗口负责销毁，避免与 FloatApp 端的 destroy 竞态 (CR-01)
     const unlistenClose = await listen(
       "float:close-requested",
-      () => {
+      async () => {
+        const win = floatWindowRef.current;
         cleanupFloatState();
+        if (win) {
+          try { await win.destroy(); } catch { /* already destroyed */ }
+        }
       }
     );
     unlistenersRef.current.push(unlistenClose);
