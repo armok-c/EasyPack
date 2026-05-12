@@ -110,7 +110,7 @@ EasyPack 把这四步变成一步：**选中 → 点击**。
 
 ```bash
 # 前端依赖
-pnpm install
+npm install
 
 # Rust 后端依赖（在 src-tauri/ 目录下，由 Cargo.toml 管理，首次构建时自动下载）
 ```
@@ -118,7 +118,7 @@ pnpm install
 ### 开发模式
 
 ```bash
-pnpm tauri dev
+npm tauri dev
 ```
 
 这会启动 Vite 开发服务器和 Tauri 窗口，支持前端热更新。
@@ -126,7 +126,7 @@ pnpm tauri dev
 ### 构建发布
 
 ```bash
-pnpm tauri build
+npm tauri build
 ```
 
 输出安装包在 `src-tauri/target/release/bundle/` 目录。
@@ -210,7 +210,7 @@ cmd.exe /C start "" /d "项目路径" cmd /K "命令"
 系统终端新窗口执行，窗口保持打开
 ```
 
-选择 `cmd.exe` 而非 `wt.exe`（Windows Terminal）是因为 Tauri GUI 进程 spawn `wt.exe` 时会触发 UWP App Execution Alias 的 `ERROR_FILE_NOT_FOUND`（0x80070002）问题，而 `spawn()` 返回 `Ok` 导致无法回退。
+
 
 ## 许可证
 
