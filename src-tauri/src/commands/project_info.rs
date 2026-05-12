@@ -17,24 +17,6 @@ pub struct ProjectInfo {
     pub branch: Option<String>,
 }
 
-/// Directories to exclude from folder size calculation (per D-05)
-const EXCLUDED_DIRS: &[&str] = &[
-    "node_modules",
-    ".git",
-    "target",
-    "dist",
-    ".next",
-    ".cache",
-    "build",
-    "__pycache__",
-    ".venv",
-    ".env",
-    ".tox",
-    "coverage",
-    ".terraform",
-    "vendor",
-];
-
 /// Icon filenames to look for in project root (non-recursive, per D-01)
 const ICON_FILENAMES: &[&str] = &[
     "favicon.ico",
@@ -74,7 +56,7 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
-/// Recursively calculate directory size, skipping EXCLUDED_DIRS
+/// Recursively calculate total directory size (matches Windows Explorer behavior)
 pub fn calculate_dir_size(path: &Path) -> u64 {
     let mut total: u64 = 0;
     if let Ok(entries) = fs::read_dir(path) {
@@ -84,16 +66,10 @@ pub fn calculate_dir_size(path: &Path) -> u64 {
             };
 
             if file_type.is_dir() {
-                let file_name = entry.file_name();
-                let name = file_name.to_string_lossy();
-                if EXCLUDED_DIRS.contains(&name.as_ref()) {
-                    continue;
-                }
                 total += calculate_dir_size(&entry.path());
             } else if file_type.is_file() {
                 total += entry.metadata().map(|m| m.len()).unwrap_or(0);
             }
-            // Skip symlinks and other special file types
         }
     }
     total
@@ -340,10 +316,10 @@ mod tests {
         cleanup_test_dir(&dir);
     }
 
-    // ---- Test 6: calculate_dir_size excludes EXCLUDED_DIRS ----
+    // ---- Test 6: calculate_dir_size includes all subdirectories ----
     #[test]
-    fn test_calculate_dir_size_excludes_dirs() {
-        let dir = create_test_dir("size_exclude");
+    fn test_calculate_dir_size_includes_all() {
+        let dir = create_test_dir("size_include");
         test_fs::write(dir.join("root.txt"), "hello").unwrap();
         test_fs::create_dir_all(dir.join("node_modules")).unwrap();
         test_fs::write(dir.join("node_modules").join("big_dep.bin"), vec![0u8; 1024 * 1024]).unwrap();
@@ -355,8 +331,10 @@ mod tests {
         let total = calculate_dir_size(&dir);
 
         let root_size = test_fs::metadata(dir.join("root.txt")).unwrap().len();
+        let node_modules_size = test_fs::metadata(dir.join("node_modules").join("big_dep.bin")).unwrap().len();
+        let git_size = test_fs::metadata(dir.join(".git").join("objects")).unwrap().len();
         let src_size = test_fs::metadata(dir.join("src").join("main.rs")).unwrap().len();
-        assert_eq!(total, root_size + src_size, "Should exclude node_modules and .git");
+        assert_eq!(total, root_size + node_modules_size + git_size + src_size, "Should include all directories");
 
         cleanup_test_dir(&dir);
     }
