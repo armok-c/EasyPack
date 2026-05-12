@@ -182,6 +182,7 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         async () => {
           operationLock.current = operationLock.current.then(async () => {
             // 所有 state 读取在 lock 内完成，避免 stale capture
+            if (snapEdgeRef.current === null) return;
             if (visibilityRef.current !== "DRAWER_HIDDEN") return;
             if (!originalRectRef.current) return;
             if (cancelled) return;
