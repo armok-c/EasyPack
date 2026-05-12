@@ -1,8 +1,8 @@
 ---
 phase: 14-边缘抽屉
-reviewed: 2026-05-12T16:00:00Z
+reviewed: 2026-05-12T18:00:00Z
 depth: standard
-iteration: 10
+iteration: 11
 files_reviewed: 18
 files_reviewed_list:
   - src/App.tsx
@@ -25,66 +25,40 @@ files_reviewed_list:
   - src-tauri/tauri.conf.json
 findings:
   critical: 0
-  warning: 1
-  info: 1
-  total: 2
-status: issues_found
+  warning: 0
+  info: 0
+  total: 0
+status: clean
 ---
 
-# Phase 14: Code Review Report (Iteration 10)
+# Phase 14: Code Review Report (Iteration 11)
 
-**Reviewed:** 2026-05-12T16:00:00Z
+**Reviewed:** 2026-05-12T18:00:00Z
 **Depth:** standard
 **Files Reviewed:** 18
-**Status:** issues_found
+**Status:** clean
 
 ## Summary
 
-Iteration 10 re-review of the edge drawer implementation. All 5 fixes from iteration 9 have been verified as correctly in place:
+Iteration 11 re-review confirms that the two findings from iteration 10 (WR-01: ungated `console.error` in `useFloatWindow.ts`, IN-01: ungated `console.error` in `useTray.ts`) have been properly fixed in commit 1cd2cb4. All `console.error` calls in both files are now gated behind `if (import.meta.env.DEV)`.
 
-| Fix (Iteration 9) | Status | Evidence |
-|-----|--------|----------|
-| WR-01: `.catch()` on all operationLock chains | VERIFIED | `useEdgeDrawer.ts` lines 168, 216, 295, 340, 356, 387, 412 -- all 7 chains have `.catch()` gated behind `import.meta.env.DEV` |
-| WR-02: `console.error` gated in `onCloseRequested` | VERIFIED | `App.tsx:212` uses `if (import.meta.env.DEV)` |
-| WR-03: `await restoreFromDrawer()` in tray `onShow` | VERIFIED | `App.tsx:156` uses `await restoreFromDrawer()` |
-| IN-01: `.catch(console.error)` gated in `App.tsx` | VERIFIED | `App.tsx:161-164` all gated behind `if (import.meta.env.DEV)` |
-| Additional: trayIcon removed from tauri.conf.json | VERIFIED | No `trayIcon` key in `tauri.conf.json`; `useTray.ts` manages full lifecycle programmatically |
-| Additional: SnapIndicator viewport positioning | VERIFIED | `SnapIndicator.tsx` uses `position:fixed` with `0`/`100vh`/`100vw` |
+Full standard-depth review of all 18 files in scope found no new issues. Specific areas verified:
 
-No critical issues found. One warning (ungated `console.error` in `useFloatWindow.ts` createFloat path) and one info item (ungated `console.error` in `useTray.ts`). Both are pre-existing issues outside Phase 14's scope.
+- **console.error gating**: All 11 `console.error` calls in `useEdgeDrawer.ts`, all 4 in `useFloatWindow.ts`, and all 9 in `useTray.ts` are correctly gated behind `if (import.meta.env.DEV)`. The catch handlers in `App.tsx` (lines 161-164, 212-215) are also properly gated.
+- **operationLock mutex pattern**: The Promise-chain mutex in `useEdgeDrawer.ts` consistently chains all state mutations (snapEdge, visibility, minWidth) inside the lock, preventing concurrent animation conflicts.
+- **Rust polling thread**: The ABBA deadlock avoidance (releasing `pr` before acquiring `sr` in the polling thread, lines 188-195) is correctly implemented. The `stop-polling` handler uses the opposite lock order (pr first, then sr, lines 207-215), which is safe because the start-polling handler acquires sr first then pr inside the same scope (lines 134-142).
+- **Visibility state machine**: The three-state model (VISIBLE / TRAY_HIDDEN / DRAWER_HIDDEN) is correctly implemented with mutually exclusive transitions. `restoreFromDrawer()` intentionally does not change visibility state (documented comment at line 418-419), leaving that responsibility to the caller.
+- **SnapIndicator viewport positioning**: Uses `position: fixed` with `100vh`/`100vw` which is correct for the Tauri webview viewport.
+- **TitleBar drag handling**: The `mouseup` listener for drag-end detection is properly cleaned up inside the handler itself (line 71). The `mousemove` listener for drag-while-snapped is properly managed via useEffect cleanup.
+- **drawer-geometry.ts**: Pure calculation module with no Tauri dependencies, correctly tested with boundary values including 150% DPI scaling.
+- **drawer-animation.ts**: `animateWindow` correctly resolves on `rawT >= 1`, with `Math.min` clamping preventing overshoot.
+- **Test coverage**: `useEdgeDrawer.test.ts` covers snap detection, mouse-near-edge slide-out, delayed retract, cancel-unsnap, drawerEnabled=false, minWidth management, and restoreFromDrawer. `useVisibilityState.test.ts` covers all three-state transitions including mutual exclusion.
 
-## Warnings
-
-### WR-01: Ungated `console.error` in `useFloatWindow.ts` createFloat error path
-
-**File:** `src/hooks/useFloatWindow.ts:247`
-**Issue:** The `console.error` at line 247 inside the `createFloat` catch block is not gated behind `import.meta.env.DEV`, unlike all other `console.error` calls in this file (lines 40, 254, 277) which are properly gated. This is inconsistent with the established convention and leaks error details in production builds.
-**Fix:**
-```typescript
-// Line 246-248, change:
-} catch (err) {
-  console.error("Failed to create float window:", err);
-  toast.error("无法创建悬浮窗");
-
-// To:
-} catch (err) {
-  if (import.meta.env.DEV) {
-    console.error("Failed to create float window:", err);
-  }
-  toast.error("无法创建悬浮窗");
-```
-
-## Info
-
-### IN-01: Ungated `console.error` in `useTray.ts` tray action callbacks
-
-**File:** `src/hooks/useTray.ts:78,81,82,158,188,189,203,214,242`
-**Issue:** Multiple `.catch(console.error)` calls and bare `console.error` statements in `useTray.ts` are not gated behind `import.meta.env.DEV`. Lines 78, 81, 82 (menu toggle action), lines 188, 189 (tray left-click action), line 158 (disable cleanup), and line 214 (effect cleanup) all use bare `.catch(console.error)`. Lines 203 and 242 use bare `console.error` in catch blocks. This is inconsistent with the convention established in `App.tsx` and `useEdgeDrawer.ts`. This is a pre-existing issue from Phase 12/13, not introduced by Phase 14, classified as Info.
-**Fix:** Consider a project-wide pass to gate all `console.error` behind `if (import.meta.env.DEV)` in a future cleanup phase. No immediate action required for Phase 14.
+All reviewed files meet quality standards. No issues found.
 
 ---
 
-_Reviewed: 2026-05-12T16:00:00Z_
+_Reviewed: 2026-05-12T18:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
-_Iteration: 10_
+_Iteration: 11_
