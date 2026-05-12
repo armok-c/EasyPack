@@ -277,10 +277,11 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           } finally {
             setIsAnimating(false);
           }
-        });
 
-        hideToDrawerRef.current();
-        emit("drawer:start-polling", { sliverRect: actualSliverRect });
+          // 状态转换 AFTER 动画完成（在 lock 内）
+          hideToDrawerRef.current();
+          emit("drawer:start-polling", { sliverRect: actualSliverRect });
+        });
       } catch (err) {
         console.error("handleMouseLeave slide-in failed:", err);
       }
