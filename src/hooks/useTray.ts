@@ -164,16 +164,21 @@ export function useTray({
 
     async function createTray() {
       try {
-        const icon = await defaultWindowIcon();
-        if (cancelled) return;
-
         const menu = await buildMenu();
         if (cancelled) return;
 
+        // Rust 端已创建带 ID "main-tray" 的托盘图标（使用柔和的 64x64 图标）。
+        // 这里只获取它并设置右键菜单，不重新创建。
         const existing = await TrayIcon.getById(TRAY_ID);
+
         if (existing) {
-          await existing.close();
+          await existing.setMenu(menu);
+          trayRef.current = existing;
+          return;
         }
+
+        // fallback：如果 Rust 端未创建（不应发生），则前端自行创建。
+        const icon = await defaultWindowIcon();
         if (cancelled) return;
 
         const tray = await TrayIcon.new({
@@ -192,13 +197,6 @@ export function useTray({
         });
 
         trayRef.current = tray;
-
-        // Rebuild menu with latest data to cover any updates that Effect 2
-        // may have missed during the async tray creation window.
-        const latestMenu = await buildMenu();
-        if (!cancelled && trayRef.current) {
-          await trayRef.current.setMenu(latestMenu);
-        }
       } catch (err) {
         if (import.meta.env.DEV) {
           console.error("Failed to create tray icon:", err);

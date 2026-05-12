@@ -46,6 +46,40 @@ pub fn run() {
                 }
             });
 
+            // 运行时加载高分辨率图标，绕过 Tauri codegen 只取 ICO 第一个条目的 bug。
+            let img = image::load_from_memory(include_bytes!("../icons/icon.png"))
+                .expect("failed to decode icon.png");
+
+            // 窗口图标（影响任务栏）：保持原始 1024x1024，让 Windows 自行缩放。
+            let rgba = img.to_rgba8();
+            let window_icon = tauri::image::Image::new_owned(
+                rgba.to_vec(),
+                rgba.width(),
+                rgba.height(),
+            );
+
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_icon(window_icon);
+                }
+            }
+
+            // 托盘图标：Rust 端创建（带 ID "main-tray"），使用 64x64 Triangle 滤波避免过度锐化。
+            // 前端 useTray.ts 通过 getById("main-tray") 找到它并设置右键菜单，不重复创建。
+            let tray_img = img.resize_exact(64, 64, image::imageops::FilterType::Triangle);
+            let tray_rgba = tray_img.to_rgba8();
+            let tray_icon = tauri::image::Image::new_owned(
+                tray_rgba.to_vec(),
+                tray_rgba.width(),
+                tray_rgba.height(),
+            );
+
+            let _tray = tauri::tray::TrayIconBuilder::with_id("main-tray")
+                .icon(tray_icon)
+                .tooltip("EasyPack")
+                .build(app)?;
+
             // 全局托盘图标事件处理器：左键点击直接显示主窗口。
             // 同样在 Rust 端直接处理，不依赖 WebView。
             app.on_tray_icon_event(|app_handle, event| {
