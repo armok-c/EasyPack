@@ -244,7 +244,9 @@ export function useFloatWindow({
         setFloatVisible(true);
         await syncState(floatWin);
       } catch (err) {
-        console.error("Failed to create float window:", err);
+        if (import.meta.env.DEV) {
+          console.error("Failed to create float window:", err);
+        }
         toast.error("无法创建悬浮窗");
       } finally {
         isCreatingRef.current = false;

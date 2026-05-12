@@ -75,11 +75,11 @@ export function useTray({
       action: async () => {
         if (visibilityRef.current === "VISIBLE") {
           onHideRef.current();
-          appWindow.hide().catch(console.error);
+          appWindow.hide().catch((err) => { if (import.meta.env.DEV) console.error(err) });
         } else {
           onShowRef.current();
-          appWindow.show().catch(console.error);
-          appWindow.setFocus().catch(console.error);
+          appWindow.show().catch((err) => { if (import.meta.env.DEV) console.error(err) });
+          appWindow.setFocus().catch((err) => { if (import.meta.env.DEV) console.error(err) });
         }
       },
     });
@@ -155,7 +155,7 @@ export function useTray({
       if (trayRef.current) {
         const tray = trayRef.current;
         trayRef.current = null;
-        tray.close().catch(console.error);
+        tray.close().catch((err) => { if (import.meta.env.DEV) console.error(err) });
       }
       return;
     }
@@ -185,8 +185,8 @@ export function useTray({
           action: async (event) => {
             if (event.type === "Click" && event.button === "Left") {
               onShowRef.current();
-              appWindow.show().catch(console.error);
-              appWindow.setFocus().catch(console.error);
+              appWindow.show().catch((err) => { if (import.meta.env.DEV) console.error(err) });
+              appWindow.setFocus().catch((err) => { if (import.meta.env.DEV) console.error(err) });
             }
           },
         });
@@ -200,7 +200,9 @@ export function useTray({
           await trayRef.current.setMenu(latestMenu);
         }
       } catch (err) {
-        console.error("Failed to create tray icon:", err);
+        if (import.meta.env.DEV) {
+          console.error("Failed to create tray icon:", err);
+        }
       }
     }
 
@@ -211,7 +213,7 @@ export function useTray({
       const tray = trayRef.current;
       trayRef.current = null;
       if (tray) {
-        tray.close().catch(console.error);
+        tray.close().catch((err) => { if (import.meta.env.DEV) console.error(err) });
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,7 +241,9 @@ export function useTray({
           await trayRef.current.setMenu(menu);
         }
       } catch (err) {
-        console.error("Failed to update tray menu:", err);
+        if (import.meta.env.DEV) {
+          console.error("Failed to update tray menu:", err);
+        }
       }
     }
 
