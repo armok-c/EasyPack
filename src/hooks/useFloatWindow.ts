@@ -36,7 +36,9 @@ async function positionFloatTopRight(win: WebviewWindow) {
       await win.setPosition(new LogicalPosition(posX, posY));
     }
   } catch (err) {
-    console.error("Failed to set float window position:", err);
+    if (import.meta.env.DEV) {
+      console.error("Failed to set float window position:", err);
+    }
   }
 }
 
