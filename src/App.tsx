@@ -144,6 +144,14 @@ function App() {
     drawerEnabled,
   });
 
+  // Phase 14: ref 模式避免 onMoved useEffect 因 snapEdge/isDrawerAnimating 变化而频繁重建
+  const snapEdgeRef = useRef(snapEdge);
+  snapEdgeRef.current = snapEdge;
+  const isDrawerAnimatingRef = useRef(isDrawerAnimating);
+  isDrawerAnimatingRef.current = isDrawerAnimating;
+  const handleDragEndRef = useRef(handleDragEnd);
+  handleDragEndRef.current = handleDragEnd;
+
   // Phase 12: system tray
   useTray({
     currentProject,
@@ -261,18 +269,30 @@ function App() {
     await store?.set("drawerEnabled", enabled);
   }, [store]);
 
-  // Phase 14: D-04 拖拽中实时窗口位置检测驱动 SnapIndicator
+  // Phase 14: D-04 onMoved 驱动 SnapIndicator + 拖拽结束检测
+  // Windows WebView2 在 startDragging() 原生拖拽期间吞掉 JS 鼠标事件（mouseup/mousemove），
+  // 因此用 onMoved + debounce 检测拖拽结束：窗口停止移动 150ms 后视为拖拽结束。
+  // 使用 ref 模式读取 snapEdge/isDrawerAnimating/handleDragEnd，避免依赖变化导致
+  // onMoved 监听器被反复销毁重建（可能丢失高频移动事件）。
   useEffect(() => {
     if (!drawerEnabled) return;
     let cancelled = false;
     let unlisten: (() => void) | null = null;
+    let dragEndTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function clearDragEndTimer() {
+      if (dragEndTimer) {
+        clearTimeout(dragEndTimer);
+        dragEndTimer = null;
+      }
+    }
 
     async function setupMoveListener() {
       const currentWindow = getCurrentWindow();
       const fn = await currentWindow.onMoved(async () => {
         if (cancelled) return;
-        // 只在未吸附且未在动画中时检测（即用户正在拖拽）
-        if (snapEdge !== null || isDrawerAnimating) {
+        // 使用 ref 读取最新值，避免闭包捕获过期状态
+        if (snapEdgeRef.current !== null || isDrawerAnimatingRef.current) {
           setSnapPreviewEdge(null);
           return;
         }
@@ -306,6 +326,15 @@ function App() {
         } catch {
           // 窗口操作可能失败（窗口已销毁等），静默忽略
         }
+
+        // 拖拽结束检测：每次 onMoved 重置定时器，150ms 无新移动则视为拖拽结束
+        clearDragEndTimer();
+        dragEndTimer = setTimeout(async () => {
+          if (cancelled) return;
+          dragEndTimer = null;
+          setSnapPreviewEdge(null);
+          await handleDragEndRef.current();
+        }, 150);
       });
       if (cancelled) { fn(); return; }
       unlisten = fn;
@@ -314,15 +343,10 @@ function App() {
 
     return () => {
       cancelled = true;
+      clearDragEndTimer();
       unlisten?.();
     };
-  }, [drawerEnabled, snapEdge, isDrawerAnimating]);
-
-  // Phase 14: 拖拽结束时清除预览
-  const handleDragEndWithCleanup = useCallback(async () => {
-    setSnapPreviewEdge(null);
-    await handleDragEnd();
-  }, [handleDragEnd]);
+  }, [drawerEnabled]);
 
   return (
     <div
@@ -334,7 +358,6 @@ function App() {
         onSettingsOpen={() => setSettingsOpen(true)}
         onFloatToggle={toggleFloat}
         floatVisible={floatVisible}
-        onDragEnd={drawerEnabled ? handleDragEndWithCleanup : null}
         onDragWhileSnapped={drawerEnabled ? handleDragWhileSnapped : null}
         drawerSnapEdge={snapEdge}
       />

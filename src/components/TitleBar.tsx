@@ -9,7 +9,6 @@ interface TitleBarProps {
   onFloatToggle: () => void;
   floatVisible: boolean;
   // Phase 14: 边缘抽屉
-  onDragEnd?: (() => Promise<void>) | null;
   onDragWhileSnapped?: ((deltaX: number, deltaY: number) => void) | null;
   drawerSnapEdge?: string | null;
 }
@@ -18,7 +17,6 @@ export function TitleBar({
   onSettingsOpen,
   onFloatToggle,
   floatVisible,
-  onDragEnd,
   onDragWhileSnapped,
   drawerSnapEdge,
 }: TitleBarProps) {
@@ -63,17 +61,8 @@ export function TitleBar({
       }
 
       appWindow.startDragging();
-
-      // Phase 14: 拖拽结束时检测吸附
-      if (onDragEnd) {
-        const handleUp = () => {
-          onDragEnd();
-          window.removeEventListener("mouseup", handleUp);
-        };
-        window.addEventListener("mouseup", handleUp);
-      }
     },
-    [onDragEnd, drawerSnapEdge]
+    [drawerSnapEdge]
   );
 
   // Phase 14: 吸附状态下拖拽时检测位移
