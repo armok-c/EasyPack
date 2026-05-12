@@ -50,9 +50,13 @@ function FloatApp() {
     setTimeout(() => setFlashIndex(null), 200);
   }
 
-  // 关闭悬浮窗
-  function handleClose() {
-    floatWindow.close();
+  // 关闭悬浮窗 -- 使用 destroy() 而非 close()，
+  // 因为 close() 需要主窗口的 onCloseRequested handler 执行 destroy()，
+  // 而主窗口隐藏后 WebView 可能被节流导致回调不执行。
+  // 改为：先发事件通知主窗口清理状态，再直接 destroy。
+  async function handleClose() {
+    emit("float:close-requested");
+    await floatWindow.destroy();
   }
 
   return (

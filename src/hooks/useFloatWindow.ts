@@ -4,7 +4,6 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { primaryMonitor } from "@tauri-apps/api/window";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { toast } from "sonner";
-import type { Window } from "@tauri-apps/api/window";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import type { ProjectItem } from "./useProject";
 import type { CommandItem } from "@/lib/types";
@@ -13,7 +12,6 @@ interface UseFloatWindowOptions {
   currentProject: ProjectItem | null;
   commands: CommandItem[];
   onExecute: (command: string) => void;
-  appWindow: Window;
 }
 
 interface UseFloatWindowReturn {
@@ -53,12 +51,12 @@ export function useFloatWindow({
   currentProject,
   commands,
   onExecute,
-  appWindow,
 }: UseFloatWindowOptions): UseFloatWindowReturn {
   const [floatVisible, setFloatVisible] = useState(false);
   const floatWindowRef = useRef<WebviewWindow | null>(null);
   const unlistenersRef = useRef<UnlistenFn[]>([]);
   const isCreatingRef = useRef(false);
+  const operationLock = useRef<Promise<void>>(Promise.resolve());
 
   // Ref 模式防止闭包过时（遵循 useTray.ts 已验证模式）
   const currentProjectRef = useRef(currentProject);
@@ -77,6 +75,13 @@ export function useFloatWindow({
     }
   }, []);
 
+  // 清理悬浮窗状态（ref + React state + listeners）
+  const cleanupFloatState = useCallback(() => {
+    floatWindowRef.current = null;
+    setFloatVisible(false);
+    cleanupListeners();
+  }, [cleanupListeners]);
+
   // 状态同步：向悬浮窗推送当前项目/指令
   const syncState = useCallback(async (target?: WebviewWindow) => {
     const win = target ?? floatWindowRef.current;
@@ -86,6 +91,29 @@ export function useFloatWindow({
       commands: commandsRef.current,
     });
   }, []);
+
+  // 注册悬浮窗事件监听器（执行请求 + 关闭请求）
+  async function registerFloatListeners(): Promise<void> {
+    const unlistenExecute = await listen<{ command: string }>(
+      "float:execute",
+      (event) => {
+        const { command } = event.payload;
+        if (typeof command === "string" && command.length > 0) {
+          onExecuteRef.current(command);
+        }
+      }
+    );
+    unlistenersRef.current.push(unlistenExecute);
+
+    // 监听悬浮窗主动发来的关闭请求（用户点击关闭按钮）
+    const unlistenClose = await listen(
+      "float:close-requested",
+      () => {
+        cleanupFloatState();
+      }
+    );
+    unlistenersRef.current.push(unlistenClose);
+  }
 
   // 创建悬浮窗
   const createFloat = useCallback(async (): Promise<WebviewWindow> => {
@@ -133,25 +161,9 @@ export function useFloatWindow({
     // 设置初始位置
     await positionFloatTopRight(floatWin);
 
-    // 监听悬浮窗发来的执行请求 + 关闭事件
+    // 注册事件监听器
     try {
-      const unlistenExecute = await listen<{ command: string }>(
-        "float:execute",
-        (event) => {
-          const { command } = event.payload;
-          if (typeof command === "string" && command.length > 0) {
-            onExecuteRef.current(command);
-          }
-        }
-      );
-      unlistenersRef.current.push(unlistenExecute);
-
-      const unlistenClose = await floatWin.onCloseRequested(() => {
-        floatWindowRef.current = null;
-        setFloatVisible(false);
-        cleanupListeners();
-      });
-      unlistenersRef.current.push(unlistenClose);
+      await registerFloatListeners();
     } catch (err) {
       // 监听器注册失败 -- 回滚：销毁已创建的窗口
       try { await floatWin.destroy(); } catch { /* ignore */ }
@@ -159,55 +171,26 @@ export function useFloatWindow({
     }
 
     return floatWin;
-  }, [cleanupListeners]);
+  }, [cleanupFloatState]);
 
   // 当窗口存在但 ref 失效时，重新领养该窗口
   async function adoptFloatWindow(win: WebviewWindow): Promise<void> {
-    const unlistenClose = await win.onCloseRequested(() => {
-      floatWindowRef.current = null;
-      setFloatVisible(false);
-      cleanupListeners();
-    });
-    unlistenersRef.current.push(unlistenClose);
-
-    const unlistenExecute = await listen<{ command: string }>(
-      "float:execute",
-      (event) => {
-        const { command } = event.payload;
-        if (typeof command === "string" && command.length > 0) {
-          onExecuteRef.current(command);
-        }
-      }
-    );
-    unlistenersRef.current.push(unlistenExecute);
-
+    cleanupListeners();
+    await registerFloatListeners();
     floatWindowRef.current = win;
   }
 
-  // toggle 显示/隐藏
-  const toggleFloat = useCallback(async () => {
-    const existing = await WebviewWindow.getByLabel("float");
+  // toggle 显示/隐藏（通过 mutex 序列化，防止并发竞态）
+  const toggleFloat = useCallback(() => {
+    operationLock.current = operationLock.current.then(async () => {
+      const existing = await WebviewWindow.getByLabel("float");
 
-    if (existing && floatWindowRef.current) {
-      // 正常 toggle：ref 有效，窗口存在
-      if (floatVisible) {
-        await existing.hide();
-        setFloatVisible(false);
-      } else {
-        await existing.show();
-        await positionFloatTopRight(existing);
-        await existing.setFocus();
-        setFloatVisible(true);
-        await syncState(existing);
-      }
-      return;
-    }
+      // Branch A: ref 有效 + 窗口存在 → 正常 toggle
+      if (existing && floatWindowRef.current) {
+        let visible = false;
+        try { visible = await existing.isVisible(); } catch { /* window dying */ }
 
-    if (existing && !floatWindowRef.current) {
-      // Adopt：窗口存在但 ref 失效
-      try {
-        await adoptFloatWindow(existing);
-        if (floatVisible) {
+        if (visible) {
           await existing.hide();
           setFloatVisible(false);
         } else {
@@ -218,28 +201,49 @@ export function useFloatWindow({
           await syncState(existing);
         }
         return;
-      } catch (err) {
-        // adopt 失败，销毁残留窗口后走创建路径
-        console.warn("Adopt float window failed, destroying and recreating:", err);
-        try { await existing.destroy(); } catch { /* ignore */ }
       }
-    }
 
-    // 窗口不存在，首次创建
-    if (isCreatingRef.current) return;
-    isCreatingRef.current = true;
-    try {
-      const floatWin = await createFloat();
-      floatWindowRef.current = floatWin;
-      setFloatVisible(true);
-      await syncState(floatWin);
-    } catch (err) {
-      console.error("Failed to create float window:", err);
-      toast.error("无法创建悬浮窗");
-    } finally {
-      isCreatingRef.current = false;
-    }
-  }, [floatVisible, createFloat, syncState]);
+      // Branch B: 窗口存在但 ref 失效 → adopt
+      if (existing && !floatWindowRef.current) {
+        try {
+          await existing.isVisible();
+          await adoptFloatWindow(existing);
+
+          let visible = false;
+          try { visible = await existing.isVisible(); } catch { /* ignore */ }
+
+          if (visible) {
+            await existing.hide();
+            setFloatVisible(false);
+          } else {
+            await existing.show();
+            await positionFloatTopRight(existing);
+            await existing.setFocus();
+            setFloatVisible(true);
+            await syncState(existing);
+          }
+          return;
+        } catch {
+          try { await existing.destroy(); } catch { /* ignore */ }
+        }
+      }
+
+      // Branch C: 无窗口 → 创建
+      if (isCreatingRef.current) return;
+      isCreatingRef.current = true;
+      try {
+        const floatWin = await createFloat();
+        floatWindowRef.current = floatWin;
+        setFloatVisible(true);
+        await syncState(floatWin);
+      } catch (err) {
+        console.error("Failed to create float window:", err);
+        toast.error("无法创建悬浮窗");
+      } finally {
+        isCreatingRef.current = false;
+      }
+    }).catch(() => {});
+  }, [createFloat, syncState]);
 
   // 自动同步：当项目/指令变化时推送
   useEffect(() => {
@@ -247,19 +251,17 @@ export function useFloatWindow({
     syncState();
   }, [currentProject, commands, floatVisible, syncState]);
 
-  // D-12: 主窗口退出时销毁悬浮窗
-  const destroyFloat = useCallback(async () => {
-    const existing = await WebviewWindow.getByLabel("float");
-    if (existing) {
-      try {
-        await existing.destroy();
-      } catch {
-        // 窗口可能已关闭，忽略错误
+  // D-12: 主窗口退出时销毁悬浮窗（通过 mutex 序列化）
+  const destroyFloat = useCallback(() => {
+    operationLock.current = operationLock.current.then(async () => {
+      const existing = await WebviewWindow.getByLabel("float");
+      if (existing) {
+        try { await existing.destroy(); } catch { /* already destroyed */ }
       }
-    }
-    floatWindowRef.current = null;
-    setFloatVisible(false);
-    cleanupListeners();
+      floatWindowRef.current = null;
+      setFloatVisible(false);
+      cleanupListeners();
+    }).catch(() => {});
   }, [cleanupListeners]);
 
   // 组件卸载时清理事件监听器
