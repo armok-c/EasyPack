@@ -314,17 +314,15 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
         const to: AnimState = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
         operationLock.current = operationLock.current.then(async () => {
           await applyAnimState(to);
-
-          // 恢复 minWidth AFTER animation
           await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-
-          // 清除吸附状态 AFTER animation
           snapEdgeRef.current = null;
           setCurrentSnapEdge(null);
           originalRectRef.current = null;
+          if (visibilityRef.current !== "VISIBLE") {
+            showFromDrawerRef.current();
+          }
         });
       } else {
-        // 没有原始位置，使用默认尺寸并居中
         operationLock.current = operationLock.current.then(async () => {
           await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
           await appWindow.setSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
@@ -332,12 +330,10 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
           snapEdgeRef.current = null;
           setCurrentSnapEdge(null);
           originalRectRef.current = null;
+          if (visibilityRef.current !== "VISIBLE") {
+            showFromDrawerRef.current();
+          }
         });
-      }
-
-      // 如果不是 VISIBLE 状态，恢复
-      if (visibilityRef.current !== "VISIBLE") {
-        showFromDrawerRef.current();
       }
     },
     [appWindow, applyAnimState]
@@ -360,10 +356,11 @@ export function useEdgeDrawer(options: UseEdgeDrawerOptions): UseEdgeDrawerRetur
     // 恢复到原始位置
     const orig = originalRectRef.current;
     if (!orig) {
-      // 没有原始位置，恢复默认尺寸并清除吸附状态
-      await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
-      snapEdgeRef.current = null;
-      setCurrentSnapEdge(null);
+      operationLock.current = operationLock.current.then(async () => {
+        await appWindow.setMinSize(new LogicalSize(DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
+        snapEdgeRef.current = null;
+        setCurrentSnapEdge(null);
+      });
       return;
     }
 
