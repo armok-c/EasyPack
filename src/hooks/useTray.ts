@@ -84,7 +84,7 @@ export function useTray({
       },
     });
 
-    const items: Array<MenuItem | PredefinedMenuItem | Menu> = [toggleItem];
+    const items: Array<MenuItem | PredefinedMenuItem> = [toggleItem];
 
     // Phase 13: 悬浮窗 toggle 菜单项
     const floatText = floatVisibleRef.current ? "关闭悬浮窗" : "打开悬浮窗";

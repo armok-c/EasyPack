@@ -59,7 +59,7 @@ function DialogContent({
   let content: React.ReactNode[] = [];
 
   function classifyChild(child: React.ReactNode) {
-    if (React.isValidElement(child)) {
+    if (React.isValidElement<{ children?: React.ReactNode }>(child)) {
       const type = child.type;
       if (type === React.Fragment) {
         React.Children.forEach(child.props.children, classifyChild);

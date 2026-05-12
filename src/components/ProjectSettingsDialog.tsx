@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { X, FolderOpen, FileImage, Loader2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ICON_OPTIONS, DEFAULT_ICON, getIconByName, isFileIcon, getFilePath } from "@/lib/icons";
 import { COLOR_OPTIONS, DEFAULT_COLOR } from "@/lib/colors";
 import { cn } from "@/lib/utils";
@@ -96,7 +96,7 @@ export function ProjectSettingsDialog({
 
   const handleSelectFile = useCallback(async () => {
     try {
-      const selected = await open({
+      const selected = await openDialog({
         multiple: false,
         directory: false,
         title: "选择图标文件",

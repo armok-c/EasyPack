@@ -9,7 +9,7 @@ import {
   ContextMenuItem,
 } from "@/components/ui/context-menu";
 import { DragDropProvider } from "@dnd-kit/react";
-import { useSortable, isSortable } from "@dnd-kit/react/sortable";
+import { useSortable } from "@dnd-kit/react/sortable";
 import { cn } from "@/lib/utils";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getIconByName, isFileIcon, getFilePath } from "@/lib/icons";
@@ -27,6 +27,20 @@ interface SidebarProps {
   // Phase 5 Plan 03: keyboard navigation zone management
   activeZone: "sidebar" | "main";
   onZoneSwitch: () => void;
+}
+
+interface SortableSource {
+  initialIndex: number;
+  index: number;
+}
+
+function isSortableSource(source: unknown): source is SortableSource {
+  if (typeof source !== "object" || source === null) return false;
+  const candidate = source as Partial<SortableSource>;
+  return (
+    typeof candidate.initialIndex === "number" &&
+    typeof candidate.index === "number"
+  );
 }
 
 // Sortable project item extracted as independent component for @dnd-kit useSortable
@@ -213,9 +227,8 @@ export function Sidebar({
     (event: { canceled?: boolean; operation: { source: unknown } }) => {
       if (event.canceled) return;
       const { source } = event.operation;
-      if (isSortable(source)) {
-        const sortableSource = source as { initialIndex: number; index: number };
-        const { initialIndex, index } = sortableSource;
+      if (isSortableSource(source)) {
+        const { initialIndex, index } = source;
         if (initialIndex !== index) {
           const newProjects = [...projects];
           const [moved] = newProjects.splice(initialIndex, 1);

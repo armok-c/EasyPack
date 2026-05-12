@@ -69,6 +69,8 @@ export function TitleBar({
   // Phase 14: 吸附状态下拖拽时检测位移
   useEffect(() => {
     if (!drawerSnapEdge || !onDragWhileSnapped) return;
+    const handleSnappedDrag: NonNullable<typeof onDragWhileSnapped> =
+      onDragWhileSnapped;
 
     function handleMouseMove(e: MouseEvent) {
       if (!dragStartPosRef.current) return;
@@ -76,7 +78,7 @@ export function TitleBar({
       const deltaY = e.clientY - dragStartPosRef.current.y;
       const totalDelta = Math.abs(deltaX) + Math.abs(deltaY);
       if (totalDelta > 5) {
-        onDragWhileSnapped(deltaX, deltaY);
+        handleSnappedDrag(deltaX, deltaY);
       }
     }
 
