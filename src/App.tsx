@@ -151,17 +151,17 @@ function App() {
     recentCommands,
     visibility,
     onExecute: handleExecuteWithRecent,
-    onShow: () => {
+    onShow: async () => {
       if (isDrawerHidden || visibility === "DRAWER_HIDDEN") {
-        restoreFromDrawer();
+        await restoreFromDrawer();
         showFromDrawer();
       } else {
         showFromTray();
       }
-      appWindow.show().catch(console.error);
-      appWindow.setFocus().catch(console.error);
+      appWindow.show().catch((err) => { if (import.meta.env.DEV) console.error(err); });
+      appWindow.setFocus().catch((err) => { if (import.meta.env.DEV) console.error(err); });
     },
-    onHide: () => { hideToTray(); appWindow.hide().catch(console.error); },
+    onHide: () => { hideToTray(); appWindow.hide().catch((err) => { if (import.meta.env.DEV) console.error(err); }); },
     onQuit: async () => {
       await destroyFloat();
       await appWindow.destroy();
@@ -209,7 +209,9 @@ function App() {
       try {
         await appWindow.hide();
       } catch (err) {
-        console.error("Failed to hide window:", err);
+        if (import.meta.env.DEV) {
+          console.error("Failed to hide window:", err);
+        }
       }
     });
     return () => { unlisten.then((fn) => fn()); };
