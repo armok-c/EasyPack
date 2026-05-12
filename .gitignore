@@ -17,3 +17,9 @@ Thumbs.db
 # Temp files
 *.tmp
 *.log
+
+# Claude Code local config
+.claude/settings.local.json
+
+# GSD planning artifacts
+.planning/
