@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: none
-milestone_name: ""
-status: milestone_complete
+milestone: v2.0
+milestone_name: "能力跃升"
+status: planning
 stopped_at: ""
-last_updated: "2026-05-12T07:30:00.000Z"
-last_activity: 2026-05-12
+last_updated: "2026-05-13T00:00:00.000Z"
+last_activity: 2026-05-13
 progress:
   total_phases: 0
   completed_phases: 0
@@ -16,18 +16,20 @@ progress:
 
 # Project State
 
-**Status:** Milestone v1.2 SHIPPED — awaiting next milestone
-**Last Activity:** 2026-05-12
-**Current Focus:** Planning next milestone
+**Status:** Milestone v2.0 — defining requirements
+**Last Activity:** 2026-05-13
+**Current Focus:** Requirements and roadmap for v2.0
 
 ## Current Position
 
-Milestone v1.2 complete. All 4 phases (11-14) shipped.
-Next: `/gsd-new-milestone` to start v1.3 or v2.0 planning.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-13 — Milestone v2.0 started
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-12)
+See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** 选中项目 → 一键在终端执行指令，无需手动切换目录和输入命令
 **Shipped:** v1.0 (2026-04-15), v1.1 (2026-04-26), v1.2 (2026-05-12)
