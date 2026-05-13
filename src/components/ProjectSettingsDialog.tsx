@@ -230,6 +230,7 @@ export function ProjectSettingsDialog({
                         src={convertFileSrc(candidate.path)}
                         alt=""
                         className="size-8 rounded-md object-cover"
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
                       <span className="text-xs text-muted-foreground truncate max-w-[32px]">
                         {candidate.name}
