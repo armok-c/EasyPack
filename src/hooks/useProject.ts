@@ -192,8 +192,14 @@ export function useProject() {
       setSelectedId(newSelectedId);
       await store?.set(PROJECTS_KEY, updated);
       await store?.set(SELECTED_KEY, newSelectedId);
-      // Clean up project-level command data
+      // Clean up project-level command data (both store and in-memory)
       await store?.delete(projectCommandsKey(id));
+      setProjectCommandsMap((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      await store?.save();
     },
     [projects, selectedId, store]
   );
@@ -279,8 +285,8 @@ export function useProject() {
   // Add custom command (supports both global and project-level modes)
   const addCommand = useCallback(
     async (name: string, command: string, icon?: string, scope?: "global" | "project") => {
-      // Use explicit scope parameter, fallback to current commandMode
-      const effectiveScope = scope ?? (commandMode === "project" && selectedId ? "project" : "global");
+      // Default to project scope when a project is selected, so custom commands follow projects
+      const effectiveScope = scope ?? (selectedId ? "project" : "global");
 
       if (effectiveScope === "project" && selectedId) {
         // Project-level: add to projectCommandsMap
@@ -293,10 +299,23 @@ export function useProject() {
           scope: "project",
           addedAt: Date.now(),
         };
-        const current = projectCommandsMap[selectedId] ?? [];
+        let current = projectCommandsMap[selectedId] ?? [];
+        // When adding the first project command, initialize from presets
+        // so the user still sees default commands alongside their custom one
+        if (current.length === 0) {
+          const presets = getDefaultsAsCommandItems();
+          current = presets.map((p, idx) => ({
+            ...p,
+            id: crypto.randomUUID(),
+            scope: "project" as const,
+            addedAt: idx,
+          }));
+        }
         const updated = [...current, newItem];
         setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
         await store?.set(projectCommandsKey(selectedId), updated);
+        await store?.save();
+        setCommandMode("project");
         toast.success(`已添加指令: ${name}`);
       } else {
         // Global mode: add to customCommands
@@ -365,10 +384,12 @@ export function useProject() {
             return next;
           });
           await store?.delete(projectCommandsKey(selectedId));
+          await store?.save();
           setCommandMode("global");
         } else {
           setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
           await store?.set(projectCommandsKey(selectedId), updated);
+          await store?.save();
         }
         toast.success(`已删除指令: ${target.name}`);
       } else {
@@ -378,6 +399,7 @@ export function useProject() {
         const updated = customCommands.filter((c) => c.id !== id);
         setCustomCommands(updated);
         await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        await store?.save();
         toast.success(`已删除指令: ${target.name}`);
       }
     },

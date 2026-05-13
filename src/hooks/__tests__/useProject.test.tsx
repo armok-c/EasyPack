@@ -11,6 +11,7 @@ const { mockStore } = vi.hoisted(() => ({
     set: vi.fn(),
     delete: vi.fn(),
     keys: vi.fn(),
+    save: vi.fn(),
   },
 }));
 
@@ -55,6 +56,7 @@ describe("useProject - command CRUD", () => {
     mockStore.set.mockResolvedValue(undefined);
     mockStore.delete.mockResolvedValue(undefined);
     mockStore.keys.mockResolvedValue([]);
+    mockStore.save.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -85,7 +87,7 @@ describe("useProject - command CRUD", () => {
     expect(added!.command).toBe("npm test");
   });
 
-  it("addCommand creates command with type=custom, scope=global, default icon, UUID id", async () => {
+  it("addCommand creates command with type=custom, scope=project (default when project selected), default icon, UUID id", async () => {
     const result = await initHook();
 
     await act(async () => {
@@ -95,7 +97,7 @@ describe("useProject - command CRUD", () => {
     const added = result.current.commands.find((c) => c.name === "MyCmd");
     expect(added).toBeDefined();
     expect(added!.type).toBe("custom");
-    expect(added!.scope).toBe("global");
+    expect(added!.scope).toBe("project"); // default changed to project when a project is selected
     expect(added!.icon).toBe("Terminal"); // DEFAULT_ICON
     // UUID format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
     expect(added!.id).toMatch(
@@ -160,21 +162,21 @@ describe("useProject - command CRUD", () => {
     expect(cmds.some((c) => c.name === "Custom1")).toBe(true);
   });
 
-  it("addCommand persists to store via store.set", async () => {
+  it("addCommand persists to projectCommands store key (default scope=project)", async () => {
     const result = await initHook();
 
     await act(async () => {
       await result.current.addCommand("Persist", "echo persist");
     });
 
-    // store.set should have been called with the customCommands key
+    // store.set should have been called with the projectCommands key (not customCommands)
     expect(mockStore.set).toHaveBeenCalled();
     const lastCall = mockStore.set.mock.calls.at(-1);
-    expect(lastCall![0]).toBe("customCommands");
-    // The value should be an array with 1 item
+    expect(lastCall![0]).toBe("projectCommands:test/crud-project");
+    // The value should include auto-initialized presets (2) + 1 custom = 3
     const savedValue = lastCall![1] as CommandItem[];
-    expect(savedValue.length).toBe(1);
-    expect(savedValue[0].name).toBe("Persist");
+    expect(savedValue.length).toBe(3);
+    expect(savedValue.some((c) => c.name === "Persist")).toBe(true);
   });
 
   it("initializes customCommands from persisted store data", async () => {
@@ -251,6 +253,7 @@ describe("useProject - project-level command override", () => {
     mockStore.set.mockResolvedValue(undefined);
     mockStore.delete.mockResolvedValue(undefined);
     mockStore.keys.mockResolvedValue([]);
+    mockStore.save.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

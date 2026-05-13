@@ -51,7 +51,7 @@ export function CommandDialog({
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<"global" | "project">(
-    () => commandMode
+    () => hasProject ? "project" : commandMode
   );
 
   const filteredPresets = useMemo(
@@ -124,7 +124,7 @@ export function CommandDialog({
         setCommandDirty(false);
         setSelectedCategory("");
         setSelectedPresetId("");
-        setSelectedScope(commandMode);
+        setSelectedScope(hasProject ? "project" : commandMode);
       }
       onOpenChange(newOpen);
     },

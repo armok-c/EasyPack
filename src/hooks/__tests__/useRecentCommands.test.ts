@@ -3,11 +3,13 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 
 const mockStoreGet = vi.fn().mockResolvedValue(undefined);
 const mockStoreSet = vi.fn().mockResolvedValue(undefined);
+const mockStoreSave = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@tauri-apps/plugin-store", () => ({
   load: vi.fn().mockResolvedValue({
     get: mockStoreGet,
     set: mockStoreSet,
+    save: mockStoreSave,
   }),
 }));
 
@@ -18,6 +20,7 @@ function createMockStore(): Store {
   return {
     get: mockStoreGet,
     set: mockStoreSet,
+    save: mockStoreSave,
   } as unknown as Store;
 }
 
