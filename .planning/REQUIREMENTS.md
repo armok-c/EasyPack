@@ -75,6 +75,38 @@
 
 ---
 
+
 ## Traceability
 
-*(Filled by roadmap — maps each REQ to its phase)*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| BOOT-01 | Phase 15 | Pending |
+| BOOT-02 | Phase 15 | Pending |
+| BOOT-03 | Phase 15 | Pending |
+| BOOT-04 | Phase 15 | Pending |
+| VER-01 | Phase 16 | Pending |
+| VER-02 | Phase 16 | Pending |
+| VER-03 | Phase 16 | Pending |
+| VER-04 | Phase 16 | Pending |
+| SCRIPT-01 | Phase 17 | Pending |
+| SCRIPT-02 | Phase 17 | Pending |
+| SCRIPT-03 | Phase 17 | Pending |
+| SCRIPT-04 | Phase 17 | Pending |
+| SCRIPT-05 | Phase 17 | Pending |
+| KBD-01 | Phase 18 | Pending |
+| KBD-02 | Phase 18 | Pending |
+| KBD-03 | Phase 18 | Pending |
+| KBD-04 | Phase 18 | Pending |
+| KBD-05 | Phase 18 | Pending |
+| KBD-06 | Phase 18 | Pending |
+| FLOAT-01 | Phase 19 | Pending |
+| FLOAT-02 | Phase 19 | Pending |
+| FLOAT-03 | Phase 19 | Pending |
+| FLOAT-04 | Phase 19 | Pending |
+| FLOAT-05 | Phase 19 | Pending |
+| CONFIG-01 | Phase 20 | Pending |
+| CONFIG-02 | Phase 20 | Pending |
+| CONFIG-03 | Phase 20 | Pending |
+| CONFIG-04 | Phase 20 | Pending |
+| CONFIG-05 | Phase 20 | Pending |
+| CONFIG-06 | Phase 20 | Pending |
