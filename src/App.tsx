@@ -12,6 +12,7 @@ import { useRecentCommands } from "@/hooks/useRecentCommands";
 import { useTray } from "@/hooks/useTray";
 import { useFloatWindow } from "@/hooks/useFloatWindow";
 import { useEdgeDrawer } from "@/hooks/useEdgeDrawer";
+import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { SnapIndicator } from "@/components/SnapIndicator";
 import { detectSnapEdge } from "@/lib/drawer-geometry";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
@@ -115,6 +116,7 @@ function App() {
 
   // Phase 12: recent commands tracking
   const { recentCommands, addRecentCommand } = useRecentCommands({ store });
+  const { updateAvailable, latestVersion, currentVersion, openReleasePage } = useUpdateCheck(store);
 
   // Phase 12: execute with recent command tracking
   const handleExecuteWithRecent = useCallback(async (shellCommand: string) => {
@@ -419,6 +421,7 @@ function App() {
         floatVisible={floatVisible}
         onDragWhileSnapped={drawerEnabled ? handleDragWhileSnapped : null}
         drawerSnapEdge={snapEdge}
+        updateAvailable={updateAvailable}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
@@ -467,6 +470,10 @@ function App() {
         onDrawerEnabledChange={handleDrawerEnabledChange}
         autostartEnabled={autostartEnabled}
         onAutostartEnabledChange={handleAutostartEnabledChange}
+        currentVersion={currentVersion}
+        updateAvailable={updateAvailable}
+        latestVersion={latestVersion}
+        onOpenReleasePage={openReleasePage}
       />
       <SnapIndicator edge={snapPreviewEdge} />
       <Toaster richColors position="bottom-right" duration={1500} />

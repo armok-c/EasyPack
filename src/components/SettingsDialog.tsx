@@ -21,6 +21,11 @@ interface SettingsDialogProps {
   // Phase 15: 开机启动
   autostartEnabled: boolean;
   onAutostartEnabledChange: (enabled: boolean) => void;
+  // Phase 16: 版本管理
+  currentVersion: string;
+  updateAvailable: boolean;
+  latestVersion: string | null;
+  onOpenReleasePage: () => void;
 }
 
 export function SettingsDialog({
@@ -34,6 +39,10 @@ export function SettingsDialog({
   onDrawerEnabledChange,
   autostartEnabled,
   onAutostartEnabledChange,
+  currentVersion,
+  updateAvailable,
+  latestVersion,
+  onOpenReleasePage,
 }: SettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,6 +135,21 @@ export function SettingsDialog({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 版本号 + 更新提示 */}
+        <div className="border-t border-white/10 pt-3 mt-2">
+          {updateAvailable && latestVersion && (
+            <button
+              onClick={onOpenReleasePage}
+              className="w-full text-left px-3 py-2 mb-2 rounded-md border-l-2 border-blue-400 bg-blue-400/10 text-sm text-blue-300 hover:bg-blue-400/20 transition-colors cursor-pointer"
+            >
+              发现新版本 v{latestVersion}，点击下载
+            </button>
+          )}
+          <p className="text-xs text-muted-foreground text-center">
+            v{currentVersion || "..."}
+          </p>
         </div>
       </DialogContent>
     </Dialog>
