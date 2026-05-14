@@ -13,6 +13,11 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .arg("--autostart")
+                .build(),
+        )
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
@@ -22,6 +27,63 @@ pub fn run() {
             commands::shell::open_folder,
         ])
         .setup(|app| {
+            // --autostart 检测：开机自启时在 WebView 加载前隐藏窗口
+            let is_autostart = std::env::args().any(|arg| arg == "--autostart");
+            if is_autostart {
+                use tauri::Manager;
+                use tauri::Emitter;
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                    let _ = window.set_skip_taskbar(true);
+                }
+                let _ = app.emit("app:autostart-hidden", ());
+                // D-02: 自启时确保 trayEnabled 和 closeToTray 为 true，否则无处可去。
+                // 所有 store.save() 和 store.set() 均为 best-effort —— 失败时静默忽略，
+                // 因为自愈逻辑每次启动都会执行，下次启动时会重试。
+                {
+                    use tauri_plugin_store::StoreExt;
+                    if let Ok(store) = app.store("easypack-store.json") {
+                        let needs_tray = store
+                            .get("trayEnabled")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        if !needs_tray {
+                            let _ = store.set("trayEnabled", serde_json::Value::Bool(true));
+                            let _ = store.set("closeToTray", serde_json::Value::Bool(true));
+                            let _ = store.save();
+                        } else {
+                            let needs_ctt = store
+                                .get("closeToTray")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(true);
+                            if !needs_ctt {
+                                let _ = store.set("closeToTray", serde_json::Value::Bool(true));
+                                let _ = store.save();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 自愈：如果 store 中 autostartEnabled=true 但注册表条目丢失，静默重新注册。
+            // manager.enable() 为 best-effort，失败时静默忽略（下次启动重试）。
+            {
+                use tauri_plugin_store::StoreExt;
+                use tauri_plugin_autostart::ManagerExt;
+                if let Ok(store) = app.store("easypack-store.json") {
+                    let autostart_on = store
+                        .get("autostartEnabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    if autostart_on {
+                        let manager = app.autolaunch();
+                        if !manager.is_enabled().unwrap_or(false) {
+                            let _ = manager.enable();
+                        }
+                    }
+                }
+            }
+
             // 全局菜单事件处理器：Rust 端直接处理核心窗口操作，
             // 不依赖 WebView JS 运行时。解决主窗口隐藏后 WebView
             // 可能被节流导致 JS 回调不执行的问题。

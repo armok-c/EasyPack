@@ -17,6 +17,10 @@ import { detectSnapEdge } from "@/lib/drawer-geometry";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
 import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
+import {
+  enable as autostartEnable,
+  disable as autostartDisable,
+} from "@tauri-apps/plugin-autostart";
 import "./index.css";
 
 const appWindow = getCurrentWindow();
@@ -94,6 +98,8 @@ function App() {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   // Phase 14: drawer settings state
   const [drawerEnabled, setDrawerEnabled] = useState(false);
+  // Phase 15: autostart settings state
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
   // Phase 14: 拖拽中实时吸附预览状态 (D-04)
   const [snapPreviewEdge, setSnapPreviewEdge] = useState<SnapEdge | null>(null);
   const closeToTrayRef = useRef(closeToTray);
@@ -196,9 +202,13 @@ function App() {
     const unlistenHidden = listen("main:hidden-from-rust", () => {
       hideToTray();
     });
+    const unlistenAutostartHidden = listen("app:autostart-hidden", () => {
+      hideToTray();
+    });
     return () => {
       unlistenShown.then((fn) => fn());
       unlistenHidden.then((fn) => fn());
+      unlistenAutostartHidden.then((fn) => fn());
     };
   }, [showFromTray, hideToTray, showFromDrawer, restoreFromDrawer, isDrawerHidden]);
 
@@ -233,6 +243,7 @@ function App() {
       const saved = await store.get<boolean>("trayEnabled");
       const savedCTT = await store.get<boolean>("closeToTray");
       const savedDrawer = await store.get<boolean>("drawerEnabled");
+      const savedAutostart = await store.get<boolean>("autostartEnabled");
       if (mounted) {
         const effectiveTrayEnabled = saved !== undefined && saved !== null ? saved : true;
         const effectiveCloseToTray = effectiveTrayEnabled
@@ -241,6 +252,19 @@ function App() {
         setTrayEnabled(effectiveTrayEnabled);
         setCloseToTray(effectiveCloseToTray);
         setDrawerEnabled(savedDrawer !== undefined && savedDrawer !== null ? savedDrawer : false);
+        const effectiveAutostartEnabled = effectiveCloseToTray
+          ? (savedAutostart !== undefined && savedAutostart !== null ? savedAutostart : false)
+          : false;
+        setAutostartEnabled(effectiveAutostartEnabled);
+        // 如果 store 中 autostartEnabled 与 closeToTray 不一致，静默修正 store
+        if (effectiveCloseToTray === false && (savedAutostart === true)) {
+          await store.set("autostartEnabled", false);
+          try { await autostartDisable(); } catch (err) {
+            if (import.meta.env.DEV) {
+              console.error("Failed to disable autostart on store invariant fix:", err);
+            }
+          }
+        }
         setSettingsLoaded(true);
       }
     }
@@ -254,6 +278,14 @@ function App() {
     if (!enabled) {
       setCloseToTray(false);
       await store?.set("closeToTray", false);
+      // D-10: 关闭 trayEnabled 时级联关闭 autostartEnabled
+      setAutostartEnabled(false);
+      await store?.set("autostartEnabled", false);
+      try { await autostartDisable(); } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error("Failed to disable autostart on tray cascade:", err);
+        }
+      }
     }
     await store?.set("trayEnabled", enabled);
   }, [store]);
@@ -261,6 +293,33 @@ function App() {
   const handleCloseToTrayChange = useCallback(async (enabled: boolean) => {
     setCloseToTray(enabled);
     await store?.set("closeToTray", enabled);
+    // D-11: 关闭 closeToTray 时级联关闭 autostartEnabled
+    if (!enabled) {
+      setAutostartEnabled(false);
+      await store?.set("autostartEnabled", false);
+      try { await autostartDisable(); } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error("Failed to disable autostart on closeToTray cascade:", err);
+        }
+      }
+    }
+  }, [store]);
+
+  // Phase 15: autostart enabled persistence
+  const handleAutostartEnabledChange = useCallback(async (enabled: boolean) => {
+    setAutostartEnabled(enabled);
+    await store?.set("autostartEnabled", enabled);
+    try {
+      if (enabled) {
+        await autostartEnable();
+      } else {
+        await autostartDisable();
+      }
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("Failed to configure autostart:", err);
+      }
+    }
   }, [store]);
 
   // Phase 14: drawer enabled persistence
@@ -406,6 +465,8 @@ function App() {
         onCloseToTrayChange={handleCloseToTrayChange}
         drawerEnabled={drawerEnabled}
         onDrawerEnabledChange={handleDrawerEnabledChange}
+        autostartEnabled={autostartEnabled}
+        onAutostartEnabledChange={handleAutostartEnabledChange}
       />
       <SnapIndicator edge={snapPreviewEdge} />
       <Toaster richColors position="bottom-right" duration={1500} />

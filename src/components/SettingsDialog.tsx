@@ -18,6 +18,9 @@ interface SettingsDialogProps {
   // Phase 14: 边缘抽屉
   drawerEnabled: boolean;
   onDrawerEnabledChange: (enabled: boolean) => void;
+  // Phase 15: 开机启动
+  autostartEnabled: boolean;
+  onAutostartEnabledChange: (enabled: boolean) => void;
 }
 
 export function SettingsDialog({
@@ -29,6 +32,8 @@ export function SettingsDialog({
   onCloseToTrayChange,
   drawerEnabled,
   onDrawerEnabledChange,
+  autostartEnabled,
+  onAutostartEnabledChange,
 }: SettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -76,6 +81,26 @@ export function SettingsDialog({
                   checked={closeToTray}
                   onCheckedChange={onCloseToTrayChange}
                   disabled={!trayEnabled}
+                />
+              </div>
+
+              {/* Switch: 开机启动 (depends on closeToTray) */}
+              <div
+                className={cn(
+                  "flex items-center justify-between",
+                  !closeToTray && "opacity-50 pointer-events-none"
+                )}
+              >
+                <div>
+                  <p className="text-sm">开机启动</p>
+                  <p className="text-xs text-muted-foreground">
+                    Windows 启动时自动运行 EasyPack 并最小化到系统托盘
+                  </p>
+                </div>
+                <Switch
+                  checked={autostartEnabled}
+                  onCheckedChange={onAutostartEnabledChange}
+                  disabled={!closeToTray}
                 />
               </div>
             </div>

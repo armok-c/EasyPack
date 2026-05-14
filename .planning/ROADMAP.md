@@ -78,8 +78,8 @@ Plans:
   4. 点击更新提示后，浏览器打开 GitHub Release 下载页面
 **Plans:** 2 plans
 Plans:
-- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
-- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
+- [ ] 16-01-PLAN.md — Rust 后端：check_for_updates command + open_release_page command + Cargo.toml 依赖
+- [ ] 16-02-PLAN.md — 前端 UI：useUpdateCheck hook + TitleBar 红点 + SettingsDialog 版本号和提示条
 
 ### Phase 17: 多行脚本指令
 **Goal**: 用户可以编写和执行多行批处理脚本，使用完整的 Windows 批处理语法
@@ -93,8 +93,8 @@ Plans:
   5. 现有单行指令数据完全兼容，scriptLines 为可选字段
 **Plans:** 2 plans
 Plans:
-- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
-- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
+- [ ] 17-01-PLAN.md — TBD
+- [ ] 17-02-PLAN.md — TBD
 
 ### Phase 18: 快捷键设置面板
 **Goal**: 用户可以在 VS Code 风格的面板中管理所有快捷键绑定
@@ -109,8 +109,8 @@ Plans:
   6. 所有快捷键绑定重启后保持
 **Plans:** 2 plans
 Plans:
-- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
-- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
+- [ ] 18-01-PLAN.md — TBD
+- [ ] 18-02-PLAN.md — TBD
 **UI hint**: yes
 
 ### Phase 19: 悬浮窗改进
@@ -125,8 +125,8 @@ Plans:
   5. 悬浮窗可以拖拽移动到屏幕任意位置
 **Plans:** 2 plans
 Plans:
-- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
-- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
+- [ ] 19-01-PLAN.md — TBD
+- [ ] 19-02-PLAN.md — TBD
 **UI hint**: yes
 
 ### Phase 20: 多配置文件管理
@@ -142,8 +142,8 @@ Plans:
   6. Profile 切换操作序列化执行，快速连续切换不会导致数据损坏
 **Plans:** 2 plans
 Plans:
-- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
-- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
+- [ ] 20-01-PLAN.md — TBD
+- [ ] 20-02-PLAN.md — TBD
 **UI hint**: yes
 
 ## Progress
@@ -168,7 +168,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 13. 迷你悬浮窗 | v1.2 | 3/3 | Complete | 2026-05-10 |
 | 14. 边缘抽屉 | v1.2 | 3/3 | Complete | 2026-05-10 |
 | 15. 开机启动 | v2.0 | 0/2 | Ready to execute | - |
-| 16. 版本管理 | v2.0 | 0/? | Not started | - |
+| 16. 版本管理 | v2.0 | 0/2 | Planned | - |
 | 17. 多行脚本指令 | v2.0 | 0/? | Not started | - |
 | 18. 快捷键设置面板 | v2.0 | 0/? | Not started | - |
 | 19. 悬浮窗改进 | v2.0 | 0/? | Not started | - |
