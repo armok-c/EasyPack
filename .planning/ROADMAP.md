@@ -93,8 +93,8 @@ Plans:
   5. 现有单行指令数据完全兼容，scriptLines 为可选字段
 **Plans:** 2 plans
 Plans:
-- [ ] 17-01-PLAN.md — TBD
-- [ ] 17-02-PLAN.md — TBD
+- [ ] 17-01-PLAN.md — Rust 后端：数据模型扩展 + 临时 .bat 文件创建和执行
+- [ ] 17-02-PLAN.md — 前端 UI：CommandDialog Tab 切换 + CodeMirror 编辑器 + 批处理检测 + 卡片多行显示
 
 ### Phase 18: 快捷键设置面板
 **Goal**: 用户可以在 VS Code 风格的面板中管理所有快捷键绑定
