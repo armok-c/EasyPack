@@ -25,6 +25,8 @@ pub fn run() {
             commands::project_info::scan_project_icons,
             commands::project_info::get_project_info,
             commands::shell::open_folder,
+            commands::update::check_for_updates,
+            commands::update::open_release_page,
         ])
         .setup(|app| {
             // --autostart 检测：开机自启时在 WebView 加载前隐藏窗口

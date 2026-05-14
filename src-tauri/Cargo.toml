@@ -22,3 +22,6 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
 image = "0.25"
+reqwest = { version = "0.13", features = ["blocking", "json"] }
+semver = "1"
+open = "5"
