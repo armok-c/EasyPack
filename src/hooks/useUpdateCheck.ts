@@ -35,13 +35,17 @@ export function useUpdateCheck(storeReady: boolean) {
     return () => { mounted = false; };
   }, [storeReady]);
 
-  async function checkNow() {
+  async function checkNow(): Promise<boolean> {
     try {
+      const version = await getVersion();
+      setCurrentVersion(version);
+
       const result = await invoke<UpdateCheckResult>("check_for_updates");
       setUpdateAvailable(result.has_update);
       setLatestVersion(result.latest_version);
+      return true;
     } catch {
-      // Silent fail
+      return false;
     }
   }
 

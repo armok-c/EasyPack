@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,7 @@ interface SettingsDialogProps {
   updateAvailable: boolean;
   latestVersion: string | null;
   onOpenReleasePage: () => void;
-  onCheckNow: () => void;
+  onCheckNow: () => Promise<boolean>;
 }
 
 export function SettingsDialog({
@@ -46,6 +47,16 @@ export function SettingsDialog({
   onOpenReleasePage,
   onCheckNow,
 }: SettingsDialogProps) {
+  const [checkLabel, setCheckLabel] = useState("检查更新");
+
+  async function handleCheckNow() {
+    const ok = await onCheckNow();
+    if (!ok) {
+      setCheckLabel("检查失败");
+      setTimeout(() => setCheckLabel("检查更新"), 2000);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[380px]">
@@ -152,10 +163,10 @@ export function SettingsDialog({
           <p className="text-xs text-muted-foreground text-center">
             v{currentVersion || "..."}{" "}
             <button
-              onClick={onCheckNow}
+              onClick={handleCheckNow}
               className="text-blue-400 hover:text-blue-300 transition-colors"
             >
-              检查更新
+              {checkLabel}
             </button>
           </p>
         </div>
