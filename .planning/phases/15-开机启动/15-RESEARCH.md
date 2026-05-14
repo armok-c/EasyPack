@@ -439,17 +439,19 @@ tauri-plugin-autostart = "2"
 | A3 | 前端 mount 时 `isEnabled()` 已可用（autostart plugin 在 setup 前已初始化） | Pattern 3 | 如果插件初始化有延迟，isEnabled() 可能失败；但 .plugin() 是同步初始化的 |
 | A4 | `emit("app:autostart-hidden")` 在前端未 mount 时发出，前端 listen 不会丢失 | Pitfall 4 | Tauri v2 的 listen 是否有 backlog 机制需要确认；已建议前端用主动检查替代 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **窗口可见性配置**
    - What we know: D-03 要求 setup 阶段隐藏窗口。现有 `tauri.conf.json` 中窗口可能配置了 `visible: true`。
    - What's unclear: 是否需要在 tauri.conf.json 中将窗口默认设为不可见，然后在非 autostart 情况下手动显示？
    - Recommendation: 保持 `visible: true` 不变，在 setup 中检测到 `--autostart` 后立即 `window.hide()`。如果实测有闪现，再改为 `visible: false` + 手动 show。
+   - RESOLVED: 采纳 Recommendation，保持 visible: true + setup 中 hide()，已在 Plan 15-01 Task 1 步骤 4 中实现。
 
 2. **自愈逻辑的最佳执行位置**
    - What we know: D-08 要求 Rust 端执行，但 Rust 端读取 plugin-store 的 JSON 需要额外逻辑。
    - What's unclear: 是否值得在 Rust 端直接读取 JSON 文件，还是让前端在 mount 时执行自愈更简洁。
    - Recommendation: 优先让前端 mount 时自愈（复用现有 loadTraySettings 模式），因为 store 的 JS API 更方便。如果用户强烈要求纯 Rust 端，可以用 `tauri_plugin_store::StoreExt` trait。
+   - RESOLVED: 遵循 D-08 锁定决策，自愈逻辑全部在 Rust 端 setup 中执行，前端不感知。已在 Plan 15-01 Task 1 步骤 5 中实现。
 
 ## Environment Availability
 
