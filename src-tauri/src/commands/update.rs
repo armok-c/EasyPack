@@ -110,6 +110,7 @@ pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResul
 
 #[tauri::command]
 pub fn open_release_page() -> Result<(), String> {
+    // Compile-time invariant: constant always starts with https://
     if !RELEASE_PAGE_URL.starts_with("https://") {
         return Err("Invalid URL scheme".to_string());
     }
