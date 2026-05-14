@@ -60,6 +60,12 @@ pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResul
         Ok(resp) if resp.status().is_success() => {
             let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
             let tag_name = body["tag_name"].as_str().unwrap_or("");
+            if tag_name.is_empty() {
+                return Ok(UpdateCheckResult {
+                    has_update: false,
+                    latest_version: None,
+                });
+            }
             let version_str = tag_name.strip_prefix('v').unwrap_or(tag_name);
 
             match semver::Version::parse(version_str) {
