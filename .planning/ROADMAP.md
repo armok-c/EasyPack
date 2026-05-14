@@ -62,7 +62,10 @@
   1. 用户可以在设置中切换开机启动开关，开关状态重启后保持
   2. 启用开机启动后，重启 Windows 时 EasyPack 自动启动并最小化到系统托盘，不显示窗口
   3. 如果注册表条目丢失（如被清理工具删除），下次启动 EasyPack 时自动修复
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
+- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
 
 ### Phase 16: 版本管理
 **Goal**: 用户可以看到当前版本号并在有新版本时收到通知
@@ -73,7 +76,10 @@
   2. 应用启动时自动检查更新，24 小时内不重复检查（缓存结果）
   3. 发现新版本时，用户看到明确的更新提示（badge 或 toast）
   4. 点击更新提示后，浏览器打开 GitHub Release 下载页面
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
+- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
 
 ### Phase 17: 多行脚本指令
 **Goal**: 用户可以编写和执行多行批处理脚本，使用完整的 Windows 批处理语法
@@ -85,7 +91,10 @@
   3. 脚本编辑器提供语法高亮和行号显示
   4. 用户可以选择严格模式（失败即停）或宽松模式（继续执行）
   5. 现有单行指令数据完全兼容，scriptLines 为可选字段
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
+- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
 
 ### Phase 18: 快捷键设置面板
 **Goal**: 用户可以在 VS Code 风格的面板中管理所有快捷键绑定
@@ -98,7 +107,10 @@
   4. 用户可以搜索、按分类筛选快捷键，以及重置为默认值
   5. 除指令执行外，窗口操作（显示/隐藏、切换悬浮窗）、项目切换、打开文件夹等操作也可绑定快捷键
   6. 所有快捷键绑定重启后保持
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
+- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
 **UI hint**: yes
 
 ### Phase 19: 悬浮窗改进
@@ -111,7 +123,10 @@
   3. 折叠态点击项目名称可切换当前选中项目（不展开窗口）
   4. 折叠/展开之间有平滑动画过渡
   5. 悬浮窗可以拖拽移动到屏幕任意位置
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
+- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
 **UI hint**: yes
 
 ### Phase 20: 多配置文件管理
@@ -125,7 +140,10 @@
   4. 用户可以导入 JSON 配置文件覆盖当前 profile
   5. 首次启动时，现有单配置数据自动迁移到默认 profile，无数据丢失
   6. Profile 切换操作序列化执行，快速连续切换不会导致数据损坏
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
+- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
 **UI hint**: yes
 
 ## Progress
@@ -149,7 +167,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 12. 系统托盘 | v1.2 | 3/3 | Complete | 2026-04-28 |
 | 13. 迷你悬浮窗 | v1.2 | 3/3 | Complete | 2026-05-10 |
 | 14. 边缘抽屉 | v1.2 | 3/3 | Complete | 2026-05-10 |
-| 15. 开机启动 | v2.0 | 0/? | Not started | - |
+| 15. 开机启动 | v2.0 | 0/2 | Ready to execute | - |
 | 16. 版本管理 | v2.0 | 0/? | Not started | - |
 | 17. 多行脚本指令 | v2.0 | 0/? | Not started | - |
 | 18. 快捷键设置面板 | v2.0 | 0/? | Not started | - |
