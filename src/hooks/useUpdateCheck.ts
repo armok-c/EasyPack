@@ -1,20 +1,19 @@
 import { useState, useEffect } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import type { Store } from "@tauri-apps/plugin-store";
 
 interface UpdateCheckResult {
   has_update: boolean;
   latest_version: string | null;
 }
 
-export function useUpdateCheck(store: Store | null) {
+export function useUpdateCheck(storeReady: boolean) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [currentVersion, setCurrentVersion] = useState("");
 
   useEffect(() => {
-    if (!store) return;
+    if (!storeReady) return;
     let mounted = true;
 
     async function check() {
@@ -34,7 +33,17 @@ export function useUpdateCheck(store: Store | null) {
 
     check();
     return () => { mounted = false; };
-  }, [store]);
+  }, [storeReady]);
+
+  async function checkNow() {
+    try {
+      const result = await invoke<UpdateCheckResult>("check_for_updates");
+      setUpdateAvailable(result.has_update);
+      setLatestVersion(result.latest_version);
+    } catch {
+      // Silent fail
+    }
+  }
 
   async function openReleasePage() {
     try {
@@ -44,5 +53,5 @@ export function useUpdateCheck(store: Store | null) {
     }
   }
 
-  return { updateAvailable, latestVersion, currentVersion, openReleasePage };
+  return { updateAvailable, latestVersion, currentVersion, openReleasePage, checkNow };
 }

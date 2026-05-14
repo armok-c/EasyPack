@@ -1,6 +1,9 @@
 use serde::Serialize;
 use tauri_plugin_store::StoreExt;
 
+const RELEASE_API_URL: &str = "https://api.github.com/repos/armok-c/EasyPack/releases/latest";
+const RELEASE_PAGE_URL: &str = "https://github.com/armok-c/EasyPack/releases/latest";
+
 #[derive(Serialize)]
 pub struct UpdateCheckResult {
     has_update: bool,
@@ -8,7 +11,7 @@ pub struct UpdateCheckResult {
 }
 
 #[tauri::command]
-pub fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
+pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
     let store = app.store("easypack-store.json").map_err(|e| e.to_string())?;
 
     let config = app.config();
@@ -21,7 +24,6 @@ pub fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResult, Str
         .unwrap_or_default()
         .as_secs();
 
-    // Check cache: if checked within 24h, return cached result
     let last_check: Option<u64> = store
         .get("updateCheck.lastCheckTime")
         .and_then(|v| v.as_u64());
@@ -38,20 +40,23 @@ pub fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResult, Str
                         latest_version: cached_latest,
                     });
                 }
+                let _ = store.delete("updateCheck.latestVersion");
+                let _ = store.delete("updateCheck.lastCheckTime");
+                let _ = store.save();
             }
         }
     }
 
-    // Cache miss or expired: fetch from GitHub Releases API
-    let response = reqwest::blocking::Client::new()
-        .get("https://api.github.com/repos/armok-c/EasyPack/releases/latest")
+    let response = reqwest::Client::new()
+        .get(RELEASE_API_URL)
         .header("User-Agent", "EasyPack")
         .timeout(std::time::Duration::from_secs(10))
-        .send();
+        .send()
+        .await;
 
     match response {
         Ok(resp) if resp.status().is_success() => {
-            let body: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+            let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
             let tag_name = body["tag_name"].as_str().unwrap_or("");
             let version_str = tag_name.strip_prefix('v').unwrap_or(tag_name);
 
@@ -60,15 +65,17 @@ pub fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResult, Str
                     let has_update = latest > current;
                     let latest_str = version_str.to_string();
 
-                    let _ = store.set(
+                    store.set(
                         "updateCheck.lastCheckTime",
                         serde_json::Value::from(now),
                     );
-                    let _ = store.set(
+                    store.set(
                         "updateCheck.latestVersion",
                         serde_json::Value::String(latest_str.clone()),
                     );
-                    let _ = store.save();
+                    if let Err(e) = store.save() {
+                        eprintln!("Warning: failed to persist update cache: {}", e);
+                    }
 
                     Ok(UpdateCheckResult {
                         has_update,
@@ -79,14 +86,12 @@ pub fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResult, Str
             }
         }
         Ok(resp) if resp.status() == reqwest::StatusCode::NOT_FOUND => {
-            // No releases yet
             Ok(UpdateCheckResult {
                 has_update: false,
                 latest_version: None,
             })
         }
         Ok(_) | Err(_) => {
-            // Network error, rate limit, etc — silent fail
             Ok(UpdateCheckResult {
                 has_update: false,
                 latest_version: None,
@@ -97,6 +102,9 @@ pub fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResult, Str
 
 #[tauri::command]
 pub fn open_release_page() -> Result<(), String> {
-    open::that("https://github.com/armok-c/EasyPack/releases/latest")
+    if !RELEASE_PAGE_URL.starts_with("https://") {
+        return Err("Invalid URL scheme".to_string());
+    }
+    open::that(RELEASE_PAGE_URL)
         .map_err(|e| format!("Failed to open browser: {}", e))
 }

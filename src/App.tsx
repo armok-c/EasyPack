@@ -116,7 +116,7 @@ function App() {
 
   // Phase 12: recent commands tracking
   const { recentCommands, addRecentCommand } = useRecentCommands({ store });
-  const { updateAvailable, latestVersion, currentVersion, openReleasePage } = useUpdateCheck(store);
+  const { updateAvailable, latestVersion, currentVersion, openReleasePage, checkNow } = useUpdateCheck(!!store);
 
   // Phase 12: execute with recent command tracking
   const handleExecuteWithRecent = useCallback(async (shellCommand: string) => {
