@@ -42,7 +42,9 @@ pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateCheckResul
                 }
                 let _ = store.delete("updateCheck.latestVersion");
                 let _ = store.delete("updateCheck.lastCheckTime");
-                let _ = store.save();
+                if let Err(e) = store.save() {
+                    eprintln!("Warning: failed to clear corrupted update cache: {}", e);
+                }
             }
         }
     }

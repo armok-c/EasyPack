@@ -474,6 +474,7 @@ function App() {
         updateAvailable={updateAvailable}
         latestVersion={latestVersion}
         onOpenReleasePage={openReleasePage}
+        onCheckNow={checkNow}
       />
       <SnapIndicator edge={snapPreviewEdge} />
       <Toaster richColors position="bottom-right" duration={1500} />

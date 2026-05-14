@@ -26,6 +26,7 @@ interface SettingsDialogProps {
   updateAvailable: boolean;
   latestVersion: string | null;
   onOpenReleasePage: () => void;
+  onCheckNow: () => void;
 }
 
 export function SettingsDialog({
@@ -43,6 +44,7 @@ export function SettingsDialog({
   updateAvailable,
   latestVersion,
   onOpenReleasePage,
+  onCheckNow,
 }: SettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,7 +150,13 @@ export function SettingsDialog({
             </button>
           )}
           <p className="text-xs text-muted-foreground text-center">
-            v{currentVersion || "..."}
+            v{currentVersion || "..."}{" "}
+            <button
+              onClick={onCheckNow}
+              className="text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              检查更新
+            </button>
           </p>
         </div>
       </DialogContent>
