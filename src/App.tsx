@@ -15,6 +15,7 @@ import { useEdgeDrawer } from "@/hooks/useEdgeDrawer";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { SnapIndicator } from "@/components/SnapIndicator";
 import { detectSnapEdge } from "@/lib/drawer-geometry";
+import type { CommandItem } from "@/lib/types";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
 import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
@@ -35,6 +36,7 @@ function App() {
     selectProject,
     removeProject,
     executeCommand,
+    executeScriptCommand,
     // Phase 4: command management
     commands,
     commandMode,
@@ -119,16 +121,18 @@ function App() {
   const { updateAvailable, latestVersion, currentVersion, openReleasePage, checkNow } = useUpdateCheck(!!store);
 
   // Phase 12: execute with recent command tracking
-  const handleExecuteWithRecent = useCallback(async (shellCommand: string) => {
-    const success = await executeCommand(shellCommand);
+  const handleExecuteWithRecent = useCallback(async (shellCommand: string, cmdItem?: CommandItem) => {
+    const success = cmdItem
+      ? await executeScriptCommand(cmdItem)
+      : await executeCommand(shellCommand);
     if (!success) return;
-    const cmd = commands.find((c) => c.command === shellCommand);
+    const cmd = cmdItem ?? commands.find((c) => c.command === shellCommand);
     if (cmd) {
       await addRecentCommand(cmd.name, cmd.command);
     } else {
       await addRecentCommand(shellCommand, shellCommand);
     }
-  }, [executeCommand, commands, addRecentCommand]);
+  }, [executeCommand, executeScriptCommand, commands, addRecentCommand]);
 
   useGlobalShortcuts({
     commands,

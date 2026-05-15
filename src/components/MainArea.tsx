@@ -10,14 +10,14 @@ import type { CommandItem } from "@/lib/types";
 
 interface MainAreaProps {
   currentProject: ProjectItem | null;
-  onExecute: (command: string) => void;
+  onExecute: (command: string, cmd?: CommandItem) => void;
   // Phase 4: command list + edit mode + mode management
   commands: CommandItem[];
   commandMode: "global" | "project";
   editMode: boolean;
   setEditMode: (editMode: boolean) => void;
   addCommand: (name: string, command: string, icon?: string, scope?: "global" | "project") => Promise<void>;
-  updateCommand: (id: string, data: { name: string; command: string; icon: string }) => Promise<void>;
+  updateCommand: (id: string, data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
   deleteCommand: (id: string) => Promise<void>;
   enableProjectCommands: () => Promise<void>;
   disableProjectCommands: () => Promise<void>;
@@ -118,7 +118,7 @@ export function MainArea({
   }, [recordingCommandId, onRecordingChange]);
 
   const handleDialogSubmit = useCallback(
-    async (data: { name: string; command: string; icon: string; scope?: "global" | "project" }) => {
+    async (data: { name: string; command: string; icon: string; scope?: "global" | "project"; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => {
       if (editingCommand) {
         await updateCommand(editingCommand.id, data);
       } else {
@@ -191,7 +191,7 @@ export function MainArea({
           e.preventDefault();
           const cmd = commands[focusedCardIndex];
           if (cmd) {
-            onExecute(cmd.command);
+            onExecute(cmd.command, cmd);
           }
           break;
         }
@@ -328,12 +328,13 @@ export function MainArea({
               name={cmd.name}
               icon={getIconByName(cmd.icon)}
               command={cmd.command}
+              scriptLines={cmd.scriptLines}
               isCustom={isCustom}
               editMode={canEdit}
               onEdit={() => handleEdit(cmd)}
               onDelete={() => deleteCommand(cmd.id)}
               commandId={cmd.id}
-              onClick={() => onExecute(cmd.command)}
+              onClick={() => onExecute(cmd.command, cmd)}
               tabIndex={isCardFocused ? 0 : -1}
               shortcut={cmd.shortcut}
               shortcutNumber={!cmd.shortcut && !isCustom && !canEdit && index < 9 ? index + 1 : undefined}
