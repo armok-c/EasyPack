@@ -47,7 +47,7 @@
 
 - [ ] **Phase 15: 开机启动** — 提供开机自启动开关和自愈机制
 - [ ] **Phase 16: 版本管理** — 应用版本号显示和 GitHub 更新检查
-- [ ] **Phase 17: 多行脚本指令** — 多行批处理脚本编辑和执行（v2.0 核心价值）
+- [x] **Phase 17: 多行脚本指令** — 多行批处理脚本编辑和执行（v2.0 核心价值） -- completed 2026-05-15
 - [ ] **Phase 18: 快捷键设置面板** — VS Code 风格快捷键自定义面板
 - [ ] **Phase 19: 悬浮窗改进** — 紧凑布局、可折叠、折叠态项目切换
 - [ ] **Phase 20: 多配置文件管理** — 多套独立配置 profile 切换和导入导出
@@ -93,8 +93,8 @@ Plans:
   5. 现有单行指令数据完全兼容，scriptLines 为可选字段
 **Plans:** 2 plans
 Plans:
-- [ ] 17-01-PLAN.md — Rust 后端：数据模型扩展 + 临时 .bat 文件创建和执行
-- [ ] 17-02-PLAN.md — 前端 UI：CommandDialog Tab 切换 + CodeMirror 编辑器 + 批处理检测 + 卡片多行显示
+- [x] 17-01-PLAN.md — Rust 后端：数据模型扩展 + 临时 .bat 文件创建和执行 (completed 2026-05-15)
+- [x] 17-02-PLAN.md — 前端 UI：CommandDialog Tab 切换 + CodeMirror 编辑器 + 批处理检测 + 卡片多行显示 (completed 2026-05-15)
 
 ### Phase 18: 快捷键设置面板
 **Goal**: 用户可以在 VS Code 风格的面板中管理所有快捷键绑定
