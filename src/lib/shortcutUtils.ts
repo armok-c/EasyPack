@@ -68,9 +68,11 @@ export function findConflict(
   bindings: Record<string, string>,
   excludeActionId: string,
   newShortcut: string,
+  skipIds?: string[],
 ): string | null {
+  const skip = new Set(skipIds);
   for (const [actionId, shortcut] of Object.entries(bindings)) {
-    if (actionId !== excludeActionId && shortcut === newShortcut) {
+    if (actionId !== excludeActionId && !skip.has(actionId) && shortcut === newShortcut) {
       return actionId;
     }
   }

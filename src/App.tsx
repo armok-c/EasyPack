@@ -143,6 +143,13 @@ function App() {
     }
   }, [executeCommand, executeScriptCommand, commands, addRecentCommand]);
 
+  // Phase 13: 悬浮窗 (must be before useShortcutActions — toggleFloat used there)
+  const { floatVisible, toggleFloat, destroyFloat } = useFloatWindow({
+    currentProject,
+    commands,
+    onExecute: handleExecuteWithRecent,
+  });
+
   // Phase 18: Build ShortcutAction registry and pass to useGlobalShortcuts
   const actions = useShortcutActions({
     commands,
@@ -178,13 +185,6 @@ function App() {
     bindings: shortcutBindings,
     enabled: !!currentProject,
     recording: isRecording,
-  });
-
-  // Phase 13: 悬浮窗
-  const { floatVisible, toggleFloat, destroyFloat } = useFloatWindow({
-    currentProject,
-    commands,
-    onExecute: handleExecuteWithRecent,
   });
 
   // Phase 14: 边缘抽屉

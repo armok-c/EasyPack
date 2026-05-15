@@ -516,15 +516,15 @@ export function useProject() {
 
   // Set a shortcut binding for an action, with full conflict detection
   const setShortcutBinding = useCallback(
-    async (actionId: string, shortcut: string) => {
-      const conflictId = findConflict(shortcutBindings, actionId, shortcut);
+    async (actionId: string, shortcut: string, skipConflictFor?: string[]) => {
+      const conflictId = findConflict(shortcutBindings, actionId, shortcut, skipConflictFor);
       if (conflictId) {
-        return conflictId; // Return conflicting actionId for UI to show warning
+        return conflictId;
       }
       const updated = { ...shortcutBindings, [actionId]: shortcut };
       setShortcutBindings(updated);
       await store?.set(SHORTCUT_BINDINGS_KEY, updated);
-      return null; // No conflict
+      return null;
     },
     [shortcutBindings, store],
   );

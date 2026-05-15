@@ -132,7 +132,7 @@ export function ShortcutPanel({
   const confirmConflict = useCallback(async () => {
     if (!conflictInfo) return;
     await onClearBinding(conflictInfo.actionId);
-    await onSetBinding(recordingId!, conflictInfo.newShortcut);
+    await onSetBinding(recordingId!, conflictInfo.newShortcut, [conflictInfo.actionId]);
     stopRecording();
   }, [conflictInfo, recordingId, onClearBinding, onSetBinding, stopRecording]);
 
@@ -174,6 +174,9 @@ export function ShortcutPanel({
         } else {
           stopRecording();
         }
+      }).catch((err) => {
+        if (import.meta.env.DEV) console.error("Failed to set binding:", err);
+        stopRecording();
       });
     }
 
