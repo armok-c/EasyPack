@@ -18,3 +18,14 @@ export interface CommandItem {
   scriptLines?: string;  // Phase 17: Multi-line script content, \n-separated string. Undefined = use command field (SCRIPT-05)
   executionMode?: "strict" | "lenient" | "batch";  // Phase 17: Execution mode. strict=stop on error (&&), lenient=continue (&), batch=verbatim. Default: strict (D-08)
 }
+
+/** Phase 18: Shortcut action category — command execution, window ops, project ops */
+export type ShortcutCategory = "command" | "window" | "project";
+
+/** Phase 18: Unified shortcut-bindable action (D-11) */
+export interface ShortcutAction {
+  id: string;           // Fixed ops use fixed id; commands use "command.{commandId}"
+  label: string;        // Display name in shortcut panel
+  category: ShortcutCategory;
+  handler: () => void;  // Not persisted — rebuilt from App-layer callbacks each render
+}

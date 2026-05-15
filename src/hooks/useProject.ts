@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { CommandItem } from "@/lib/types";
 import { getDefaultsAsCommandItems } from "@/lib/presets";
 import { DEFAULT_ICON } from "@/lib/icons";
-import { shortcutToDisplay } from "@/lib/shortcutUtils";
+import { shortcutToDisplay, findConflict } from "@/lib/shortcutUtils";
 
 export interface ProjectItem {
   id: string;       // normalized path as ID (lowercase, forward slashes)
@@ -30,6 +30,7 @@ const STORE_PATH = "easypack-store.json";
 const PROJECTS_KEY = "projects";
 const SELECTED_KEY = "selectedProjectId";
 const CUSTOM_COMMANDS_KEY = "customCommands";
+const SHORTCUT_BINDINGS_KEY = "shortcutBindings";
 
 function projectCommandsKey(projectId: string): string {
   return `projectCommands:${projectId}`;
@@ -58,6 +59,9 @@ export function useProject() {
   // Phase 11: preset shortcut overrides (persisted separately since presets are derived fresh)
   const [presetShortcutsMap, setPresetShortcutsMap] = useState<Record<string, string>>({});
   const PRESHORTCUTS_KEY = "presetShortcuts";
+
+  // Phase 18: unified shortcut bindings (independent store key)
+  const [shortcutBindings, setShortcutBindings] = useState<Record<string, string>>({});
 
   // Phase 8: project info (folder size + Git branch)
   const [projectInfo, setProjectInfo] = useState<ProjectInfoResult | null>(null);
@@ -141,6 +145,45 @@ export function useProject() {
         // Phase 11: restore preset shortcut overrides
         const savedPresetShortcuts = await s.get<Record<string, string>>(PRESHORTCUTS_KEY);
         if (savedPresetShortcuts) setPresetShortcutsMap(savedPresetShortcuts);
+
+        // Phase 18: restore unified shortcut bindings, migrate from old format if needed
+        const savedBindings = await s.get<Record<string, string>>(SHORTCUT_BINDINGS_KEY);
+        if (savedBindings && Object.keys(savedBindings).length > 0) {
+          setShortcutBindings(savedBindings);
+        } else {
+          // Migration: convert old CommandItem.shortcut + presetShortcutsMap to new format
+          const migrated: Record<string, string> = {};
+          // Migrate from custom commands' shortcut fields
+          if (savedCommands) {
+            for (const cmd of savedCommands) {
+              if (cmd.shortcut) {
+                migrated[`command.${cmd.id}`] = cmd.shortcut;
+              }
+            }
+          }
+          // Migrate from project commands' shortcut fields
+          for (const k of allKeys) {
+            if (!k.startsWith("projectCommands:")) continue;
+            const projCmds = await s.get<CommandItem[]>(k);
+            if (projCmds) {
+              for (const cmd of projCmds) {
+                if (cmd.shortcut) {
+                  migrated[`command.${cmd.id}`] = cmd.shortcut;
+                }
+              }
+            }
+          }
+          // Migrate from preset shortcut overrides
+          if (savedPresetShortcuts) {
+            for (const [presetId, shortcut] of Object.entries(savedPresetShortcuts)) {
+              migrated[`command.${presetId}`] = shortcut;
+            }
+          }
+          if (Object.keys(migrated).length > 0) {
+            setShortcutBindings(migrated);
+            await s.set(SHORTCUT_BINDINGS_KEY, migrated);
+          }
+        }
 
         setStore(s);
       } catch (error) {
@@ -469,7 +512,41 @@ export function useProject() {
     [commandMode, selectedId, projectCommandsMap, customCommands, store]
   );
 
-  // --- Phase 11: Shortcut assignment ---
+  // --- Phase 18: Unified shortcut binding management ---
+
+  // Set a shortcut binding for an action, with full conflict detection
+  const setShortcutBinding = useCallback(
+    async (actionId: string, shortcut: string) => {
+      const conflictId = findConflict(shortcutBindings, actionId, shortcut);
+      if (conflictId) {
+        return conflictId; // Return conflicting actionId for UI to show warning
+      }
+      const updated = { ...shortcutBindings, [actionId]: shortcut };
+      setShortcutBindings(updated);
+      await store?.set(SHORTCUT_BINDINGS_KEY, updated);
+      return null; // No conflict
+    },
+    [shortcutBindings, store],
+  );
+
+  // Clear a shortcut binding for an action
+  const clearShortcutBinding = useCallback(
+    async (actionId: string) => {
+      const updated = { ...shortcutBindings };
+      delete updated[actionId];
+      setShortcutBindings(updated);
+      await store?.set(SHORTCUT_BINDINGS_KEY, updated);
+    },
+    [shortcutBindings, store],
+  );
+
+  // Reset all shortcut bindings
+  const resetAllShortcuts = useCallback(async () => {
+    setShortcutBindings({});
+    await store?.set(SHORTCUT_BINDINGS_KEY, {});
+  }, [store]);
+
+  // --- Phase 11: Shortcut assignment (legacy, preserved for transition) ---
 
   // Assign a global shortcut to a command (project, custom, or preset)
   const assignShortcut = useCallback(
@@ -620,9 +697,15 @@ export function useProject() {
     // Phase 17: script command execution (dispatches single-line or multi-line)
     executeScriptCommand, // (cmd: CommandItem) => Promise<boolean>
 
-    // Phase 11: shortcut assignment
+    // Phase 11: shortcut assignment (legacy, preserved for transition)
     assignShortcut, // (commandId: string, shortcut: string) => Promise<boolean>
     clearShortcut, // (commandId: string) => Promise<void>
+
+    // Phase 18: unified shortcut bindings
+    shortcutBindings,    // Record<string, string>
+    setShortcutBinding,  // (actionId: string, shortcut: string) => Promise<string | null>
+    clearShortcutBinding, // (actionId: string) => Promise<void>
+    resetAllShortcuts,   // () => Promise<void>
 
     // Phase 4 Plan 03: project-level command override
     commandMode, // 'global' | 'project'

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 
 const { mockRegister, mockUnregisterAll, mockIsRegistered } = vi.hoisted(() => ({
   mockRegister: vi.fn().mockResolvedValue(undefined),
@@ -15,38 +15,36 @@ vi.mock("@tauri-apps/plugin-global-shortcut", () => ({
 }));
 
 import { useGlobalShortcuts } from "../useGlobalShortcuts";
-import type { CommandItem } from "@/lib/types";
+import type { ShortcutAction } from "@/lib/types";
 
-function makeCommand(overrides: Partial<CommandItem> & { id: string; shortcut?: string }): CommandItem {
+function makeAction(id: string, shortcut?: string): ShortcutAction {
   return {
-    name: "Test",
-    command: "echo test",
-    icon: "Terminal",
-    type: "custom",
-    scope: "global" as const,
-    addedAt: Date.now(),
-    ...overrides,
+    id,
+    label: `Action ${id}`,
+    category: "command",
+    handler: vi.fn(),
   };
 }
 
 describe("useGlobalShortcuts", () => {
-  const onShortcutTrigger = vi.fn();
+  const onActionTrigger = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    onShortcutTrigger.mockClear();
+    onActionTrigger.mockClear();
   });
 
   it("registers shortcuts on mount when enabled", async () => {
-    const commands = [
-      makeCommand({ id: "1", shortcut: "CommandOrControl+G" }),
-      makeCommand({ id: "2", shortcut: "CommandOrControl+Shift+R" }),
-    ];
+    const actions = [makeAction("cmd-1"), makeAction("cmd-2")];
+    const bindings: Record<string, string> = {
+      "cmd-1": "CommandOrControl+G",
+      "cmd-2": "CommandOrControl+Shift+R",
+    };
 
     renderHook(() =>
       useGlobalShortcuts({
-        commands,
-        onExecute: onShortcutTrigger,
+        actions,
+        bindings,
         enabled: true,
       })
     );
@@ -59,14 +57,13 @@ describe("useGlobalShortcuts", () => {
   });
 
   it("does not register when disabled", async () => {
-    const commands = [
-      makeCommand({ id: "1", shortcut: "CommandOrControl+G" }),
-    ];
+    const actions = [makeAction("cmd-1")];
+    const bindings: Record<string, string> = { "cmd-1": "CommandOrControl+G" };
 
     renderHook(() =>
       useGlobalShortcuts({
-        commands,
-        onExecute: onShortcutTrigger,
+        actions,
+        bindings,
         enabled: false,
       })
     );
@@ -79,14 +76,13 @@ describe("useGlobalShortcuts", () => {
   });
 
   it("unregisters all on unmount", async () => {
-    const commands = [
-      makeCommand({ id: "1", shortcut: "CommandOrControl+G" }),
-    ];
+    const actions = [makeAction("cmd-1")];
+    const bindings: Record<string, string> = { "cmd-1": "CommandOrControl+G" };
 
     const { unmount } = renderHook(() =>
       useGlobalShortcuts({
-        commands,
-        onExecute: onShortcutTrigger,
+        actions,
+        bindings,
         enabled: true,
       })
     );
@@ -101,15 +97,15 @@ describe("useGlobalShortcuts", () => {
     expect(mockUnregisterAll.mock.calls.length).toBeGreaterThan(callCountBeforeUnmount);
   });
 
-  it("handler executes command only on Pressed state", async () => {
-    const commands = [
-      makeCommand({ id: "1", shortcut: "CommandOrControl+G" }),
-    ];
+  it("handler executes action only on Pressed state", async () => {
+    const action = makeAction("cmd-1");
+    const actions = [action];
+    const bindings: Record<string, string> = { "cmd-1": "CommandOrControl+G" };
 
     renderHook(() =>
       useGlobalShortcuts({
-        commands,
-        onExecute: onShortcutTrigger,
+        actions,
+        bindings,
         enabled: true,
       })
     );
@@ -123,27 +119,25 @@ describe("useGlobalShortcuts", () => {
 
     // Simulate Pressed state
     handler({ shortcut: "CommandOrControl+G", state: "Pressed" });
-    expect(onShortcutTrigger).toHaveBeenCalledTimes(1);
-    expect(onShortcutTrigger).toHaveBeenCalledWith("echo test");
+    expect(action.handler).toHaveBeenCalledTimes(1);
 
     // Simulate Released state — should not trigger again
     handler({ shortcut: "CommandOrControl+G", state: "Released" });
-    expect(onShortcutTrigger).toHaveBeenCalledTimes(1); // still 1
+    expect(action.handler).toHaveBeenCalledTimes(1); // still 1
   });
 
-  it("re-registers on commands change", async () => {
-    const commands1 = [
-      makeCommand({ id: "1", shortcut: "CommandOrControl+G" }),
-    ];
+  it("re-registers on actions/bindings change", async () => {
+    const actions1 = [makeAction("cmd-1")];
+    const bindings1: Record<string, string> = { "cmd-1": "CommandOrControl+G" };
 
     const { rerender } = renderHook(
-      ({ commands }) =>
+      ({ actions, bindings }: { actions: ShortcutAction[]; bindings: Record<string, string> }) =>
         useGlobalShortcuts({
-          commands,
-          onExecute: onShortcutTrigger,
+          actions,
+          bindings,
           enabled: true,
         }),
-      { initialProps: { commands: commands1 } }
+      { initialProps: { actions: actions1, bindings: bindings1 } }
     );
 
     await vi.waitFor(() => {
@@ -152,16 +146,36 @@ describe("useGlobalShortcuts", () => {
 
     vi.clearAllMocks();
 
-    const commands2 = [
-      makeCommand({ id: "2", shortcut: "Alt+F5" }),
-      makeCommand({ id: "3", shortcut: "CommandOrControl+T" }),
-    ];
+    const actions2 = [makeAction("cmd-2"), makeAction("cmd-3")];
+    const bindings2: Record<string, string> = {
+      "cmd-2": "Alt+F5",
+      "cmd-3": "CommandOrControl+T",
+    };
 
-    rerender({ commands: commands2 });
+    rerender({ actions: actions2, bindings: bindings2 });
 
     await vi.waitFor(() => {
       expect(mockUnregisterAll).toHaveBeenCalled();
       expect(mockRegister).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("only registers actions that have bindings", async () => {
+    const actions = [makeAction("cmd-1"), makeAction("cmd-2"), makeAction("cmd-3")];
+    const bindings: Record<string, string> = {
+      "cmd-2": "Alt+F5",
+    };
+
+    renderHook(() =>
+      useGlobalShortcuts({
+        actions,
+        bindings,
+        enabled: true,
+      })
+    );
+
+    await vi.waitFor(() => {
+      expect(mockRegister).toHaveBeenCalledTimes(1);
     });
   });
 });

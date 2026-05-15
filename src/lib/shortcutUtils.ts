@@ -58,3 +58,21 @@ export function keyboardEventToShortcut(e: KeyboardEventLike): string | null {
 export function shortcutToDisplay(shortcut: string): string {
   return shortcut.replace("CommandOrControl", "Ctrl");
 }
+
+/**
+ * Phase 18: Check if a shortcut conflicts with existing bindings.
+ * Returns the conflicting actionId, or null if no conflict.
+ * Self-binding (excludeActionId matches) is NOT a conflict.
+ */
+export function findConflict(
+  bindings: Record<string, string>,
+  excludeActionId: string,
+  newShortcut: string,
+): string | null {
+  for (const [actionId, shortcut] of Object.entries(bindings)) {
+    if (actionId !== excludeActionId && shortcut === newShortcut) {
+      return actionId;
+    }
+  }
+  return null;
+}

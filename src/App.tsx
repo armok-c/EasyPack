@@ -7,6 +7,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { useProject } from "@/hooks/useProject";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
+import { useShortcutActions } from "@/hooks/useShortcutActions";
 import { useVisibilityState } from "@/hooks/useVisibilityState";
 import { useRecentCommands } from "@/hooks/useRecentCommands";
 import { useTray } from "@/hooks/useTray";
@@ -60,6 +61,11 @@ function App() {
     // Phase 11: shortcut assignment
     assignShortcut,
     clearShortcut,
+    // Phase 18: unified shortcut bindings
+    shortcutBindings,
+    setShortcutBinding,
+    clearShortcutBinding,
+    resetAllShortcuts,
     // Phase 12: store for tray settings
     store,
   } = useProject();
@@ -134,9 +140,39 @@ function App() {
     }
   }, [executeCommand, executeScriptCommand, commands, addRecentCommand]);
 
-  useGlobalShortcuts({
+  // Phase 18: Build ShortcutAction registry and pass to useGlobalShortcuts
+  const actions = useShortcutActions({
     commands,
-    onExecute: handleExecuteWithRecent,
+    onExecute: (cmd) => handleExecuteWithRecent(cmd.command, cmd),
+    onToggleVisibility: () => {
+      if (visibility === "TRAY_HIDDEN") {
+        showFromTray();
+        appWindow.show().catch((err) => { if (import.meta.env.DEV) console.error(err); });
+        appWindow.setFocus().catch((err) => { if (import.meta.env.DEV) console.error(err); });
+      } else {
+        hideToTray();
+        appWindow.hide().catch((err) => { if (import.meta.env.DEV) console.error(err); });
+      }
+    },
+    onToggleFloat: toggleFloat,
+    onPrevProject: () => {
+      if (!selectedId || projects.length === 0) return;
+      const idx = projects.findIndex((p) => p.id === selectedId);
+      const prevIdx = (idx - 1 + projects.length) % projects.length;
+      selectProject(projects[prevIdx].id);
+    },
+    onNextProject: () => {
+      if (!selectedId || projects.length === 0) return;
+      const idx = projects.findIndex((p) => p.id === selectedId);
+      const nextIdx = (idx + 1) % projects.length;
+      selectProject(projects[nextIdx].id);
+    },
+    onOpenFolder: handleOpenFolder,
+  });
+
+  useGlobalShortcuts({
+    actions,
+    bindings: shortcutBindings,
     enabled: !!currentProject,
     recording: isRecording,
   });

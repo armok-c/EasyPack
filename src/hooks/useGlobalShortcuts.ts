@@ -1,33 +1,34 @@
 import { useEffect, useRef } from "react";
 import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
 import type { ShortcutEvent } from "@tauri-apps/plugin-global-shortcut";
-import type { CommandItem } from "@/lib/types";
+import type { ShortcutAction } from "@/lib/types";
 
 interface UseGlobalShortcutsOptions {
-  commands: CommandItem[];
-  onExecute: (command: string) => void;
+  actions: ShortcutAction[];
+  bindings: Record<string, string>;
   enabled: boolean;
   recording?: boolean;
 }
 
 /**
  * Manages OS-level global shortcut registration lifecycle.
- * - Registers all commands with shortcut fields on mount/project change
+ * - Registers all actions that have a matching binding
  * - Unregisters all on unmount/switch
- * - Executes commands on shortcut Pressed events
+ * - Executes action handlers on shortcut Pressed events
  *
  * Per RESEARCH.md: must check event.state === 'Pressed' to prevent double-fire.
- * Per RESEARCH.md Pitfall 2: must unregisterAll before re-registration on project switch.
- * Per RESEARCH.md Pitfall 5: uses version counter to prevent race conditions on rapid switching.
+ * Per RESEARCH.md Pitfall 2: must unregisterAll before re-registration on change.
+ * Per RESEARCH.md Pitfall 5: uses version counter to prevent race conditions.
  */
 export function useGlobalShortcuts({
-  commands,
-  onExecute,
+  actions,
+  bindings,
   enabled,
   recording = false,
 }: UseGlobalShortcutsOptions) {
-  const onExecuteRef = useRef(onExecute);
-  onExecuteRef.current = onExecute;
+  // Ref pattern: action handlers are read from ref to avoid stale closures
+  const actionsMapRef = useRef<Map<string, ShortcutAction>>(new Map());
+  actionsMapRef.current = new Map(actions.map((a) => [a.id, a]));
 
   useEffect(() => {
     if (!enabled || recording) {
@@ -35,7 +36,8 @@ export function useGlobalShortcuts({
       return;
     }
 
-    const shortcuts = commands.filter((cmd) => cmd.shortcut);
+    // Filter actions that have a binding
+    const boundActions = actions.filter((a) => bindings[a.id]);
 
     // Version counter to prevent race conditions (Pitfall 5)
     let version = 0;
@@ -46,13 +48,17 @@ export function useGlobalShortcuts({
         await unregisterAll();
         if (version !== currentVersion) return;
 
-        for (const cmd of shortcuts) {
+        for (const action of boundActions) {
+          const shortcut = bindings[action.id]!;
+          // Capture action.id for the handler closure
+          const actionId = action.id;
           const handler = (event: ShortcutEvent) => {
             if (event.state === "Pressed") {
-              onExecuteRef.current(cmd.command);
+              const resolved = actionsMapRef.current.get(actionId);
+              resolved?.handler();
             }
           };
-          await register(cmd.shortcut!, handler);
+          await register(shortcut, handler);
           if (version !== currentVersion) return;
         }
       } catch (err) {
@@ -66,5 +72,5 @@ export function useGlobalShortcuts({
       version++;
       unregisterAll().catch(console.error);
     };
-  }, [commands, enabled, recording]);
+  }, [actions, bindings, enabled, recording]);
 }
