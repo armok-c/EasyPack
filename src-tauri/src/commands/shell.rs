@@ -41,6 +41,96 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+// --- Phase 17: Multi-line script support ---
+
+/// Build .bat file content for multi-line script execution.
+///
+/// - Header always includes: @echo off, chcp 65001 >nul, cd /d "{project_path}" (per D-10, D-11)
+/// - When `is_batch_script=true`: script_content is appended verbatim
+/// - When `is_batch_script=false`: non-empty lines are joined with separator
+///   (strict: "&&", lenient: "&") and appended (per D-05, D-08)
+/// - Empty/whitespace-only lines are always filtered
+fn build_bat_content(
+    project_path: &str,
+    script_lines: &str,
+    is_batch_script: bool,
+    strict: bool,
+) -> String {
+    let header = format!(
+        "@echo off\nchcp 65001 >nul\ncd /d \"{}\"",
+        project_path
+    );
+
+    if is_batch_script {
+        // Batch script: write content verbatim (per D-05)
+        format!("{}\n{}", header, script_lines)
+    } else {
+        // Simple multi-line: filter empty lines, join with && or & (per D-05, D-08)
+        let separator = if strict { " && " } else { " & " };
+        let joined = script_lines
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect::<Vec<_>>()
+            .join(separator);
+
+        if joined.is_empty() {
+            header
+        } else {
+            format!("{}\n{}", header, joined)
+        }
+    }
+}
+
+/// Execute a multi-line script by creating a temporary .bat file and running it
+/// in a new terminal window.
+///
+/// The .bat file is kept (not deleted) in the system temp directory (per D-09).
+/// Returns the path to the created .bat file.
+#[tauri::command]
+pub async fn execute_script(
+    project_path: String,
+    script_content: String,
+    is_batch_script: bool,
+    strict: bool,
+) -> Result<String, String> {
+    let content = build_bat_content(&project_path, &script_content, is_batch_script, strict);
+
+    // Create temp .bat file with "easypack-" prefix (per D-09)
+    let temp_dir = std::env::temp_dir();
+    let named_file = tempfile::Builder::new()
+        .prefix("easypack-")
+        .suffix(".bat")
+        .rand_bytes(8)
+        .tempfile_in(&temp_dir)
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+
+    // Keep the file (don't auto-delete on drop) per D-09
+    let temp_path = named_file
+        .into_temp_path()
+        .keep()
+        .map_err(|e| format!("Failed to persist temp file: {}", e))?;
+
+    // Write .bat content
+    std::fs::write(&temp_path, &content)
+        .map_err(|e| format!("Failed to write script file: {}", e))?;
+
+    let bat_path_str = temp_path.to_string_lossy().to_string();
+
+    // Execute: cmd /C start "" /d "{project_path}" cmd /K "{bat_path}"
+    let args = format!(
+        r#"/C start "" /d "{}" cmd /K "{}""#,
+        project_path, bat_path_str
+    );
+
+    StdCommand::new("cmd")
+        .raw_arg(&args)
+        .spawn()
+        .map_err(|e| format!("Failed to execute script: {}", e))?;
+
+    Ok(bat_path_str)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,5 +187,100 @@ mod tests {
         assert!(result.contains(r#"/d "E:\git\EasyPack""#));
         // 验证命令被引号包裹
         assert!(result.contains(r#"cmd /K "claude""#));
+    }
+
+    // --- Phase 17: build_bat_content tests ---
+
+    #[test]
+    fn test_build_bat_content_strict() {
+        let result = build_bat_content(
+            "E:\\git\\EasyPack",
+            "npm install\nnpm run build",
+            false,
+            true,
+        );
+        // Header always present
+        assert!(result.contains("@echo off"));
+        assert!(result.contains("chcp 65001 >nul"));
+        assert!(result.contains(r#"cd /d "E:\git\EasyPack""#));
+        // Strict mode: lines joined with " && "
+        assert!(result.contains("npm install && npm run build"));
+    }
+
+    #[test]
+    fn test_build_bat_content_lenient() {
+        let result = build_bat_content(
+            "E:\\git\\EasyPack",
+            "npm install\nnpm run build",
+            false,
+            false,
+        );
+        // Header present
+        assert!(result.contains("@echo off"));
+        assert!(result.contains("chcp 65001 >nul"));
+        // Lenient mode: lines joined with " & "
+        assert!(result.contains("npm install & npm run build"));
+    }
+
+    #[test]
+    fn test_build_bat_content_batch_script() {
+        let script = "if %ERRORLEVEL% EQU 0 (\n  echo Success\n) else (\n  echo Failed\n)";
+        let result = build_bat_content("E:\\git\\EasyPack", script, true, false);
+        // Header present
+        assert!(result.contains("@echo off"));
+        assert!(result.contains("chcp 65001 >nul"));
+        // Batch script: content written verbatim (not joined with && or &)
+        assert!(result.contains("if %ERRORLEVEL% EQU 0 ("));
+        assert!(result.contains("  echo Success"));
+        assert!(!result.contains(" && "));
+        assert!(!result.contains(" & "));
+    }
+
+    #[test]
+    fn test_build_bat_content_empty_lines() {
+        let result = build_bat_content(
+            "E:\\git\\EasyPack",
+            "npm install\n\n   \nnpm run build\n  \n  git status",
+            false,
+            true,
+        );
+        // Empty and whitespace-only lines should be filtered
+        assert!(result.contains("npm install && npm run build && git status"));
+        // No double separators from empty lines
+        assert!(!result.contains("&& &&"));
+    }
+
+    #[test]
+    fn test_execute_script_creates_bat_file() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(execute_script(
+            "E:\\git\\EasyPack".to_string(),
+            "echo hello".to_string(),
+            false,
+            true,
+        ));
+
+        assert!(result.is_ok(), "execute_script should succeed: {:?}", result.err());
+        let bat_path = result.unwrap();
+        assert!(
+            bat_path.contains("easypack-"),
+            "Bat file path should contain 'easypack-', got: {}",
+            bat_path
+        );
+        assert!(
+            bat_path.ends_with(".bat"),
+            "Bat file path should end with '.bat', got: {}",
+            bat_path
+        );
+
+        // Verify the file exists and has correct content
+        let content = std::fs::read_to_string(&bat_path).expect("Should be able to read bat file");
+        assert!(content.contains("@echo off"));
+        assert!(content.contains("chcp 65001 >nul"));
+        assert!(content.contains(r#"cd /d "E:\git\EasyPack""#));
+        assert!(content.contains("echo hello"));
+
+        // Clean up
+        let _ = std::fs::remove_file(&bat_path);
     }
 }

@@ -1078,6 +1078,8 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
