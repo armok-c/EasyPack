@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { MainArea } from "@/components/MainArea";
 import { TitleBar } from "@/components/TitleBar";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { ShortcutPanel } from "@/components/ShortcutPanel";
 import { useProject } from "@/hooks/useProject";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
@@ -102,6 +103,8 @@ function App() {
 
   // Phase 12: tray settings state
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Phase 18: shortcut panel state
+  const [shortcutPanelOpen, setShortcutPanelOpen] = useState(false);
   const [trayEnabled, setTrayEnabled] = useState(true);
   const [closeToTray, setCloseToTray] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -370,6 +373,12 @@ function App() {
     await store?.set("drawerEnabled", enabled);
   }, [store]);
 
+  // Phase 18: open shortcut panel (close settings first)
+  const handleOpenShortcutPanel = useCallback(() => {
+    setSettingsOpen(false);
+    setShortcutPanelOpen(true);
+  }, []);
+
   // Phase 14: D-04 onMoved 驱动 SnapIndicator + 拖拽结束检测
   // Windows WebView2 在 startDragging() 原生拖拽期间吞掉 JS 鼠标事件（mouseup/mousemove），
   // 因此用 onMoved + debounce 检测拖拽结束：窗口停止移动 150ms 后视为拖拽结束。
@@ -515,6 +524,17 @@ function App() {
         latestVersion={latestVersion}
         onOpenReleasePage={openReleasePage}
         onCheckNow={checkNow}
+        onOpenShortcutPanel={handleOpenShortcutPanel}
+      />
+      <ShortcutPanel
+        open={shortcutPanelOpen}
+        onOpenChange={setShortcutPanelOpen}
+        actions={actions}
+        bindings={shortcutBindings}
+        onSetBinding={setShortcutBinding}
+        onClearBinding={clearShortcutBinding}
+        onResetAll={resetAllShortcuts}
+        onRecordingChange={handleRecordingChange}
       />
       <SnapIndicator edge={snapPreviewEdge} />
       <Toaster richColors position="bottom-right" duration={1500} />

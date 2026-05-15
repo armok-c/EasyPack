@@ -28,6 +28,8 @@ interface SettingsDialogProps {
   latestVersion: string | null;
   onOpenReleasePage: () => void;
   onCheckNow: () => Promise<boolean>;
+  // Phase 18: 快捷键设置面板入口
+  onOpenShortcutPanel: () => void;
 }
 
 export function SettingsDialog({
@@ -46,6 +48,7 @@ export function SettingsDialog({
   latestVersion,
   onOpenReleasePage,
   onCheckNow,
+  onOpenShortcutPanel,
 }: SettingsDialogProps) {
   const [checkLabel, setCheckLabel] = useState("检查更新");
   const [checking, setChecking] = useState(false);
@@ -156,6 +159,17 @@ export function SettingsDialog({
             </div>
           </div>
         </div>
+
+        {/* Phase 18: 快捷键设置入口 */}
+        <button
+          onClick={() => {
+            onOpenShortcutPanel();
+            onOpenChange(false);
+          }}
+          className="w-full text-left px-3 py-2 mb-2 rounded-md border-l-2 border-blue-400 bg-blue-400/10 text-sm text-blue-300 hover:bg-blue-400/20 transition-colors cursor-pointer"
+        >
+          快捷键设置...
+        </button>
 
         {/* 版本号 + 更新提示 */}
         <div className="border-t border-white/10 pt-3 mt-2">
