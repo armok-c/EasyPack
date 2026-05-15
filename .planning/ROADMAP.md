@@ -109,8 +109,8 @@ Plans:
   6. 所有快捷键绑定重启后保持
 **Plans:** 2 plans
 Plans:
-- [ ] 18-01-PLAN.md — TBD
-- [ ] 18-02-PLAN.md — TBD
+- [ ] 18-01-PLAN.md — 后端数据模型与快捷键注册扩展（ShortcutAction 类型 + useShortcutActions hook + useGlobalShortcuts 扩展 + 持久化迁移 + 移除旧录制 UI）
+- [ ] 18-02-PLAN.md — 前端 UI ShortcutPanel 面板（搜索 + 分组列表 + 录制 + 冲突检测 + 重置 + SettingsDialog 入口 + App 集成）
 **UI hint**: yes
 
 ### Phase 19: 悬浮窗改进
