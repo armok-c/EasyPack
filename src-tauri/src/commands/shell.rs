@@ -21,6 +21,9 @@ fn build_cmd_start_args(project_path: &str, shell_command: &str) -> String {
 /// (0x80070002)。is_ok() 检查阻止了回退到 cmd.exe，导致所有命令都无法执行。
 #[tauri::command]
 pub async fn execute_command(project_path: String, shell_command: String) -> Result<(), String> {
+    if project_path.contains('"') {
+        return Err("Invalid project path: contains double quote".to_string());
+    }
     let args = build_cmd_start_args(&project_path, &shell_command);
     StdCommand::new("cmd")
         .raw_arg(&args)
@@ -34,6 +37,9 @@ pub async fn execute_command(project_path: String, shell_command: String) -> Res
 /// 使用 explorer.exe + raw_arg() 模式，路径用双引号包裹处理空格
 #[tauri::command]
 pub async fn open_folder(path: String) -> Result<(), String> {
+    if path.contains('"') {
+        return Err("Invalid path: contains double quote".to_string());
+    }
     StdCommand::new("explorer.exe")
         .raw_arg(format!("\"{}\"", path))
         .spawn()
@@ -94,6 +100,9 @@ pub async fn execute_script(
     is_batch_script: bool,
     strict: bool,
 ) -> Result<String, String> {
+    if project_path.contains('"') {
+        return Err("Invalid project path: contains double quote".to_string());
+    }
     let content = build_bat_content(&project_path, &script_content, is_batch_script, strict);
 
     // Create temp .bat file with "easypack-" prefix (per D-09)
@@ -111,8 +120,9 @@ pub async fn execute_script(
         .keep()
         .map_err(|e| format!("Failed to persist temp file: {}", e))?;
 
-    // Write .bat content
-    std::fs::write(&temp_path, &content)
+    // Write .bat content with UTF-8 BOM so cmd.exe reads it as UTF-8
+    let content_with_bom = format!("\u{FEFF}{}", content);
+    std::fs::write(&temp_path, content_with_bom.as_bytes())
         .map_err(|e| format!("Failed to write script file: {}", e))?;
 
     let bat_path_str = temp_path.to_string_lossy().to_string();

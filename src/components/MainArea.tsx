@@ -16,7 +16,7 @@ interface MainAreaProps {
   commandMode: "global" | "project";
   editMode: boolean;
   setEditMode: (editMode: boolean) => void;
-  addCommand: (name: string, command: string, icon?: string, scope?: "global" | "project") => Promise<void>;
+  addCommand: (name: string, command: string, icon?: string, scope?: "global" | "project", extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
   updateCommand: (id: string, data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
   deleteCommand: (id: string) => Promise<void>;
   enableProjectCommands: () => Promise<void>;
@@ -122,7 +122,10 @@ export function MainArea({
       if (editingCommand) {
         await updateCommand(editingCommand.id, data);
       } else {
-        await addCommand(data.name, data.command, data.icon, data.scope);
+        await addCommand(data.name, data.command, data.icon, data.scope, {
+          scriptLines: data.scriptLines,
+          executionMode: data.executionMode,
+        });
       }
       setDialogOpen(false);
       setEditingCommand(null);

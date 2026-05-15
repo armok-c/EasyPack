@@ -48,12 +48,19 @@ export function SettingsDialog({
   onCheckNow,
 }: SettingsDialogProps) {
   const [checkLabel, setCheckLabel] = useState("检查更新");
+  const [checking, setChecking] = useState(false);
 
   async function handleCheckNow() {
-    const ok = await onCheckNow();
-    if (!ok) {
-      setCheckLabel("检查失败");
-      setTimeout(() => setCheckLabel("检查更新"), 2000);
+    if (checking) return;
+    setChecking(true);
+    try {
+      const ok = await onCheckNow();
+      if (!ok) {
+        setCheckLabel("检查失败");
+        setTimeout(() => setCheckLabel("检查更新"), 2000);
+      }
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -164,7 +171,11 @@ export function SettingsDialog({
             v{currentVersion || "..."}{" "}
             <button
               onClick={handleCheckNow}
-              className="text-blue-400 hover:text-blue-300 transition-colors"
+              disabled={checking}
+              className={cn(
+                "text-blue-400 hover:text-blue-300 transition-colors",
+                checking && "opacity-50 pointer-events-none"
+              )}
             >
               {checkLabel}
             </button>

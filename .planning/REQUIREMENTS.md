@@ -16,10 +16,10 @@
 
 ## Version Management (VER)
 
-- [ ] **VER-01**: 应用内显示当前版本号（标题栏或设置页）
-- [ ] **VER-02**: 启动时检查 GitHub Releases API 是否有新版本，结果缓存 24 小时避免速率限制
-- [ ] **VER-03**: 发现新版本时显示更新提示（badge 或 toast 通知）
-- [ ] **VER-04**: 点击更新提示后打开浏览器跳转到 GitHub Release 下载页面
+- [x] **VER-01**: 应用内显示当前版本号（标题栏或设置页）
+- [x] **VER-02**: 启动时检查 GitHub Releases API 是否有新版本，结果缓存 24 小时避免速率限制
+- [x] **VER-03**: 发现新版本时显示更新提示（badge 或 toast 通知）
+- [x] **VER-04**: 点击更新提示后打开浏览器跳转到 GitHub Release 下载页面
 
 ## Keyboard Shortcut Panel (KBD)
 

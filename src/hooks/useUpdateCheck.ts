@@ -40,11 +40,12 @@ export function useUpdateCheck(storeReady: boolean) {
       const version = await getVersion();
       setCurrentVersion(version);
 
-      const result = await invoke<UpdateCheckResult>("check_for_updates");
+      const result = await invoke<UpdateCheckResult>("check_for_updates", { force: true });
       setUpdateAvailable(result.has_update);
       setLatestVersion(result.latest_version);
       return true;
     } catch {
+      setUpdateAvailable(false);
       return false;
     }
   }

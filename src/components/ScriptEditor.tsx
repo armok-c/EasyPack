@@ -12,7 +12,7 @@
  * dispatches a transaction to update. Prevents infinite loop by tracking
  * whether the change originated from user input (onChange callback).
  */
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { basicSetup } from "codemirror";
@@ -39,7 +39,8 @@ function useCodeMirror(
   darkMode: boolean,
 ) {
   const viewRef = useRef<EditorView | null>(null);
-  const isExternalUpdate = useRef(false);
+  // Prevents updateListener from firing onChange during external value sync
+  const isSyncUpdate = useRef(false);
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -58,7 +59,7 @@ function useCodeMirror(
         lineNumbers(),
         batchSupport(),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged && !isExternalUpdate.current) {
+          if (update.docChanged && !isSyncUpdate.current) {
             onChange(update.state.doc.toString());
           }
         }),
