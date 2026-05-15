@@ -28,6 +28,8 @@ interface CommandCardProps {
   onShortcutAssign?: (shortcut: string) => void;
   onShortcutClear?: () => void;
   hasConflict?: boolean;
+  // Phase 17: multi-line script content display
+  scriptLines?: string;
 }
 
 export function CommandCard({
@@ -49,6 +51,7 @@ export function CommandCard({
   onShortcutAssign,
   onShortcutClear,
   hasConflict = false,
+  scriptLines,
 }: CommandCardProps) {
   const [flashing, setFlashing] = useState(false);
 
@@ -118,7 +121,7 @@ export function CommandCard({
       onClick={handleClick}
       disabled={disabled}
       tabIndex={tabIndex}
-      title={disabled ? undefined : command}
+      title={disabled ? undefined : (scriptLines || command)}
       className={cn(
         "group relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl",
         "bg-white/5 border border-white/10",
@@ -240,6 +243,14 @@ export function CommandCard({
       )}
       <Icon className={cn("size-6", flashing && "animate-spin")} />
       <span>{name}</span>
+      {scriptLines && (
+        <div
+          className="w-full text-[10px] text-muted-foreground/70 leading-tight line-clamp-3 text-center"
+          aria-label="脚本内容预览"
+        >
+          {scriptLines}
+        </div>
+      )}
     </button>
   );
 }

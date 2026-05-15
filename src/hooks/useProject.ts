@@ -280,11 +280,47 @@ export function useProject() {
     [currentProject]
   );
 
+  // Phase 17: Execute a CommandItem, dispatching to single-line or multi-line path
+  const executeScriptCommand = useCallback(
+    async (cmd: CommandItem): Promise<boolean> => {
+      if (!currentProject) return false;
+
+      if (cmd.scriptLines) {
+        // Multi-line script path: call execute_script on Rust backend
+        try {
+          await invoke("execute_script", {
+            projectPath: currentProject.path,
+            scriptContent: cmd.scriptLines,
+            isBatchScript: cmd.executionMode === "batch",
+            strict: cmd.executionMode !== "lenient",
+          });
+          toast.success(`已执行脚本: ${cmd.name}`);
+          return true;
+        } catch (error) {
+          toast.error(
+            `脚本执行失败：${error}。请检查脚本内容是否正确。`
+          );
+          return false;
+        }
+      }
+
+      // Single-line path: delegate to existing executeCommand
+      return executeCommand(cmd.command);
+    },
+    [currentProject, executeCommand]
+  );
+
   // --- Command CRUD operations ---
 
   // Add custom command (supports both global and project-level modes)
   const addCommand = useCallback(
-    async (name: string, command: string, icon?: string, scope?: "global" | "project") => {
+    async (
+      name: string,
+      command: string,
+      icon?: string,
+      scope?: "global" | "project",
+      extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" },
+    ) => {
       // Default to project scope when a project is selected, so custom commands follow projects
       const effectiveScope = scope ?? (selectedId ? "project" : "global");
 
@@ -298,6 +334,8 @@ export function useProject() {
           type: "custom",
           scope: "project",
           addedAt: Date.now(),
+          scriptLines: extra?.scriptLines,
+          executionMode: extra?.executionMode,
         };
         let current = projectCommandsMap[selectedId] ?? [];
         // When adding the first project command, initialize from presets
@@ -327,6 +365,8 @@ export function useProject() {
           type: "custom",
           scope: "global",
           addedAt: Date.now(),
+          scriptLines: extra?.scriptLines,
+          executionMode: extra?.executionMode,
         };
         const updated = [...customCommands, newItem];
         setCustomCommands(updated);
@@ -339,13 +379,29 @@ export function useProject() {
 
   // Update command (supports both global and project-level modes)
   const updateCommand = useCallback(
-    async (id: string, data: { name: string; command: string; icon: string }) => {
+    async (
+      id: string,
+      data: {
+        name: string;
+        command: string;
+        icon: string;
+        scriptLines?: string;
+        executionMode?: "strict" | "lenient" | "batch";
+      },
+    ) => {
       if (commandMode === "project" && selectedId) {
         // Project-level mode
         const projectCmds = projectCommandsMap[selectedId] ?? [];
         const idx = projectCmds.findIndex((c) => c.id === id);
         if (idx === -1) return;
-        const updatedItem: CommandItem = { ...projectCmds[idx], ...data };
+        const updatedItem: CommandItem = {
+          ...projectCmds[idx],
+          name: data.name,
+          command: data.command,
+          icon: data.icon,
+          scriptLines: data.scriptLines,
+          executionMode: data.executionMode,
+        };
         const updated = projectCmds.map((c) => (c.id === id ? updatedItem : c));
         setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
         await store?.set(projectCommandsKey(selectedId), updated);
@@ -354,7 +410,14 @@ export function useProject() {
         // Global mode
         const idx = customCommands.findIndex((c) => c.id === id);
         if (idx === -1) return;
-        const updatedItem: CommandItem = { ...customCommands[idx], ...data };
+        const updatedItem: CommandItem = {
+          ...customCommands[idx],
+          name: data.name,
+          command: data.command,
+          icon: data.icon,
+          scriptLines: data.scriptLines,
+          executionMode: data.executionMode,
+        };
         const updated = customCommands.map((c) =>
           c.id === id ? updatedItem : c
         );
@@ -550,9 +613,12 @@ export function useProject() {
 
     // Command CRUD interface
     commands, // CommandItem[]
-    addCommand, // (name: string, command: string, icon?: string, scope?: "global" | "project") => Promise<void>
-    updateCommand, // (id: string, data: { name: string; command: string; icon: string }) => Promise<void>
+    addCommand, // (name, command, icon?, scope?, extra?) => Promise<void>
+    updateCommand, // (id, data: { name, command, icon, scriptLines?, executionMode? }) => Promise<void>
     deleteCommand, // (id: string) => Promise<void>
+
+    // Phase 17: script command execution (dispatches single-line or multi-line)
+    executeScriptCommand, // (cmd: CommandItem) => Promise<boolean>
 
     // Phase 11: shortcut assignment
     assignShortcut, // (commandId: string, shortcut: string) => Promise<boolean>

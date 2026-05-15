@@ -21,11 +21,22 @@ import { PRESET_CATEGORIES, ALL_PRESETS } from "@/lib/presets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScriptEditor } from "@/components/ScriptEditor";
+import { useBatchDetect } from "@/hooks/useBatchDetect";
+
+type ExecutionMode = "strict" | "lenient" | "batch";
 
 interface CommandDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: { name: string; command: string; icon: string; scope?: "global" | "project" }) => void;
+  onSubmit: (data: {
+    name: string;
+    command: string;
+    icon: string;
+    scope?: "global" | "project";
+    scriptLines?: string;
+    executionMode?: ExecutionMode;
+  }) => void;
   initialData?: CommandItem | null;
   commandMode: "global" | "project";
   hasProject: boolean;
@@ -41,6 +52,18 @@ export function CommandDialog({
 }: CommandDialogProps) {
   const isEditing = initialData !== null && initialData !== undefined;
 
+  // Phase 17: Tab state -- "single" for single-line, "multi" for multi-line script
+  const hasInitialScript = !!(initialData?.scriptLines);
+  const [activeTab, setActiveTab] = useState<"single" | "multi">(
+    () => hasInitialScript ? "multi" : "single"
+  );
+  const [scriptContent, setScriptContent] = useState(
+    () => initialData?.scriptLines ?? ""
+  );
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>(
+    () => initialData?.executionMode ?? "strict"
+  );
+
   const [name, setName] = useState(() => initialData?.name ?? "");
   const [command, setCommand] = useState(() => initialData?.command ?? "");
   const [selectedIcon, setSelectedIcon] = useState(
@@ -54,12 +77,17 @@ export function CommandDialog({
     () => hasProject ? "project" : commandMode
   );
 
+  // Phase 17: batch syntax detection for multi-line scripts
+  const isBatch = useBatchDetect(scriptContent);
+
   const filteredPresets = useMemo(
     () => ALL_PRESETS.filter((p) => p.category === selectedCategory),
     [selectedCategory]
   );
 
-  const isValid = name.trim().length > 0 && command.trim().length > 0;
+  const isValid = activeTab === "multi"
+    ? name.trim().length > 0 && scriptContent.trim().length > 0
+    : name.trim().length > 0 && command.trim().length > 0;
 
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,6 +108,15 @@ export function CommandDialog({
   const handleIconSelect = useCallback((iconName: string) => {
     setSelectedIcon(iconName);
   }, []);
+
+  // Phase 17: Tab switch handler (D-03: preserve content on switch)
+  const handleTabChange = useCallback((tab: "single" | "multi") => {
+    if (tab === "multi" && activeTab === "single" && command.trim()) {
+      // D-03: carry single-line content into multi-line editor
+      setScriptContent(command);
+    }
+    setActiveTab(tab);
+  }, [activeTab, command]);
 
   const handleCategoryChange = useCallback((categoryId: string) => {
     setSelectedCategory(categoryId);
@@ -105,13 +142,25 @@ export function CommandDialog({
 
   const handleSubmit = useCallback(() => {
     if (!isValid) return;
-    onSubmit({
-      name: name.trim(),
-      command: command.trim(),
-      icon: selectedIcon,
-      scope: selectedScope,
-    });
-  }, [isValid, name, command, selectedIcon, selectedScope, onSubmit]);
+    if (activeTab === "multi") {
+      const effectiveMode = isBatch ? "batch" : executionMode;
+      onSubmit({
+        name: name.trim(),
+        command: scriptContent.trim().split("\n")[0] || "",
+        icon: selectedIcon,
+        scope: selectedScope,
+        scriptLines: scriptContent,
+        executionMode: effectiveMode,
+      });
+    } else {
+      onSubmit({
+        name: name.trim(),
+        command: command.trim(),
+        icon: selectedIcon,
+        scope: selectedScope,
+      });
+    }
+  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, selectedScope, onSubmit]);
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
@@ -125,10 +174,14 @@ export function CommandDialog({
         setSelectedCategory("");
         setSelectedPresetId("");
         setSelectedScope(hasProject ? "project" : commandMode);
+        // Phase 17: reset tab and script state
+        setActiveTab(initialData?.scriptLines ? "multi" : "single");
+        setScriptContent(initialData?.scriptLines ?? "");
+        setExecutionMode(initialData?.executionMode ?? "strict");
       }
       onOpenChange(newOpen);
     },
-    [initialData, onOpenChange]
+    [initialData, onOpenChange, hasProject, commandMode]
   );
 
   const previewIcon = useMemo(() => getIconByName(selectedIcon), [selectedIcon]);
@@ -140,15 +193,60 @@ export function CommandDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className={cn(
+        activeTab === "multi" ? "sm:max-w-[560px]" : "sm:max-w-[480px]"
+      )}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             {isEditing ? "编辑指令" : "添加指令"}
           </DialogTitle>
         </DialogHeader>
 
+        {/* Phase 17: Tab switch buttons (D-01) */}
+        <div className="pb-2">
+          <div
+            className="inline-flex rounded-md overflow-hidden border border-white/10"
+            role="radiogroup"
+            aria-label="编辑模式"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={activeTab === "single"}
+              aria-label="单行命令"
+              onClick={() => handleTabChange("single")}
+              className={cn(
+                "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
+                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                activeTab === "single"
+                  ? "bg-white/15 text-foreground border-r border-white/10"
+                  : "bg-transparent text-muted-foreground hover:bg-white/5"
+              )}
+            >
+              单行
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={activeTab === "multi"}
+              aria-label="多行脚本"
+              onClick={() => handleTabChange("multi")}
+              className={cn(
+                "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
+                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                activeTab === "multi"
+                  ? "bg-white/15 text-foreground"
+                  : "bg-transparent text-muted-foreground hover:bg-white/5"
+              )}
+            >
+              多行
+            </button>
+          </div>
+        </div>
+
         <div className="py-4 space-y-4">
-          {/* Preset selection area per D-03 */}
+          {/* Preset selection area per D-03 -- only in single-line tab (D-04) */}
+          {activeTab === "single" && (
           <div className="pb-4 mb-4 border-b border-white/10">
             <div className="grid grid-cols-2 gap-2">
               {/* Category Select */}
@@ -203,6 +301,7 @@ export function CommandDialog({
               </div>
             </div>
           </div>
+          )}
 
           {/* Scope selector per PRE-04 */}
           {!isEditing && (
@@ -265,19 +364,83 @@ export function CommandDialog({
             )}
           </div>
 
-          {/* Command field */}
+          {/* Command field -- single-line Input or multi-line ScriptEditor */}
           <div className="space-y-2">
-            <Label htmlFor="cmd-command">Shell 命令</Label>
-            <Input
-              id="cmd-command"
-              placeholder="例如: npm test"
-              value={command}
-              onChange={handleCommandChange}
-            />
-            {commandDirty && command.trim().length === 0 && (
+            <Label htmlFor="cmd-command">
+              {activeTab === "multi" ? "脚本内容" : "Shell 命令"}
+            </Label>
+            {activeTab === "single" ? (
+              <Input
+                id="cmd-command"
+                placeholder="例如: npm test"
+                value={command}
+                onChange={handleCommandChange}
+              />
+            ) : (
+              <ScriptEditor
+                value={scriptContent}
+                onChange={setScriptContent}
+                height="270px"
+                darkMode={document.documentElement.classList.contains("dark")}
+              />
+            )}
+            {activeTab === "single" && commandDirty && command.trim().length === 0 && (
               <p className="text-red-400 text-xs mt-1">命令不能为空</p>
             )}
           </div>
+
+          {/* Phase 17: batch detection result + strict/lenient toggle (D-07) */}
+          {activeTab === "multi" && scriptContent.trim().length > 0 && (
+            <div className="flex items-center gap-2">
+              {isBatch ? (
+                <span className="text-xs text-muted-foreground">
+                  已识别为批处理脚本，将原样执行
+                </span>
+              ) : (
+                <>
+                  <span className="text-xs text-muted-foreground mr-1">执行模式:</span>
+                  <div
+                    className="inline-flex rounded-md overflow-hidden border border-white/10"
+                    role="radiogroup"
+                    aria-label="执行模式"
+                  >
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={executionMode === "strict"}
+                      aria-label="严格模式"
+                      onClick={() => setExecutionMode("strict")}
+                      className={cn(
+                        "px-2.5 py-1 text-xs transition-all duration-150 ease-out",
+                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                        executionMode === "strict"
+                          ? "bg-white/15 text-foreground border-r border-white/10"
+                          : "bg-transparent text-muted-foreground hover:bg-white/5"
+                      )}
+                    >
+                      严格
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={executionMode === "lenient"}
+                      aria-label="宽松模式"
+                      onClick={() => setExecutionMode("lenient")}
+                      className={cn(
+                        "px-2.5 py-1 text-xs transition-all duration-150 ease-out",
+                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                        executionMode === "lenient"
+                          ? "bg-white/15 text-foreground"
+                          : "bg-transparent text-muted-foreground hover:bg-white/5"
+                      )}
+                    >
+                      宽松
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Icon picker */}
           <div className="space-y-2">
