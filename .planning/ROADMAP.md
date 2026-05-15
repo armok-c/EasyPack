@@ -48,7 +48,7 @@
 - [ ] **Phase 15: 开机启动** — 提供开机自启动开关和自愈机制
 - [ ] **Phase 16: 版本管理** — 应用版本号显示和 GitHub 更新检查
 - [x] **Phase 17: 多行脚本指令** — 多行批处理脚本编辑和执行（v2.0 核心价值） -- completed 2026-05-15
-- [ ] **Phase 18: 快捷键设置面板** — VS Code 风格快捷键自定义面板
+- [x] **Phase 18: 快捷键设置面板** — VS Code 风格快捷键自定义面板 -- completed 2026-05-15
 - [ ] **Phase 19: 悬浮窗改进** — 紧凑布局、可折叠、折叠态项目切换
 - [ ] **Phase 20: 多配置文件管理** — 多套独立配置 profile 切换和导入导出
 
@@ -109,8 +109,8 @@ Plans:
   6. 所有快捷键绑定重启后保持
 **Plans:** 2 plans
 Plans:
-- [ ] 18-01-PLAN.md — 后端数据模型与快捷键注册扩展（ShortcutAction 类型 + useShortcutActions hook + useGlobalShortcuts 扩展 + 持久化迁移 + 移除旧录制 UI）
-- [ ] 18-02-PLAN.md — 前端 UI ShortcutPanel 面板（搜索 + 分组列表 + 录制 + 冲突检测 + 重置 + SettingsDialog 入口 + App 集成）
+- [x] 18-01-PLAN.md — 后端数据模型与快捷键注册扩展（ShortcutAction 类型 + useShortcutActions hook + useGlobalShortcuts 扩展 + 持久化迁移 + 移除旧录制 UI） (completed 2026-05-15)
+- [x] 18-02-PLAN.md — 前端 UI ShortcutPanel 面板（搜索 + 分组列表 + 录制 + 冲突检测 + 重置 + SettingsDialog 入口 + App 集成） (completed 2026-05-15)
 **UI hint**: yes
 
 ### Phase 19: 悬浮窗改进
@@ -169,7 +169,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 14. 边缘抽屉 | v1.2 | 3/3 | Complete | 2026-05-10 |
 | 15. 开机启动 | v2.0 | 0/2 | Ready to execute | - |
 | 16. 版本管理 | v2.0 | 0/2 | Planned | - |
-| 17. 多行脚本指令 | v2.0 | 0/? | Not started | - |
-| 18. 快捷键设置面板 | v2.0 | 0/? | Not started | - |
+| 17. 多行脚本指令 | v2.0 | 2/2 | Complete | 2026-05-15 |
+| 18. 快捷键设置面板 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 19. 悬浮窗改进 | v2.0 | 0/? | Not started | - |
 | 20. 多配置文件管理 | v2.0 | 0/? | Not started | - |
