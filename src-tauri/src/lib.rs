@@ -22,6 +22,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::shell::execute_command,
+            commands::shell::execute_script,
             commands::project_info::scan_project_icons,
             commands::project_info::get_project_info,
             commands::shell::open_folder,
