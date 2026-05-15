@@ -31,7 +31,7 @@ interface MainAreaProps {
   // Phase 9: open folder + toggle disabled state
   onOpenFolder: () => void;
   isProjectToggleDisabled: boolean;
-  // Phase 11: shortcut management
+  // Phase 11: shortcut management (preserved for ShortcutPanel integration in Plan 02)
   assignShortcut: (commandId: string, shortcut: string) => Promise<boolean>;
   clearShortcut: (commandId: string) => Promise<void>;
   onRecordingChange?: (recording: boolean) => void;
@@ -70,52 +70,10 @@ export function MainArea({
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
-  // Phase 11: shortcut recording state
-  const [recordingCommandId, setRecordingCommandId] = useState<string | null>(null);
-  const [conflictCommandId, setConflictCommandId] = useState<string | null>(null);
-
   const handleEdit = useCallback((cmd: CommandItem) => {
     setEditingCommand(cmd);
     setDialogOpen(true);
   }, []);
-
-  // Phase 11: shortcut recording callbacks
-  const handleRecordingStart = useCallback((commandId: string) => {
-    setRecordingCommandId(commandId);
-    setConflictCommandId(null);
-  }, []);
-
-  const handleRecordingStop = useCallback(() => {
-    setRecordingCommandId(null);
-    setConflictCommandId(null);
-  }, []);
-
-  const handleShortcutAssign = useCallback(async (commandId: string, shortcut: string) => {
-    const success = await assignShortcut(commandId, shortcut);
-    if (!success) {
-      setConflictCommandId(commandId);
-      setTimeout(() => setConflictCommandId(null), 2000);
-    } else {
-      setRecordingCommandId(null);
-    }
-  }, [assignShortcut]);
-
-  const handleShortcutClear = useCallback(async (commandId: string) => {
-    await clearShortcut(commandId);
-  }, [clearShortcut]);
-
-  // Cancel recording when edit mode is turned off
-  useEffect(() => {
-    if (!editMode) {
-      setRecordingCommandId(null);
-      setConflictCommandId(null);
-    }
-  }, [editMode]);
-
-  // Sync recording state to parent (for disabling global shortcuts during recording)
-  useEffect(() => {
-    onRecordingChange?.(recordingCommandId !== null);
-  }, [recordingCommandId, onRecordingChange]);
 
   const handleDialogSubmit = useCallback(
     async (data: { name: string; command: string; icon: string; scope?: "global" | "project"; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => {
@@ -341,12 +299,6 @@ export function MainArea({
               tabIndex={isCardFocused ? 0 : -1}
               shortcut={cmd.shortcut}
               shortcutNumber={!cmd.shortcut && !isCustom && !canEdit && index < 9 ? index + 1 : undefined}
-              isRecording={recordingCommandId === cmd.id}
-              hasConflict={conflictCommandId === cmd.id}
-              onRecordingStart={() => handleRecordingStart(cmd.id)}
-              onRecordingStop={handleRecordingStop}
-              onShortcutAssign={(s) => handleShortcutAssign(cmd.id, s)}
-              onShortcutClear={() => handleShortcutClear(cmd.id)}
             />
           );
         })}
