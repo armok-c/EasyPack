@@ -49,7 +49,7 @@
 - [ ] **Phase 16: 版本管理** — 应用版本号显示和 GitHub 更新检查
 - [x] **Phase 17: 多行脚本指令** — 多行批处理脚本编辑和执行（v2.0 核心价值） -- completed 2026-05-15
 - [x] **Phase 18: 快捷键设置面板** — VS Code 风格快捷键自定义面板 -- completed 2026-05-15
-- [ ] **Phase 19: 悬浮窗改进** — 紧凑布局、可折叠、折叠态项目切换
+- [x] **Phase 19: 悬浮窗改进** — 紧凑布局、可折叠、折叠态项目切换 -- completed 2026-06-02
 - [ ] **Phase 20: 多配置文件管理** — 多套独立配置 profile 切换和导入导出
 
 ## Phase Details
@@ -125,8 +125,8 @@ Plans:
   5. 悬浮窗可以拖拽移动到屏幕任意位置
 **Plans:** 2 plans
 Plans:
-- [ ] 19-01-PLAN.md — FloatApp 折叠/展开 UI + 胶囊折叠态 + CSS 过渡动画 + 展开态紧凑布局
-- [ ] 19-02-PLAN.md — 项目切换通信 + useFloatWindow 扩展（syncState 推送 projects + resize + float:switch-project 事件）
+- [x] 19-01-PLAN.md — FloatApp 折叠/展开 UI + 胶囊折叠态 + CSS 过渡动画 + 展开态紧凑布局 (completed 2026-06-02)
+- [x] 19-02-PLAN.md — 项目切换通信 + useFloatWindow 扩展（syncState 推送 projects + resize + float:switch-project 事件） (completed 2026-06-02)
 **UI hint**: yes
 
 ### Phase 20: 多配置文件管理
@@ -171,5 +171,5 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 16. 版本管理 | v2.0 | 0/2 | Planned | - |
 | 17. 多行脚本指令 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 18. 快捷键设置面板 | v2.0 | 2/2 | Complete | 2026-05-15 |
-| 19. 悬浮窗改进 | v2.0 | 0/2 | Ready to execute | - |
+| 19. 悬浮窗改进 | v2.0 | 2/2 | Complete | 2026-06-02 |
 | 20. 多配置文件管理 | v2.0 | 0/? | Not started | - |
