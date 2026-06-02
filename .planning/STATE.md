@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: 能力跃升
-status: completed
-stopped_at: Phase 18 completed
-last_updated: "2026-05-15T10:25:00.000Z"
-last_activity: 2026-05-15
+status: in_progress
+stopped_at: Phase 19 context gathered
+last_updated: "2026-06-02T00:00:00.000Z"
+last_activity: 2026-06-02
 progress:
   total_phases: 6
   completed_phases: 4
@@ -16,16 +16,16 @@ progress:
 
 # Project State
 
-**Status:** Milestone v2.0 — Phase 18 (快捷键设置面板) completed
-**Last Activity:** 2026-05-15
-**Current Focus:** Ready for Phase 19
+**Status:** Milestone v2.0 — Phase 19 (悬浮窗改进) context gathered
+**Last Activity:** 2026-06-02
+**Current Focus:** Ready for Phase 19 planning
 
 ## Current Position
 
-Phase: 18 of 20 (快捷键设置面板) — COMPLETED
-Plan: 2/2 plans completed
-Status: Verified (12/12 must-haves passed, human_needed for UX testing)
-Last activity: 2026-05-15 — Phase 18 completed, code review fixes applied
+Phase: 19 of 20 (悬浮窗改进) — CONTEXT GATHERED
+Plan: 0/? plans created
+Status: Context gathered, ready for research/planning
+Last activity: 2026-06-02 — Phase 19 context gathered
 
 Progress: [▓▓▓▓░░░░░░] 67% (v2.0: 4/6 phases done)
 
@@ -68,6 +68,8 @@ Recent decisions affecting current work:
 - Phase 17: Tab 切换编辑模式（单行/多行），CodeMirror 6 编辑器
 - Phase 17: 智能模式检测批处理语法，简单多行用 &&/& 连接
 - Phase 17: .bat 文件始终添加 chcp 65001 + cd /d 工作目录
+- Phase 19: 折叠态胶囊形 rounded-full + 130px 宽，CSS 收缩动画 + Tauri resize
+- Phase 19: 折叠态点击项目名循环切换项目，主窗口同步
 
 ### Pending Todos
 
@@ -94,6 +96,6 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-05-12:
 
 ## Session Continuity
 
-Last session: 2026-05-15T09:12:05.621Z
-Stopped at: Phase 18 context gathered
-Resume file: .planning/phases/18-快捷键设置面板/18-CONTEXT.md
+Last session: 2026-06-02T00:00:00.000Z
+Stopped at: Phase 19 context gathered
+Resume file: .planning/phases/19-悬浮窗改进/19-CONTEXT.md
