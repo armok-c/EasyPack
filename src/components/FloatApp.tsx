@@ -12,6 +12,7 @@ const floatWindow = getCurrentWindow();
 
 function FloatApp() {
   const [project, setProject] = useState<ProjectItem | null>(null);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [commands, setCommands] = useState<CommandItem[]>([]);
   const [flashIndex, setFlashIndex] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -25,6 +26,7 @@ function FloatApp() {
     }>("float:state-update", (event) => {
       if (cancelled) return;
       setProject(event.payload.project);
+      setProjects(event.payload.projects);
       setCommands(event.payload.commands);
     });
     return () => {
@@ -49,6 +51,13 @@ function FloatApp() {
 
   function handleClose() {
     emit("float:close-requested");
+  }
+
+  function handleSwitchProject() {
+    if (!project || projects.length <= 1) return;
+    const currentIndex = projects.findIndex((p) => p.id === project.id);
+    const nextIndex = (currentIndex + 1) % projects.length;
+    emit("float:switch-project", { projectId: projects[nextIndex].id });
   }
 
   async function handleCollapse() {
@@ -106,7 +115,10 @@ function FloatApp() {
         {project ? (
           <>
             {renderProjectIcon()}
-            <span className="text-[11px] text-foreground truncate max-w-[60px]">
+            <span
+              className="text-[11px] text-foreground truncate max-w-[60px] cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); handleSwitchProject(); }}
+            >
               {project.name}
             </span>
           </>

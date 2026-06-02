@@ -139,15 +139,18 @@ function App() {
     if (cmd) {
       await addRecentCommand(cmd.name, cmd.command);
     } else {
-      await addRecentCommand(shellCommand, shellCommand);
+      const recent = recentCommands.find((c) => c.command === shellCommand);
+      await addRecentCommand(recent?.name ?? shellCommand, shellCommand);
     }
-  }, [executeCommand, executeScriptCommand, commands, addRecentCommand]);
+  }, [executeCommand, executeScriptCommand, commands, addRecentCommand, recentCommands]);
 
   // Phase 13: 悬浮窗 (must be before useShortcutActions — toggleFloat used there)
   const { floatVisible, toggleFloat, destroyFloat } = useFloatWindow({
     currentProject,
+    projects,
     commands,
     onExecute: handleExecuteWithRecent,
+    onSwitchProject: selectProject,
   });
 
   // Phase 18: Build ShortcutAction registry and pass to useGlobalShortcuts
