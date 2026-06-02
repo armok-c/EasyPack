@@ -125,8 +125,8 @@ Plans:
   5. 悬浮窗可以拖拽移动到屏幕任意位置
 **Plans:** 2 plans
 Plans:
-- [ ] 19-01-PLAN.md — TBD
-- [ ] 19-02-PLAN.md — TBD
+- [ ] 19-01-PLAN.md — FloatApp 折叠/展开 UI + 胶囊折叠态 + CSS 过渡动画 + 展开态紧凑布局
+- [ ] 19-02-PLAN.md — 项目切换通信 + useFloatWindow 扩展（syncState 推送 projects + resize + float:switch-project 事件）
 **UI hint**: yes
 
 ### Phase 20: 多配置文件管理
@@ -171,5 +171,5 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 16. 版本管理 | v2.0 | 0/2 | Planned | - |
 | 17. 多行脚本指令 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 18. 快捷键设置面板 | v2.0 | 2/2 | Complete | 2026-05-15 |
-| 19. 悬浮窗改进 | v2.0 | 0/? | Not started | - |
+| 19. 悬浮窗改进 | v2.0 | 0/2 | Ready to execute | - |
 | 20. 多配置文件管理 | v2.0 | 0/? | Not started | - |
