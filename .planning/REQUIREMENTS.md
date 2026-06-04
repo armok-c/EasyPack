@@ -47,12 +47,12 @@
 
 ## Multi-config Profile System (CONFIG)
 
-- [ ] **CONFIG-01**: 用户可创建、删除、重命名配置 profile（如"工作"、"个人"、"学习"）
-- [ ] **CONFIG-02**: 用户可在不同 profile 之间切换，切换后加载对应的项目列表和指令
-- [ ] **CONFIG-03**: 用户可导出当前配置为 JSON 文件
-- [ ] **CONFIG-04**: 用户可导入 JSON 配置文件恢复配置（覆盖当前 profile）
-- [ ] **CONFIG-05**: 从现有单配置自动迁移到 profile 系统（首次启动时检测并迁移）
-- [ ] **CONFIG-06**: Profile 切换使用 mutex 序列化，防止并发写入导致数据损坏
+- [x] **CONFIG-01**: 用户可创建、删除、重命名配置 profile（如"工作"、"个人"、"学习"）
+- [x] **CONFIG-02**: 用户可在不同 profile 之间切换，切换后加载对应的项目列表和指令
+- [x] **CONFIG-03**: 用户可导出当前配置为 JSON 文件
+- [x] **CONFIG-04**: 用户可导入 JSON 配置文件恢复配置（覆盖当前 profile）
+- [x] **CONFIG-05**: 从现有单配置自动迁移到 profile 系统（首次启动时检测并迁移）
+- [x] **CONFIG-06**: Profile 切换使用 mutex 序列化，防止并发写入导致数据损坏
 
 ---
 
@@ -104,9 +104,9 @@
 | FLOAT-03 | Phase 19 | Done |
 | FLOAT-04 | Phase 19 | Done |
 | FLOAT-05 | Phase 19 | Done |
-| CONFIG-01 | Phase 20 | Pending |
-| CONFIG-02 | Phase 20 | Pending |
-| CONFIG-03 | Phase 20 | Pending |
-| CONFIG-04 | Phase 20 | Pending |
-| CONFIG-05 | Phase 20 | Pending |
-| CONFIG-06 | Phase 20 | Pending |
+| CONFIG-01 | Phase 20 | Complete |
+| CONFIG-02 | Phase 20 | Complete |
+| CONFIG-03 | Phase 20 | Complete |
+| CONFIG-04 | Phase 20 | Complete |
+| CONFIG-05 | Phase 20 | Complete |
+| CONFIG-06 | Phase 20 | Complete |
