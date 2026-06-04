@@ -50,7 +50,7 @@
 - [x] **Phase 17: 多行脚本指令** — 多行批处理脚本编辑和执行（v2.0 核心价值） -- completed 2026-05-15
 - [x] **Phase 18: 快捷键设置面板** — VS Code 风格快捷键自定义面板 -- completed 2026-05-15
 - [x] **Phase 19: 悬浮窗改进** — 紧凑布局、可折叠、折叠态项目切换 -- completed 2026-06-02
-- [ ] **Phase 20: 多配置文件管理** — 多套独立配置 profile 切换和导入导出
+- [x] **Phase 20: 多配置文件管理** — 多套独立配置 profile 切换和导入导出 (completed 2026-06-04)
 
 ## Phase Details
 
@@ -140,10 +140,10 @@ Plans:
   4. 用户可以导入 JSON 配置文件覆盖当前 profile
   5. 首次启动时，现有单配置数据自动迁移到默认 profile，无数据丢失
   6. Profile 切换操作序列化执行，快速连续切换不会导致数据损坏
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 20-01-PLAN.md — Store 层重构 + Profile 管理 + 数据迁移
-- [ ] 20-02-PLAN.md — UI 实现 + App.tsx 集成
+- [x] 20-01-PLAN.md — Store 层重构 + Profile 管理 + 数据迁移
+- [x] 20-02-PLAN.md — UI 实现 + App.tsx 集成
 **UI hint**: yes
 
 ## Progress
@@ -172,4 +172,4 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 17. 多行脚本指令 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 18. 快捷键设置面板 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 19. 悬浮窗改进 | v2.0 | 2/2 | Complete | 2026-06-02 |
-| 20. 多配置文件管理 | v2.0 | 0/2 | Planned | - |
+| 20. 多配置文件管理 | v2.0 | 2/2 | Complete   | 2026-06-04 |
