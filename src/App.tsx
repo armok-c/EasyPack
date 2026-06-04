@@ -69,6 +69,17 @@ function App() {
     resetAllShortcuts,
     // Phase 12: store for tray settings
     store,
+    // Phase 20: profile management
+    profileMetas,
+    activeProfileId,
+    profileSwitching,
+    switchProfile,
+    createProfile,
+    deleteProfile,
+    renameProfile,
+    importProfile,
+    exportProfile,
+    mainStore,
   } = useProject();
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
@@ -126,7 +137,7 @@ function App() {
   visibilityRef.current = visibility;
 
   // Phase 12: recent commands tracking
-  const { recentCommands, addRecentCommand } = useRecentCommands({ store });
+  const { recentCommands, addRecentCommand } = useRecentCommands({ store, activeProfileId });
   const { updateAvailable, latestVersion, currentVersion, openReleasePage, checkNow } = useUpdateCheck(!!store);
 
   // Phase 12: execute with recent command tracking
@@ -287,11 +298,11 @@ function App() {
   useEffect(() => {
     let mounted = true;
     async function loadTraySettings() {
-      if (!store) return;
-      const saved = await store.get<boolean>("trayEnabled");
-      const savedCTT = await store.get<boolean>("closeToTray");
-      const savedDrawer = await store.get<boolean>("drawerEnabled");
-      const savedAutostart = await store.get<boolean>("autostartEnabled");
+      if (!mainStore) return;
+      const saved = await mainStore.get<boolean>("trayEnabled");
+      const savedCTT = await mainStore.get<boolean>("closeToTray");
+      const savedDrawer = await mainStore.get<boolean>("drawerEnabled");
+      const savedAutostart = await mainStore.get<boolean>("autostartEnabled");
       if (mounted) {
         const effectiveTrayEnabled = saved !== undefined && saved !== null ? saved : true;
         const effectiveCloseToTray = effectiveTrayEnabled
@@ -306,7 +317,7 @@ function App() {
         setAutostartEnabled(effectiveAutostartEnabled);
         // 如果 store 中 autostartEnabled 与 closeToTray 不一致，静默修正 store
         if (effectiveCloseToTray === false && (savedAutostart === true)) {
-          await store.set("autostartEnabled", false);
+          await mainStore.set("autostartEnabled", false);
           try { await autostartDisable(); } catch (err) {
             if (import.meta.env.DEV) {
               console.error("Failed to disable autostart on store invariant fix:", err);
@@ -318,45 +329,45 @@ function App() {
     }
     loadTraySettings();
     return () => { mounted = false; };
-  }, [store]);
+  }, [mainStore]);
 
   // Phase 12: persist tray settings on change
   const handleTrayEnabledChange = useCallback(async (enabled: boolean) => {
     setTrayEnabled(enabled);
     if (!enabled) {
       setCloseToTray(false);
-      await store?.set("closeToTray", false);
+      await mainStore?.set("closeToTray", false);
       // D-10: 关闭 trayEnabled 时级联关闭 autostartEnabled
       setAutostartEnabled(false);
-      await store?.set("autostartEnabled", false);
+      await mainStore?.set("autostartEnabled", false);
       try { await autostartDisable(); } catch (err) {
         if (import.meta.env.DEV) {
           console.error("Failed to disable autostart on tray cascade:", err);
         }
       }
     }
-    await store?.set("trayEnabled", enabled);
-  }, [store]);
+    await mainStore?.set("trayEnabled", enabled);
+  }, [mainStore]);
 
   const handleCloseToTrayChange = useCallback(async (enabled: boolean) => {
     setCloseToTray(enabled);
-    await store?.set("closeToTray", enabled);
+    await mainStore?.set("closeToTray", enabled);
     // D-11: 关闭 closeToTray 时级联关闭 autostartEnabled
     if (!enabled) {
       setAutostartEnabled(false);
-      await store?.set("autostartEnabled", false);
+      await mainStore?.set("autostartEnabled", false);
       try { await autostartDisable(); } catch (err) {
         if (import.meta.env.DEV) {
           console.error("Failed to disable autostart on closeToTray cascade:", err);
         }
       }
     }
-  }, [store]);
+  }, [mainStore]);
 
   // Phase 15: autostart enabled persistence
   const handleAutostartEnabledChange = useCallback(async (enabled: boolean) => {
     setAutostartEnabled(enabled);
-    await store?.set("autostartEnabled", enabled);
+    await mainStore?.set("autostartEnabled", enabled);
     try {
       if (enabled) {
         await autostartEnable();
@@ -368,13 +379,13 @@ function App() {
         console.error("Failed to configure autostart:", err);
       }
     }
-  }, [store]);
+  }, [mainStore]);
 
   // Phase 14: drawer enabled persistence
   const handleDrawerEnabledChange = useCallback(async (enabled: boolean) => {
     setDrawerEnabled(enabled);
-    await store?.set("drawerEnabled", enabled);
-  }, [store]);
+    await mainStore?.set("drawerEnabled", enabled);
+  }, [mainStore]);
 
   // Phase 18: open shortcut panel (close settings first)
   const handleOpenShortcutPanel = useCallback(() => {
@@ -467,6 +478,14 @@ function App() {
       onMouseEnter={snapEdge ? handleMouseEnter : undefined}
       onMouseLeave={snapEdge ? handleMouseLeave : undefined}
     >
+      {profileSwitching && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <div className="size-8 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+            <p className="text-sm text-muted-foreground">切换配置中...</p>
+          </div>
+        </div>
+      )}
       <TitleBar
         onSettingsOpen={() => setSettingsOpen(true)}
         onFloatToggle={toggleFloat}
@@ -528,6 +547,14 @@ function App() {
         onOpenReleasePage={openReleasePage}
         onCheckNow={checkNow}
         onOpenShortcutPanel={handleOpenShortcutPanel}
+        profileMetas={profileMetas}
+        activeProfileId={activeProfileId}
+        onSwitchProfile={switchProfile}
+        onCreateProfile={createProfile}
+        onDeleteProfile={deleteProfile}
+        onRenameProfile={renameProfile}
+        onImportProfile={importProfile}
+        onExportProfile={exportProfile}
       />
       <ShortcutPanel
         open={shortcutPanelOpen}
