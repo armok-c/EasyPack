@@ -872,6 +872,95 @@ export function useProject() {
     }
   }, []);
 
+  // --- Phase 20: Profile import/export ---
+
+  // 导出当前 profile 为 JSON 文件 (per D-16/D-20)
+  const exportProfile = useCallback(async (filePath: string) => {
+    if (!profileStore || !activeProfileId) return;
+    try {
+      const profileName = profileMetas.find((p) => p.id === activeProfileId)?.name ?? "unknown";
+
+      // 收集 projectCommands:* 条目
+      const allKeys = await (profileStore as unknown as { keys: () => Promise<string[]> }).keys();
+      const projectCommands: Record<string, unknown> = {};
+      for (const key of allKeys) {
+        if (key.startsWith("projectCommands:")) {
+          const val = await profileStore.get(key);
+          projectCommands[key.replace("projectCommands:", "")] = val;
+        }
+      }
+
+      const exportData: ProfileExportData = {
+        formatVersion: 1,
+        profileName,
+        exportedAt: new Date().toISOString(),
+        data: {
+          projects: await profileStore.get(PROJECTS_KEY),
+          selectedProjectId: await profileStore.get(SELECTED_KEY),
+          customCommands: await profileStore.get(CUSTOM_COMMANDS_KEY),
+          projectCommands,
+          shortcutBindings: await profileStore.get(SHORTCUT_BINDINGS_KEY),
+          presetShortcuts: await profileStore.get(PRESHORTCUTS_KEY),
+          recentCommands: await profileStore.get("recentCommands"),
+        },
+      };
+
+      await writeTextFile(filePath, JSON.stringify(exportData, null, 2));
+      toast.success(`已导出配置: ${profileName}`);
+    } catch (error) {
+      toast.error("导出失败", {
+        description: String(error),
+      });
+    }
+  }, [profileStore, activeProfileId, profileMetas]);
+
+  // 导入 JSON 文件覆盖当前 profile (per D-17/D-21/D-22)
+  const importProfile = useCallback(async (filePath: string) => {
+    if (!profileStore) return;
+    try {
+      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      const content = await readTextFile(filePath);
+      const parsed = JSON.parse(content);
+
+      // 校验 formatVersion per D-21/D-22
+      if (parsed.formatVersion !== 1) {
+        toast.error("配置文件格式不兼容或已损坏");
+        return;
+      }
+      if (!parsed.data || typeof parsed.data !== "object") {
+        toast.error("配置文件格式不兼容或已损坏");
+        return;
+      }
+
+      const { data } = parsed;
+
+      // 写入各字段到 profileStore
+      if (data.projects) await profileStore.set(PROJECTS_KEY, data.projects);
+      if (data.selectedProjectId !== undefined) await profileStore.set(SELECTED_KEY, data.selectedProjectId);
+      if (data.customCommands) await profileStore.set(CUSTOM_COMMANDS_KEY, data.customCommands);
+      if (data.shortcutBindings) await profileStore.set(SHORTCUT_BINDINGS_KEY, data.shortcutBindings);
+      if (data.presetShortcuts) await profileStore.set(PRESHORTCUTS_KEY, data.presetShortcuts);
+      if (data.recentCommands) await profileStore.set("recentCommands", data.recentCommands);
+
+      // 写入 projectCommands
+      if (data.projectCommands && typeof data.projectCommands === "object") {
+        for (const [projectId, cmds] of Object.entries(data.projectCommands)) {
+          await profileStore.set(projectCommandsKey(projectId), cmds);
+        }
+      }
+
+      await profileStore.save();
+
+      // 刷新 React state
+      await loadProfileDataIntoState(profileStore);
+      toast.success("配置导入成功");
+    } catch (error) {
+      toast.error("导入失败", {
+        description: String(error),
+      });
+    }
+  }, [profileStore, loadProfileDataIntoState]);
+
   return {
     // Legacy interface (backward compatible until Plan 02 migration)
     currentProject, // ProjectItem | null (compatible with old Project | null)
@@ -939,5 +1028,7 @@ export function useProject() {
     createProfile,         // (name: string) => Promise<void>
     deleteProfile,         // (id: string) => Promise<void>
     renameProfile,         // (id: string, newName: string) => Promise<void>
+    exportProfile,         // (filePath: string) => Promise<void>
+    importProfile,         // (filePath: string) => Promise<void>
   };
 }
