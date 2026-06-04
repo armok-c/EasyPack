@@ -142,8 +142,8 @@ Plans:
   6. Profile 切换操作序列化执行，快速连续切换不会导致数据损坏
 **Plans:** 2 plans
 Plans:
-- [ ] 20-01-PLAN.md — TBD
-- [ ] 20-02-PLAN.md — TBD
+- [ ] 20-01-PLAN.md — Store 层重构 + Profile 管理 + 数据迁移
+- [ ] 20-02-PLAN.md — UI 实现 + App.tsx 集成
 **UI hint**: yes
 
 ## Progress
@@ -172,4 +172,4 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 17. 多行脚本指令 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 18. 快捷键设置面板 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 19. 悬浮窗改进 | v2.0 | 2/2 | Complete | 2026-06-02 |
-| 20. 多配置文件管理 | v2.0 | 0/? | Not started | - |
+| 20. 多配置文件管理 | v2.0 | 0/2 | Planned | - |

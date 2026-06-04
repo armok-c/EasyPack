@@ -3,32 +3,45 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: 能力跃升
 status: in_progress
-last_updated: "2026-06-04T12:00:00.000Z"
+last_updated: "2026-06-04T14:00:00.000Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 10
+  total_plans: 12
   completed_plans: 10
   percent: 83
 ---
 
 # Project State
 
-**Status:** Milestone v2.0 — Phase 20 context gathered
+**Status:** Milestone v2.0 — Phase 20 plans created, awaiting execution
 **Last Activity:** 2026-06-04
-**Current Focus:** Phase 20 (多配置文件管理) — context ready, awaiting planning
+**Current Focus:** Phase 20 (多配置文件管理) — 2 plans ready
 
 ## Current Position
 
-Phase: 20 of 20 (多配置文件管理) — CONTEXT GATHERED
-Plan: 0/? plans created
-Status: Ready for planning
-Last activity: 2026-06-04 — Phase 20 context gathered
+Phase: 20 of 20 (多配置文件管理) — PLANNED
+Plan: 0/2 plans executed
+Status: Ready for execution
+Last activity: 2026-06-04 — Phase 20 planned (2 plans, research + checker passed)
 
 Progress: [▓▓▓▓▓▓▓▓░░] 83% (v2.0: 5/6 phases done)
 
 ## Session
 
-Stopped at: Phase 20 context gathered
-Resume: .planning/phases/20-多配置文件管理/20-CONTEXT.md
+Stopped at: Phase 20 plans created
+Resume: `/gsd-execute-phase 20` to begin execution
+
+## Phase 20 Plan Summary
+
+### Plan 20-01: Store 层重构 + Profile 管理 + 数据迁移
+- **Files:** src/lib/types.ts, src/hooks/useProject.ts
+- **Tasks:** 6 tasks (types → 双store重构 → CRUD改用profileStore → switchProfile → Profile CRUD → import/export)
+- **Requirements:** CONFIG-01, CONFIG-02, CONFIG-05, CONFIG-06
+
+### Plan 20-02: UI 实现 + App.tsx 集成
+- **Depends on:** Plan 20-01
+- **Files:** src/hooks/useRecentCommands.ts, src/App.tsx, src/components/SettingsDialog.tsx
+- **Tasks:** 5 tasks (useRecentCommands适配 → App.tsx集成 → SettingsDialog Profile区域 → 导入导出UI → 端到端验证)
+- **Requirements:** CONFIG-01, CONFIG-03, CONFIG-04, CONFIG-06
