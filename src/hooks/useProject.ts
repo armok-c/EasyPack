@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import type { CommandItem } from "@/lib/types";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import type { CommandItem, ProfileMeta, ProfileExportData } from "@/lib/types";
 import { getDefaultsAsCommandItems } from "@/lib/presets";
 import { DEFAULT_ICON } from "@/lib/icons";
 import { shortcutToDisplay, findConflict } from "@/lib/shortcutUtils";
@@ -32,8 +33,18 @@ const SELECTED_KEY = "selectedProjectId";
 const CUSTOM_COMMANDS_KEY = "customCommands";
 const SHORTCUT_BINDINGS_KEY = "shortcutBindings";
 
+// Phase 20: Profile store 架构常量
+const PROFILE_STORE_PREFIX = "profile-";
+const PROFILES_KEY = "profiles";
+const ACTIVE_PROFILE_KEY = "activeProfileId";
+const MIGRATION_DONE_KEY = "profileMigrationDone";
+
 function projectCommandsKey(projectId: string): string {
   return `projectCommands:${projectId}`;
+}
+
+function profileStorePath(id: string): string {
+  return `${PROFILE_STORE_PREFIX}${id}.json`;
 }
 
 function generateProjectId(path: string): string {
@@ -50,6 +61,14 @@ export function useProject() {
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
   const [customCommands, setCustomCommands] = useState<CommandItem[]>([]);
+
+  // Phase 20: 双 store 架构
+  const [mainStore, setMainStore] = useState<Store | null>(null);
+  const [profileStore, setProfileStore] = useState<Store | null>(null);
+  const [profileMetas, setProfileMetas] = useState<ProfileMeta[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [profileSwitching, setProfileSwitching] = useState(false);
+  const switchingProfileRef = useRef(false);
 
   // Phase 4 Plan 03: project-level command override
   const [commandMode, setCommandMode] = useState<"global" | "project">("global");
@@ -106,86 +125,182 @@ export function useProject() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // Initialize: load store and restore persisted data
-  useEffect(() => {
-    let mounted = true;
-    async function init() {
-      try {
-        const s = await load(STORE_PATH, { autoSave: 100, defaults: {} });
-        if (!mounted) return;
-        const savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
-        const savedSelectedId = await s.get<string>(SELECTED_KEY);
-        const savedCommands = await s.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
-        if (savedProjects) setProjects(savedProjects);
-        if (savedSelectedId) setSelectedId(savedSelectedId);
-        if (savedCommands) setCustomCommands(savedCommands);
+  // Phase 20: 从 profile store 加载数据到 React state
+  const loadProfileDataIntoState = useCallback(async (s: Store) => {
+    const savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
+    const savedSelectedId = await s.get<string>(SELECTED_KEY);
+    const savedCommands = await s.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
+    if (savedProjects) setProjects(savedProjects);
+    else setProjects([]);
+    if (savedSelectedId) setSelectedId(savedSelectedId);
+    else setSelectedId(null);
+    if (savedCommands) setCustomCommands(savedCommands);
+    else setCustomCommands([]);
 
-        // Phase 8: fetch project info for already-selected project on startup
-        if (savedSelectedId && savedProjects) {
-          const savedProject = savedProjects.find((p: ProjectItem) => p.id === savedSelectedId);
-          if (savedProject) {
-            fetchProjectInfo(savedProject.path);
+    // Restore project-level command data
+    const allKeys = await (s as unknown as { keys: () => Promise<string[]> }).keys();
+    const projectCmdEntries = await Promise.all(
+      allKeys
+        .filter((k) => k.startsWith("projectCommands:"))
+        .map(async (k) => {
+          const projectId = k.replace("projectCommands:", "");
+          const cmds = await s.get<CommandItem[]>(k);
+          return [projectId, cmds ?? []] as const;
+        })
+    );
+    const map = Object.fromEntries(projectCmdEntries);
+    setProjectCommandsMap(map);
+
+    // Restore preset shortcut overrides
+    const savedPresetShortcuts = await s.get<Record<string, string>>(PRESHORTCUTS_KEY);
+    if (savedPresetShortcuts) setPresetShortcutsMap(savedPresetShortcuts);
+    else setPresetShortcutsMap({});
+
+    // Restore shortcut bindings
+    const savedBindings = await s.get<Record<string, string>>(SHORTCUT_BINDINGS_KEY);
+    if (savedBindings && Object.keys(savedBindings).length > 0) {
+      setShortcutBindings(savedBindings);
+    } else {
+      setShortcutBindings({});
+    }
+
+    // Fetch project info for selected project
+    if (savedSelectedId && savedProjects) {
+      const savedProject = savedProjects.find((p: ProjectItem) => p.id === savedSelectedId);
+      if (savedProject) {
+        fetchProjectInfo(savedProject.path);
+      }
+    }
+  }, [fetchProjectInfo]);
+
+  // Phase 20: 迁移旧数据到 profile 架构（幂等）
+  const migrateToProfiles = useCallback(async (ms: Store): Promise<{ metas: ProfileMeta[]; activeId: string }> => {
+    const migrationDone = await ms.get<boolean>(MIGRATION_DONE_KEY);
+    if (migrationDone) {
+      // 已迁移，从主 store 读取 profile 信息
+      const metas = await ms.get<ProfileMeta[]>(PROFILES_KEY) ?? [];
+      const activeId = await ms.get<string>(ACTIVE_PROFILE_KEY) ?? metas[0]?.id ?? "";
+      return { metas, activeId };
+    }
+
+    const id = crypto.randomUUID();
+    const meta: ProfileMeta = { id, name: "默认", createdAt: Date.now() };
+    const metas = [meta];
+
+    // 检查是否有旧数据需要迁移
+    const oldProjects = await ms.get<ProjectItem[]>(PROJECTS_KEY);
+
+    if (oldProjects && oldProjects.length > 0) {
+      // 有旧数据 → 迁移到新 profile store 文件
+      const ps = await load(profileStorePath(id), { autoSave: 100, defaults: {} });
+
+      // 迁移所有跟 profile 走的 key
+      const keysToMigrate = [PROJECTS_KEY, SELECTED_KEY, CUSTOM_COMMANDS_KEY, PRESHORTCUTS_KEY, SHORTCUT_BINDINGS_KEY];
+      const allKeys = await (ms as unknown as { keys: () => Promise<string[]> }).keys();
+
+      for (const key of keysToMigrate) {
+        const val = await ms.get(key);
+        if (val !== undefined && val !== null) {
+          await ps.set(key, val);
+        }
+      }
+
+      // 迁移 projectCommands:* 条目
+      for (const key of allKeys) {
+        if (key.startsWith("projectCommands:")) {
+          const val = await ms.get(key);
+          if (val !== undefined && val !== null) {
+            await ps.set(key, val);
           }
         }
+      }
 
-        // Restore project-level command data from store
-        const allKeys = await (s as unknown as { keys: () => Promise<string[]> }).keys();
-        const projectCmdEntries = await Promise.all(
-          allKeys
-            .filter((k) => k.startsWith("projectCommands:"))
-            .map(async (k) => {
-              const projectId = k.replace("projectCommands:", "");
-              const cmds = await s.get<CommandItem[]>(k);
-              return [projectId, cmds ?? []] as const;
-            })
-        );
-        const map = Object.fromEntries(projectCmdEntries);
-        if (Object.keys(map).length > 0) setProjectCommandsMap(map);
+      await ps.save();
 
-        // Phase 11: restore preset shortcut overrides
-        const savedPresetShortcuts = await s.get<Record<string, string>>(PRESHORTCUTS_KEY);
-        if (savedPresetShortcuts) setPresetShortcutsMap(savedPresetShortcuts);
-
-        // Phase 18: restore unified shortcut bindings, migrate from old format if needed
-        const savedBindings = await s.get<Record<string, string>>(SHORTCUT_BINDINGS_KEY);
-        if (savedBindings && Object.keys(savedBindings).length > 0) {
-          setShortcutBindings(savedBindings);
-        } else {
-          // Migration: convert old CommandItem.shortcut + presetShortcutsMap to new format
-          const migrated: Record<string, string> = {};
-          // Migrate from custom commands' shortcut fields
-          if (savedCommands) {
-            for (const cmd of savedCommands) {
+      // 迁移 shortcut bindings（如果旧格式存在）
+      const oldBindings = await ms.get<Record<string, string>>(SHORTCUT_BINDINGS_KEY);
+      if (!oldBindings || Object.keys(oldBindings).length === 0) {
+        // 尝试从旧格式迁移
+        const migrated: Record<string, string> = {};
+        const savedCommands = await ms.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
+        if (savedCommands) {
+          for (const cmd of savedCommands) {
+            if (cmd.shortcut) {
+              migrated[`command.${cmd.id}`] = cmd.shortcut;
+            }
+          }
+        }
+        for (const key of allKeys) {
+          if (!key.startsWith("projectCommands:")) continue;
+          const projCmds = await ms.get<CommandItem[]>(key);
+          if (projCmds) {
+            for (const cmd of projCmds) {
               if (cmd.shortcut) {
                 migrated[`command.${cmd.id}`] = cmd.shortcut;
               }
             }
           }
-          // Migrate from project commands' shortcut fields
-          for (const k of allKeys) {
-            if (!k.startsWith("projectCommands:")) continue;
-            const projCmds = await s.get<CommandItem[]>(k);
-            if (projCmds) {
-              for (const cmd of projCmds) {
-                if (cmd.shortcut) {
-                  migrated[`command.${cmd.id}`] = cmd.shortcut;
-                }
-              }
-            }
-          }
-          // Migrate from preset shortcut overrides
-          if (savedPresetShortcuts) {
-            for (const [presetId, shortcut] of Object.entries(savedPresetShortcuts)) {
-              migrated[`command.${presetId}`] = shortcut;
-            }
-          }
-          if (Object.keys(migrated).length > 0) {
-            setShortcutBindings(migrated);
-            await s.set(SHORTCUT_BINDINGS_KEY, migrated);
+        }
+        const savedPresetShortcuts = await ms.get<Record<string, string>>(PRESHORTCUTS_KEY);
+        if (savedPresetShortcuts) {
+          for (const [presetId, shortcut] of Object.entries(savedPresetShortcuts)) {
+            migrated[`command.${presetId}`] = shortcut;
           }
         }
+        if (Object.keys(migrated).length > 0) {
+          await ps.set(SHORTCUT_BINDINGS_KEY, migrated);
+          await ps.save();
+        }
+      }
 
-        setStore(s);
+      // 从主 store 删除旧数据
+      for (const key of keysToMigrate) {
+        await ms.delete(key);
+      }
+      for (const key of allKeys) {
+        if (key.startsWith("projectCommands:")) {
+          await ms.delete(key);
+        }
+      }
+    } else {
+      // 全新安装：创建空默认 profile
+      const ps = await load(profileStorePath(id), { autoSave: 100, defaults: {} });
+      await ps.save();
+    }
+
+    // 设置 profile 元信息和迁移标记
+    await ms.set(PROFILES_KEY, metas);
+    await ms.set(ACTIVE_PROFILE_KEY, id);
+    await ms.set(MIGRATION_DONE_KEY, true);
+    await ms.save();
+
+    return { metas, activeId: id };
+  }, []);
+
+  // Initialize: load store and restore persisted data
+  useEffect(() => {
+    let mounted = true;
+    async function init() {
+      try {
+        // Phase 20: 先加载主 store，执行迁移，再加载 profile store
+        const ms = await load(STORE_PATH, { autoSave: 100, defaults: {} });
+        if (!mounted) return;
+
+        const { metas, activeId } = await migrateToProfiles(ms);
+        if (!mounted) return;
+
+        setMainStore(ms);
+        setProfileMetas(metas);
+        setActiveProfileId(activeId);
+
+        // 加载活跃 profile 数据
+        const ps = await load(profileStorePath(activeId), { autoSave: 100, defaults: {} });
+        if (!mounted) return;
+
+        await loadProfileDataIntoState(ps);
+        setProfileStore(ps);
+        // 保持 store 引用指向 profileStore（供 useRecentCommands 等使用）
+        setStore(ps);
       } catch (error) {
         console.warn("Store 加载失败，使用内存模式:", error);
         // Graceful degradation: app works without persistence
@@ -197,7 +312,7 @@ export function useProject() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Add project (per D-02 append to bottom, D-04 duplicate check, D-05 auto-select)
   const addProject = useCallback(
@@ -731,5 +846,11 @@ export function useProject() {
 
     // Phase 12: expose store for tray settings persistence
     store,                 // Store | null
+
+    // Phase 20: Profile 管理
+    mainStore,             // Store | null（全局设置读写）
+    profileMetas,          // ProfileMeta[]
+    activeProfileId,       // string | null
+    profileSwitching,      // boolean
   };
 }
