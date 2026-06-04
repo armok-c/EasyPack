@@ -277,6 +277,42 @@ export function useProject() {
     return { metas, activeId: id };
   }, []);
 
+  // Phase 20: 切换 Profile（含并发安全 + loading 态管理 per D-24/D-25）
+  const switchProfile = useCallback(async (id: string) => {
+    if (!mainStore) return;
+    if (switchingProfileRef.current) return; // 并发安全 per D-24
+    if (id === activeProfileId) return;       // 跳过重复切换
+
+    switchingProfileRef.current = true;
+    setProfileSwitching(true);
+
+    try {
+      // 1. 更新主 store 的 activeProfileId
+      await mainStore.set(ACTIVE_PROFILE_KEY, id);
+      await mainStore.save();
+
+      // 2. 加载新 profile store
+      const ps = await load(profileStorePath(id), { autoSave: 100, defaults: {} });
+
+      // 3. 批量重置所有 React state per D-04/D-05
+      setCommandMode("global");
+      setEditMode(false);
+      await loadProfileDataIntoState(ps);
+
+      // 4. 更新 profileStore 引用
+      setProfileStore(ps);
+      // 5. 同步更新 store 引用（供 useRecentCommands 等）
+      setStore(ps);
+      // 6. 更新 activeProfileId
+      setActiveProfileId(id);
+      // 7. 重置 project info
+      setProjectInfo(null);
+    } finally {
+      switchingProfileRef.current = false;
+      setProfileSwitching(false);
+    }
+  }, [mainStore, activeProfileId, loadProfileDataIntoState]);
+
   // Initialize: load store and restore persisted data
   useEffect(() => {
     let mounted = true;
@@ -852,5 +888,6 @@ export function useProject() {
     profileMetas,          // ProfileMeta[]
     activeProfileId,       // string | null
     profileSwitching,      // boolean
+    switchProfile,         // (id: string) => Promise<void>
   };
 }
