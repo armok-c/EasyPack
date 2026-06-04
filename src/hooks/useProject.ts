@@ -814,6 +814,53 @@ export function useProject() {
     [profileStore]
   );
 
+  // --- Phase 20: Profile CRUD ---
+
+  // 创建新 profile + 自动切换
+  const createProfile = useCallback(async (name: string) => {
+    if (!mainStore) return;
+    const id = crypto.randomUUID();
+    const meta: ProfileMeta = { id, name, createdAt: Date.now() };
+    const updated = [...profileMetas, meta];
+    // 创建空的 profile store 文件
+    const ps = await load(profileStorePath(id), { autoSave: 100, defaults: {} });
+    await ps.save();
+    // 更新主 store
+    await mainStore.set(PROFILES_KEY, updated);
+    await mainStore.save();
+    setProfileMetas(updated);
+    // 自动切换到新 profile
+    await switchProfile(id);
+  }, [mainStore, profileMetas, switchProfile]);
+
+  // 删除 profile（不允许删除最后一个）
+  const deleteProfile = useCallback(async (id: string) => {
+    if (!mainStore) return;
+    if (profileMetas.length <= 1) {
+      toast.error("至少需要保留一个配置文件");
+      return;
+    }
+    const updated = profileMetas.filter((p) => p.id !== id);
+    await mainStore.set(PROFILES_KEY, updated);
+    await mainStore.save();
+    setProfileMetas(updated);
+    // 如果删除的是当前活跃 profile，自动切换到第一个
+    if (id === activeProfileId && updated.length > 0) {
+      await switchProfile(updated[0].id);
+    }
+  }, [mainStore, profileMetas, activeProfileId, switchProfile]);
+
+  // 重命名 profile（仅更新主 store 的 metas）
+  const renameProfile = useCallback(async (id: string, newName: string) => {
+    if (!mainStore) return;
+    const updated = profileMetas.map((p) =>
+      p.id === id ? { ...p, name: newName } : p
+    );
+    await mainStore.set(PROFILES_KEY, updated);
+    await mainStore.save();
+    setProfileMetas(updated);
+  }, [mainStore, profileMetas]);
+
   // Phase 9: open project folder in Windows Explorer (per D-04)
   const openFolder = useCallback(async (path: string) => {
     try {
@@ -889,5 +936,8 @@ export function useProject() {
     activeProfileId,       // string | null
     profileSwitching,      // boolean
     switchProfile,         // (id: string) => Promise<void>
+    createProfile,         // (name: string) => Promise<void>
+    deleteProfile,         // (id: string) => Promise<void>
+    renameProfile,         // (id: string, newName: string) => Promise<void>
   };
 }
