@@ -8,18 +8,20 @@ export interface RecentCommand {
 
 interface UseRecentCommandsOptions {
   store: Store | null;
+  activeProfileId: string | null;
 }
 
 const STORE_KEY = "recentCommands";
 const MAX_COMMANDS = 8;
 
-export function useRecentCommands({ store }: UseRecentCommandsOptions) {
+export function useRecentCommands({ store, activeProfileId }: UseRecentCommandsOptions) {
   const [recentCommands, setRecentCommands] = useState<RecentCommand[]>([]);
   const storeRef = useRef(store);
   storeRef.current = store;
 
   useEffect(() => {
     if (!store) return;
+    setRecentCommands([]); // 先清空，避免显示旧 profile 数据
     store
       .get<RecentCommand[]>(STORE_KEY)
       .then((saved) => {
@@ -28,7 +30,7 @@ export function useRecentCommands({ store }: UseRecentCommandsOptions) {
       .catch(() => {
         // Store read failure: keep empty list
       });
-  }, [store]);
+  }, [store, activeProfileId]);
 
   const addRecentCommand = useCallback(
     async (name: string, command: string) => {
