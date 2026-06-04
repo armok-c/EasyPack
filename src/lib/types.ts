@@ -29,3 +29,26 @@ export interface ShortcutAction {
   category: ShortcutCategory;
   handler: () => void;  // Not persisted — rebuilt from App-layer callbacks each render
 }
+
+/** Phase 20: Profile 元信息，存储在主 store 中 */
+export interface ProfileMeta {
+  id: string;       // UUID
+  name: string;     // 用户可见名称，如"工作"、"个人"
+  createdAt: number; // Date.now() 时间戳
+}
+
+/** Phase 20: 导出 JSON 文件格式 (per D-20) */
+export interface ProfileExportData {
+  formatVersion: number;
+  profileName: string;
+  exportedAt: string;          // ISO 8601
+  data: {
+    projects: unknown;
+    selectedProjectId: unknown;
+    customCommands: unknown;
+    projectCommands: Record<string, unknown>;
+    shortcutBindings: unknown;
+    presetShortcuts: unknown;
+    recentCommands: unknown;
+  };
+}
