@@ -326,10 +326,10 @@ export function useProject() {
       const updated = [...projects, newItem];
       setProjects(updated);
       setSelectedId(id);
-      await store?.set(PROJECTS_KEY, updated);
-      await store?.set(SELECTED_KEY, id);
+      await profileStore?.set(PROJECTS_KEY, updated);
+      await profileStore?.set(SELECTED_KEY, id);
     },
-    [projects, store]
+    [projects, profileStore]
   );
 
   // Remove project (per D-10 auto-select nearest, D-11 empty state for last item)
@@ -348,18 +348,18 @@ export function useProject() {
         newSelectedId = selectedId;
       }
       setSelectedId(newSelectedId);
-      await store?.set(PROJECTS_KEY, updated);
-      await store?.set(SELECTED_KEY, newSelectedId);
+      await profileStore?.set(PROJECTS_KEY, updated);
+      await profileStore?.set(SELECTED_KEY, newSelectedId);
       // Clean up project-level command data (both store and in-memory)
-      await store?.delete(projectCommandsKey(id));
+      await profileStore?.delete(projectCommandsKey(id));
       setProjectCommandsMap((prev) => {
         const next = { ...prev };
         delete next[id];
         return next;
       });
-      await store?.save();
+      await profileStore?.save();
     },
-    [projects, selectedId, store]
+    [projects, selectedId, profileStore]
   );
 
   // Phase 8: fetch project info (folder size + Git branch) per D-04
@@ -390,14 +390,14 @@ export function useProject() {
     async (id: string) => {
       setSelectedId(id);
       setEditMode(false);
-      await store?.set(SELECTED_KEY, id);
+      await profileStore?.set(SELECTED_KEY, id);
       // Phase 8: fetch project info on project switch (per D-04)
       const project = projects.find((p) => p.id === id);
       if (project) {
         fetchProjectInfo(project.path);
       }
     },
-    [store, projects, fetchProjectInfo]
+    [profileStore, projects, fetchProjectInfo]
   );
 
   // Folder picker (inherits Phase 1 logic, calls addProject internally)
@@ -509,8 +509,8 @@ export function useProject() {
         }
         const updated = [...current, newItem];
         setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
-        await store?.set(projectCommandsKey(selectedId), updated);
-        await store?.save();
+        await profileStore?.set(projectCommandsKey(selectedId), updated);
+        await profileStore?.save();
         setCommandMode("project");
         toast.success(`已添加指令: ${name}`);
       } else {
@@ -528,11 +528,11 @@ export function useProject() {
         };
         const updated = [...customCommands, newItem];
         setCustomCommands(updated);
-        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        await profileStore?.set(CUSTOM_COMMANDS_KEY, updated);
         toast.success(`已添加指令: ${name}`);
       }
     },
-    [commandMode, selectedId, projectCommandsMap, customCommands, store]
+    [commandMode, selectedId, projectCommandsMap, customCommands, profileStore]
   );
 
   // Update command (supports both global and project-level modes)
@@ -562,7 +562,7 @@ export function useProject() {
         };
         const updated = projectCmds.map((c) => (c.id === id ? updatedItem : c));
         setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
-        await store?.set(projectCommandsKey(selectedId), updated);
+        await profileStore?.set(projectCommandsKey(selectedId), updated);
         toast.success(`已保存指令: ${data.name}`);
       } else {
         // Global mode
@@ -580,11 +580,11 @@ export function useProject() {
           c.id === id ? updatedItem : c
         );
         setCustomCommands(updated);
-        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        await profileStore?.set(CUSTOM_COMMANDS_KEY, updated);
         toast.success(`已保存指令: ${data.name}`);
       }
     },
-    [commandMode, selectedId, projectCommandsMap, customCommands, store]
+    [commandMode, selectedId, projectCommandsMap, customCommands, profileStore]
   );
 
   // Delete command (supports both modes + auto-revert per D-10)
@@ -604,13 +604,13 @@ export function useProject() {
             delete next[selectedId];
             return next;
           });
-          await store?.delete(projectCommandsKey(selectedId));
-          await store?.save();
+          await profileStore?.delete(projectCommandsKey(selectedId));
+          await profileStore?.save();
           setCommandMode("global");
         } else {
           setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
-          await store?.set(projectCommandsKey(selectedId), updated);
-          await store?.save();
+          await profileStore?.set(projectCommandsKey(selectedId), updated);
+          await profileStore?.save();
         }
         toast.success(`已删除指令: ${target.name}`);
       } else {
@@ -619,12 +619,12 @@ export function useProject() {
         if (!target) return;
         const updated = customCommands.filter((c) => c.id !== id);
         setCustomCommands(updated);
-        await store?.set(CUSTOM_COMMANDS_KEY, updated);
-        await store?.save();
+        await profileStore?.set(CUSTOM_COMMANDS_KEY, updated);
+        await profileStore?.save();
         toast.success(`已删除指令: ${target.name}`);
       }
     },
-    [commandMode, selectedId, projectCommandsMap, customCommands, store]
+    [commandMode, selectedId, projectCommandsMap, customCommands, profileStore]
   );
 
   // --- Phase 18: Unified shortcut binding management ---
@@ -638,10 +638,10 @@ export function useProject() {
       }
       const updated = { ...shortcutBindings, [actionId]: shortcut };
       setShortcutBindings(updated);
-      await store?.set(SHORTCUT_BINDINGS_KEY, updated);
+      await profileStore?.set(SHORTCUT_BINDINGS_KEY, updated);
       return null;
     },
-    [shortcutBindings, store],
+    [shortcutBindings, profileStore],
   );
 
   // Clear a shortcut binding for an action
@@ -650,16 +650,16 @@ export function useProject() {
       const updated = { ...shortcutBindings };
       delete updated[actionId];
       setShortcutBindings(updated);
-      await store?.set(SHORTCUT_BINDINGS_KEY, updated);
+      await profileStore?.set(SHORTCUT_BINDINGS_KEY, updated);
     },
-    [shortcutBindings, store],
+    [shortcutBindings, profileStore],
   );
 
   // Reset all shortcut bindings
   const resetAllShortcuts = useCallback(async () => {
     setShortcutBindings({});
-    await store?.set(SHORTCUT_BINDINGS_KEY, {});
-  }, [store]);
+    await profileStore?.set(SHORTCUT_BINDINGS_KEY, {});
+  }, [profileStore]);
 
   // --- Phase 11: Shortcut assignment (legacy, preserved for transition) ---
 
@@ -682,23 +682,23 @@ export function useProject() {
           c.id === commandId ? { ...c, shortcut } : c
         );
         setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
-        await store?.set(projectCommandsKey(selectedId), updated);
+        await profileStore?.set(projectCommandsKey(selectedId), updated);
       } else if (customCommands.some((c) => c.id === commandId)) {
         const updated = customCommands.map((c) =>
           c.id === commandId ? { ...c, shortcut } : c
         );
         setCustomCommands(updated);
-        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        await profileStore?.set(CUSTOM_COMMANDS_KEY, updated);
       } else {
         // Preset command: store in presetShortcutsMap
         const updatedMap = { ...presetShortcutsMap, [commandId]: shortcut };
         setPresetShortcutsMap(updatedMap);
-        await store?.set(PRESHORTCUTS_KEY, updatedMap);
+        await profileStore?.set(PRESHORTCUTS_KEY, updatedMap);
       }
       toast.success(`已绑定快捷键: ${shortcutToDisplay(shortcut)}`);
       return true;
     },
-    [commandMode, selectedId, projectCommandsMap, customCommands, store, commands, presetShortcutsMap]
+    [commandMode, selectedId, projectCommandsMap, customCommands, profileStore, commands, presetShortcutsMap]
   );
 
   // Clear a shortcut binding from a command
@@ -709,22 +709,22 @@ export function useProject() {
           c.id === commandId ? { ...c, shortcut: undefined } : c
         );
         setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
-        await store?.set(projectCommandsKey(selectedId), updated);
+        await profileStore?.set(projectCommandsKey(selectedId), updated);
       } else if (customCommands.some((c) => c.id === commandId)) {
         const updated = customCommands.map((c) =>
           c.id === commandId ? { ...c, shortcut: undefined } : c
         );
         setCustomCommands(updated);
-        await store?.set(CUSTOM_COMMANDS_KEY, updated);
+        await profileStore?.set(CUSTOM_COMMANDS_KEY, updated);
       } else if (presetShortcutsMap[commandId]) {
         const updatedMap = { ...presetShortcutsMap };
         delete updatedMap[commandId];
         setPresetShortcutsMap(updatedMap);
-        await store?.set(PRESHORTCUTS_KEY, updatedMap);
+        await profileStore?.set(PRESHORTCUTS_KEY, updatedMap);
       }
       toast.success("已清除快捷键");
     },
-    [commandMode, selectedId, projectCommandsMap, customCommands, store, presetShortcutsMap]
+    [commandMode, selectedId, projectCommandsMap, customCommands, profileStore, presetShortcutsMap]
   );
 
   // --- Project-level command set management ---
@@ -745,11 +745,11 @@ export function useProject() {
       addedAt: idx,
     }));
     setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: projectCmds }));
-    await store?.set(projectCommandsKey(selectedId), projectCmds);
+    await profileStore?.set(projectCommandsKey(selectedId), projectCmds);
     setCommandMode("project");
     setEditMode(true); // per D-22: auto-enter edit mode
     toast.success("已创建项目指令集，请配置指令");
-  }, [selectedId, store, projectCommandsMap]);
+  }, [selectedId, profileStore, projectCommandsMap]);
 
   // Switch to global mode: pure view toggle, preserve project command data
   const disableProjectCommands = useCallback(async () => {
@@ -763,19 +763,19 @@ export function useProject() {
         p.id === projectId ? { ...p, ...style } : p
       );
       setProjects(updated);
-      await store?.set(PROJECTS_KEY, updated);
+      await profileStore?.set(PROJECTS_KEY, updated);
       toast.success("已更新项目样式");
     },
-    [projects, store]
+    [projects, profileStore]
   );
 
   // Phase 5 Plan 02: reorder projects via drag-and-drop
   const reorderProjects = useCallback(
     async (reordered: ProjectItem[]) => {
       setProjects(reordered);
-      await store?.set(PROJECTS_KEY, reordered);
+      await profileStore?.set(PROJECTS_KEY, reordered);
     },
-    [store]
+    [profileStore]
   );
 
   // Phase 9: open project folder in Windows Explorer (per D-04)
