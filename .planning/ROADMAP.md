@@ -45,8 +45,8 @@
 
 **Milestone Goal:** 将 EasyPack 从"单行指令执行器"升级为"多行脚本 + 完整快捷键 + 多配置管理"的强大桌面工具。
 
-- [ ] **Phase 15: 开机启动** — 提供开机自启动开关和自愈机制
-- [ ] **Phase 16: 版本管理** — 应用版本号显示和 GitHub 更新检查
+- [x] **Phase 15: 开机启动** — 提供开机自启动开关和自愈机制 -- completed 2026-05-14
+- [x] **Phase 16: 版本管理** — 应用版本号显示和 GitHub 更新检查 -- completed 2026-05-14
 - [x] **Phase 17: 多行脚本指令** — 多行批处理脚本编辑和执行（v2.0 核心价值） -- completed 2026-05-15
 - [x] **Phase 18: 快捷键设置面板** — VS Code 风格快捷键自定义面板 -- completed 2026-05-15
 - [x] **Phase 19: 悬浮窗改进** — 紧凑布局、可折叠、折叠态项目切换 -- completed 2026-06-02
@@ -64,8 +64,8 @@
   3. 如果注册表条目丢失（如被清理工具删除），下次启动 EasyPack 时自动修复
 **Plans:** 2 plans
 Plans:
-- [ ] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈）
-- [ ] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑）
+- [x] 15-01-PLAN.md — Rust 后端 autostart 插件集成（注册、窗口隐藏、自愈） (completed 2026-05-14)
+- [x] 15-02-PLAN.md — 前端 UI 集成（SettingsDialog 开关、状态管理、级联逻辑） (completed 2026-05-14)
 
 ### Phase 16: 版本管理
 **Goal**: 用户可以看到当前版本号并在有新版本时收到通知
@@ -78,8 +78,8 @@ Plans:
   4. 点击更新提示后，浏览器打开 GitHub Release 下载页面
 **Plans:** 2 plans
 Plans:
-- [ ] 16-01-PLAN.md — Rust 后端：check_for_updates command + open_release_page command + Cargo.toml 依赖
-- [ ] 16-02-PLAN.md — 前端 UI：useUpdateCheck hook + TitleBar 红点 + SettingsDialog 版本号和提示条
+- [x] 16-01-PLAN.md — Rust 后端：check_for_updates command + open_release_page command + Cargo.toml 依赖 (completed 2026-05-14)
+- [x] 16-02-PLAN.md — 前端 UI：useUpdateCheck hook + TitleBar 红点 + SettingsDialog 版本号和提示条 (completed 2026-05-14)
 
 ### Phase 17: 多行脚本指令
 **Goal**: 用户可以编写和执行多行批处理脚本，使用完整的 Windows 批处理语法
@@ -167,8 +167,8 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19 → 20
 | 12. 系统托盘 | v1.2 | 3/3 | Complete | 2026-04-28 |
 | 13. 迷你悬浮窗 | v1.2 | 3/3 | Complete | 2026-05-10 |
 | 14. 边缘抽屉 | v1.2 | 3/3 | Complete | 2026-05-10 |
-| 15. 开机启动 | v2.0 | 0/2 | Ready to execute | - |
-| 16. 版本管理 | v2.0 | 0/2 | Planned | - |
+| 15. 开机启动 | v2.0 | 2/2 | Complete | 2026-05-14 |
+| 16. 版本管理 | v2.0 | 2/2 | Complete | 2026-05-14 |
 | 17. 多行脚本指令 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 18. 快捷键设置面板 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 19. 悬浮窗改进 | v2.0 | 2/2 | Complete | 2026-06-02 |
