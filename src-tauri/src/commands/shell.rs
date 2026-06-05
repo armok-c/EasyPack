@@ -24,6 +24,9 @@ pub async fn execute_command(project_path: String, shell_command: String) -> Res
     if project_path.contains('"') {
         return Err("Invalid project path: contains double quote".to_string());
     }
+    if shell_command.contains('"') {
+        return Err("Invalid shell command: contains double quote".to_string());
+    }
     let args = build_cmd_start_args(&project_path, &shell_command);
     StdCommand::new("cmd")
         .raw_arg(&args)
@@ -102,6 +105,9 @@ pub async fn execute_script(
 ) -> Result<String, String> {
     if project_path.contains('"') {
         return Err("Invalid project path: contains double quote".to_string());
+    }
+    if script_content.len() > 1_048_576 {
+        return Err("Script content exceeds 1MB limit".to_string());
     }
     let content = build_bat_content(&project_path, &script_content, is_batch_script, strict);
 
@@ -191,12 +197,20 @@ mod tests {
     #[test]
     fn test_build_cmd_start_args_simple_command() {
         let result = build_cmd_start_args("E:\\git\\EasyPack", "claude");
-        // 验证空标题参数 "" 存在（防止路径被 start 当作标题）
         assert!(result.contains("start \"\""));
-        // 验证 /d 目录参数被引号包裹
         assert!(result.contains(r#"/d "E:\git\EasyPack""#));
-        // 验证命令被引号包裹
         assert!(result.contains(r#"cmd /K "claude""#));
+    }
+
+    #[test]
+    fn test_execute_command_rejects_quoted_command() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(execute_command(
+            "E:\\git\\EasyPack".to_string(),
+            "echo \"hello\"".to_string(),
+        ));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("double quote"));
     }
 
     // --- Phase 17: build_bat_content tests ---
