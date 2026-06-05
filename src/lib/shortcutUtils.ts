@@ -64,6 +64,10 @@ export function shortcutToDisplay(shortcut: string): string {
  * Returns the conflicting actionId, or null if no conflict.
  * Self-binding (excludeActionId matches) is NOT a conflict.
  */
+export function normalizeShortcut(shortcut: string): string {
+  return shortcut.replace(/\bCtrl\b/g, "CommandOrControl");
+}
+
 export function findConflict(
   bindings: Record<string, string>,
   excludeActionId: string,
@@ -71,8 +75,9 @@ export function findConflict(
   skipIds?: string[],
 ): string | null {
   const skip = new Set(skipIds);
+  const normalizedNew = normalizeShortcut(newShortcut);
   for (const [actionId, shortcut] of Object.entries(bindings)) {
-    if (actionId !== excludeActionId && !skip.has(actionId) && shortcut === newShortcut) {
+    if (actionId !== excludeActionId && !skip.has(actionId) && normalizeShortcut(shortcut) === normalizedNew) {
       return actionId;
     }
   }

@@ -96,23 +96,34 @@ export function useProject() {
   // Merged command list: use commandMode to decide, sorted by addedAt
   const commands = useMemo(() => {
     if (!selectedId) return [];
+    const injectBinding = (cmd: typeof customCommands[0]) => {
+      const bindingKey = `command.${cmd.id}`;
+      if (shortcutBindings[bindingKey]) {
+        return { ...cmd, shortcut: shortcutBindings[bindingKey] };
+      }
+      return cmd;
+    };
     if (commandMode === "project") {
       const projectCmds = projectCommandsMap[selectedId];
       if (projectCmds && projectCmds.length > 0) {
-        return [...projectCmds].sort((a, b) => a.addedAt - b.addedAt);
+        return [...projectCmds].map(injectBinding).sort((a, b) => a.addedAt - b.addedAt);
       }
       return [];
     }
     // Global mode: presets + global custom commands, inject preset shortcuts
     return [...getDefaultsAsCommandItems(), ...customCommands]
       .map((cmd) => {
+        const bindingKey = `command.${cmd.id}`;
+        if (shortcutBindings[bindingKey]) {
+          return { ...cmd, shortcut: shortcutBindings[bindingKey] };
+        }
         if (presetShortcutsMap[cmd.id]) {
           return { ...cmd, shortcut: presetShortcutsMap[cmd.id] };
         }
         return cmd;
       })
       .sort((a, b) => a.addedAt - b.addedAt);
-  }, [selectedId, customCommands, projectCommandsMap, commandMode, presetShortcutsMap]);
+  }, [selectedId, customCommands, projectCommandsMap, commandMode, presetShortcutsMap, shortcutBindings]);
 
   // Auto-detect commandMode only when switching projects (not on every projectCommandsMap change)
   useEffect(() => {
@@ -698,7 +709,7 @@ export function useProject() {
     await profileStore?.set(SHORTCUT_BINDINGS_KEY, {});
   }, [profileStore]);
 
-  // --- Phase 11: Shortcut assignment (legacy, preserved for transition) ---
+  // --- Phase 11: Shortcut assignment (@deprecated — use setShortcutBinding/clearShortcutBinding instead) ---
 
   // Assign a global shortcut to a command (project, custom, or preset)
   const assignShortcut = useCallback(

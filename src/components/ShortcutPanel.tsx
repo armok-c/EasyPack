@@ -30,6 +30,7 @@ interface ShortcutPanelProps {
   onSetBinding: (
     actionId: string,
     shortcut: string,
+    skipConflictFor?: string[],
   ) => Promise<string | null>;
   onClearBinding: (actionId: string) => Promise<void>;
   onResetAll: () => Promise<void>;
@@ -312,6 +313,7 @@ export function ShortcutPanel({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 h-8 text-sm"
+              disabled={recordingId !== null}
             />
           </div>
 
