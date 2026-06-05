@@ -5,7 +5,7 @@ import type { ProjectItem } from "@/hooks/useProject";
 interface UseKeyboardOptions {
   commands: CommandItem[];
   currentProject: ProjectItem | null;
-  onExecute: (command: string) => void;
+  onExecute: (command: string, cmd?: CommandItem) => void;
   editMode: boolean;
 }
 
@@ -53,7 +53,7 @@ export function useKeyboard({
         const cmd = commands[num - 1];
         if (cmd) {
           e.preventDefault();
-          onExecute(cmd.command);
+          onExecute(cmd.command, cmd);
         }
       }
     },

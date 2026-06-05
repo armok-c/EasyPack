@@ -99,7 +99,7 @@ function App() {
   useKeyboard({
     commands,
     currentProject,
-    onExecute: executeCommand,
+    onExecute: (command, cmd) => handleExecuteWithRecent(command, cmd),
     editMode,
   });
 

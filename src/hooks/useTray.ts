@@ -13,7 +13,7 @@ interface UseTrayOptions {
   commands: CommandItem[];
   recentCommands: RecentCommand[];
   visibility: VisibilityState;
-  onExecute: (command: string) => void;
+  onExecute: (command: string, cmd?: CommandItem) => void;
   onShow: () => void;
   onHide: () => void;
   onQuit: () => void;
@@ -135,7 +135,8 @@ export function useTray({
             text: `▸ 执行: ${cmd.name}`,
             enabled: currentProjectRef.current !== null,
             action: () => {
-              onExecuteRef.current(cmd.command);
+              const foundCmd = commandsRef.current.find(c => c.command === cmd.command);
+              onExecuteRef.current(cmd.command, foundCmd);
             },
           })
         );

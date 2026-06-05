@@ -12,7 +12,7 @@ interface UseFloatWindowOptions {
   currentProject: ProjectItem | null;
   projects: ProjectItem[];
   commands: CommandItem[];
-  onExecute: (command: string) => void;
+  onExecute: (command: string, cmd?: CommandItem) => void;
   onSwitchProject: (projectId: string) => void;
 }
 
@@ -96,7 +96,8 @@ export function useFloatWindow({
       (event) => {
         const { command } = event.payload;
         if (typeof command === "string" && command.length > 0) {
-          onExecuteRef.current(command);
+          const foundCmd = commandsRef.current.find(c => c.command === command);
+          onExecuteRef.current(command, foundCmd);
         }
       }
     );
