@@ -359,7 +359,7 @@ export function useProject() {
         // 保持 store 引用指向 profileStore（供 useRecentCommands 等使用）
         setStore(ps);
       } catch (error) {
-        console.warn("Store 加载失败，使用内存模式:", error);
+        if (import.meta.env.DEV) console.warn("Store 加载失败，使用内存模式:", error);
         // Graceful degradation: app works without persistence
       } finally {
         if (mounted) setLoading(false);
@@ -450,7 +450,7 @@ export function useProject() {
         await addProject(selected, name);
       }
     } catch (error) {
-      console.error("文件夹选择失败:", error);
+      if (import.meta.env.DEV) console.error("文件夹选择失败:", error);
     }
   }, [addProject]);
 
@@ -835,7 +835,7 @@ export function useProject() {
       await switchProfile(id);
     } catch (error) {
       toast.error("切换到新配置失败");
-      console.error("switchProfile failed after create:", error);
+      if (import.meta.env.DEV) console.error("switchProfile failed after create:", error);
     }
   }, [mainStore, profileMetas, switchProfile]);
 
