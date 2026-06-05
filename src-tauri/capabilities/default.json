@@ -35,6 +35,9 @@
     "core:window:allow-current-monitor",
     "core:window:allow-center",
     "autostart:allow-enable",
-    "autostart:allow-disable"
+    "autostart:allow-disable",
+    "fs:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file"
   ]
 }

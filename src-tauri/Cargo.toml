@@ -26,6 +26,7 @@ reqwest = { version = "0.13", features = ["json"] }
 semver = "1"
 open = "5"
 tempfile = "3"
+tauri-plugin-fs = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt"] }
