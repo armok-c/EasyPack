@@ -31,10 +31,6 @@ interface MainAreaProps {
   // Phase 9: open folder + toggle disabled state
   onOpenFolder: () => void;
   isProjectToggleDisabled: boolean;
-  // Phase 11: shortcut management (preserved for ShortcutPanel integration in Plan 02)
-  assignShortcut: (commandId: string, shortcut: string) => Promise<boolean>;
-  clearShortcut: (commandId: string) => Promise<void>;
-  onRecordingChange?: (recording: boolean) => void;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -60,15 +56,18 @@ export function MainArea({
   projectInfoError,
   onOpenFolder,
   isProjectToggleDisabled,
-  assignShortcut,
-  clearShortcut,
-  onRecordingChange,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
   // Phase 5 Plan 03: card focus state (-1 = no focus)
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const gridRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset dialog state on project switch to prevent stale data from other projects
+  useEffect(() => {
+    setEditingCommand(null);
+    setDialogOpen(false);
+  }, [currentProject?.id]);
 
   const handleEdit = useCallback((cmd: CommandItem) => {
     setEditingCommand(cmd);
@@ -325,8 +324,9 @@ export function MainArea({
         )}
       </div>
 
-      {/* CommandDialog for add/edit */}
+      {/* CommandDialog for add/edit — key forces remount so useState initializers re-run */}
       <CommandDialog
+        key={editingCommand?.id ?? "add"}
         open={dialogOpen}
         onOpenChange={handleDialogOpenChange}
         onSubmit={handleDialogSubmit}

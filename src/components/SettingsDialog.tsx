@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Settings } from "lucide-react";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type { ProfileMeta } from "@/lib/types";
 
 interface SettingsDialogProps {
@@ -92,7 +92,7 @@ export function SettingsDialog({
 
   async function handleImport() {
     try {
-      const selected = await open({
+      const selected = await openDialog({
         multiple: false,
         title: "导入配置文件",
         filters: [{ name: "JSON", extensions: ["json"] }],
@@ -114,7 +114,7 @@ export function SettingsDialog({
       const date = new Date().toISOString().split("T")[0];
       const defaultName = `easypack-${currentName}-${date}.json`;
 
-      const selected = await save({
+      const selected = await saveDialog({
         defaultPath: defaultName,
         filters: [{ name: "JSON", extensions: ["json"] }],
       });
@@ -228,6 +228,8 @@ export function SettingsDialog({
                 <button
                   onClick={() => {
                     if (activeProfileId && profileMetas.length > 1) {
+                      const confirmed = window.confirm("确定要删除当前配置吗？此操作不可撤销");
+                      if (!confirmed) return;
                       onDeleteProfile(activeProfileId);
                     }
                   }}

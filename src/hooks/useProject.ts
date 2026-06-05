@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import type { CommandItem, ProfileMeta, ProfileExportData } from "@/lib/types";
 import { getDefaultsAsCommandItems } from "@/lib/presets";
 import { DEFAULT_ICON } from "@/lib/icons";
@@ -124,6 +124,27 @@ export function useProject() {
     setCommandMode(projectCmds && projectCmds.length > 0 ? "project" : "global");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // Phase 8: fetch project info (folder size + Git branch) per D-04
+  // Must be declared before loadProfileDataIntoState (dependency)
+  const fetchProjectInfo = useCallback(async (projectPath: string) => {
+    setProjectInfoLoading(true);
+    setProjectInfoError(false);
+    setProjectInfo(null);
+    try {
+      const result = await Promise.race([
+        invoke<ProjectInfoResult>("get_project_info", { projectPath }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 8000)
+        ),
+      ]);
+      setProjectInfo(result);
+    } catch {
+      setProjectInfoError(true);
+    } finally {
+      setProjectInfoLoading(false);
+    }
+  }, []);
 
   // Phase 20: 从 profile store 加载数据到 React state
   const loadProfileDataIntoState = useCallback(async (s: Store) => {
@@ -398,34 +419,14 @@ export function useProject() {
     [projects, selectedId, profileStore]
   );
 
-  // Phase 8: fetch project info (folder size + Git branch) per D-04
-  const fetchProjectInfo = useCallback(async (projectPath: string) => {
-    setProjectInfoLoading(true);
-    setProjectInfoError(false);
-    setProjectInfo(null);
-    try {
-      // D-06: 8 second timeout (between 5-10s)
-      // 使用 reject 而非 resolve，确保超时状态可通过 catch 区分
-      const result = await Promise.race([
-        invoke<ProjectInfoResult>("get_project_info", { projectPath }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 8000)
-        ),
-      ]);
-      setProjectInfo(result);
-    } catch {
-      // 超时或 invoke 错误：设置错误标志
-      setProjectInfoError(true);
-    } finally {
-      setProjectInfoLoading(false);
-    }
-  }, []);
-
   // Select project (also exits edit mode on project switch)
   const selectProject = useCallback(
     async (id: string) => {
       setSelectedId(id);
       setEditMode(false);
+      // Auto-detect commandMode synchronously to prevent stale flash
+      const projectCmds = projectCommandsMap[id];
+      setCommandMode(projectCmds && projectCmds.length > 0 ? "project" : "global");
       await profileStore?.set(SELECTED_KEY, id);
       // Phase 8: fetch project info on project switch (per D-04)
       const project = projects.find((p) => p.id === id);
@@ -433,7 +434,7 @@ export function useProject() {
         fetchProjectInfo(project.path);
       }
     },
-    [profileStore, projects, fetchProjectInfo]
+    [profileStore, projects, fetchProjectInfo, projectCommandsMap]
   );
 
   // Folder picker (inherits Phase 1 logic, calls addProject internally)
@@ -829,8 +830,13 @@ export function useProject() {
     await mainStore.set(PROFILES_KEY, updated);
     await mainStore.save();
     setProfileMetas(updated);
-    // 自动切换到新 profile
-    await switchProfile(id);
+    // 自动切换到新 profile（回滚 on failure）
+    try {
+      await switchProfile(id);
+    } catch (error) {
+      toast.error("切换到新配置失败");
+      console.error("switchProfile failed after create:", error);
+    }
   }, [mainStore, profileMetas, switchProfile]);
 
   // 删除 profile（不允许删除最后一个）
@@ -918,7 +924,6 @@ export function useProject() {
   const importProfile = useCallback(async (filePath: string) => {
     if (!profileStore) return;
     try {
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
       const content = await readTextFile(filePath);
       const parsed = JSON.parse(content);
 
@@ -933,6 +938,24 @@ export function useProject() {
       }
 
       const { data } = parsed;
+
+      // 基本结构校验
+      if (data.projects && !Array.isArray(data.projects)) {
+        toast.error("配置文件损坏：projects 不是数组");
+        return;
+      }
+      if (data.customCommands && !Array.isArray(data.customCommands)) {
+        toast.error("配置文件损坏：customCommands 不是数组");
+        return;
+      }
+      if (data.shortcutBindings && typeof data.shortcutBindings !== "object") {
+        toast.error("配置文件损坏：shortcutBindings 格式错误");
+        return;
+      }
+      if (data.projectCommands && typeof data.projectCommands !== "object") {
+        toast.error("配置文件损坏：projectCommands 格式错误");
+        return;
+      }
 
       // 写入各字段到 profileStore
       if (data.projects) await profileStore.set(PROJECTS_KEY, data.projects);

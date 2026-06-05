@@ -59,9 +59,6 @@ function App() {
     projectInfoError,
     // Phase 9: open folder
     openFolder,
-    // Phase 11: shortcut assignment
-    assignShortcut,
-    clearShortcut,
     // Phase 18: unified shortcut bindings
     shortcutBindings,
     setShortcutBinding,
@@ -525,9 +522,6 @@ function App() {
           projectInfoError={projectInfoError}
           onOpenFolder={handleOpenFolder}
           isProjectToggleDisabled={isProjectToggleDisabled}
-          assignShortcut={assignShortcut}
-          clearShortcut={clearShortcut}
-          onRecordingChange={handleRecordingChange}
         />
       </div>
       <SettingsDialog

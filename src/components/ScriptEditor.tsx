@@ -39,7 +39,6 @@ function useCodeMirror(
   darkMode: boolean,
 ) {
   const viewRef = useRef<EditorView | null>(null);
-  // Prevents updateListener from firing onChange during external value sync
   const isSyncUpdate = useRef(false);
 
   useEffect(() => {
@@ -86,7 +85,7 @@ function useCodeMirror(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [darkMode]); // Re-create on theme change
 
-  return viewRef;
+  return { viewRef, isSyncUpdate };
 }
 
 /**
@@ -105,8 +104,7 @@ export function ScriptEditor({
   darkMode = false,
 }: ScriptEditorProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const viewRef = useCodeMirror(parentRef, value, onChange, darkMode);
-  const isExternalUpdate = useRef(false);
+  const { viewRef, isSyncUpdate } = useCodeMirror(parentRef, value, onChange, darkMode);
 
   // Sync external value changes into the editor
   useEffect(() => {
@@ -115,7 +113,7 @@ export function ScriptEditor({
 
     const currentContent = view.state.doc.toString();
     if (currentContent !== value) {
-      isExternalUpdate.current = true;
+      isSyncUpdate.current = true;
       view.dispatch({
         changes: {
           from: 0,
@@ -123,9 +121,9 @@ export function ScriptEditor({
           insert: value,
         },
       });
-      isExternalUpdate.current = false;
+      isSyncUpdate.current = false;
     }
-  }, [value, viewRef]);
+  }, [value, viewRef, isSyncUpdate]);
 
   return (
     <div

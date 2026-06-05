@@ -149,7 +149,7 @@ export function CommandDialog({
         command: scriptContent.trim().split("\n")[0] || "",
         icon: selectedIcon,
         scope: selectedScope,
-        scriptLines: scriptContent,
+        scriptLines: scriptContent.trim(),
         executionMode: effectiveMode,
       });
     } else {

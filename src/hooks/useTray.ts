@@ -56,6 +56,8 @@ export function useTray({
   visibilityRef.current = visibility;
   const currentProjectRef = useRef(currentProject);
   currentProjectRef.current = currentProject;
+  const commandsRef = useRef(commands);
+  commandsRef.current = commands;
   const recentCommandsRef = useRef(recentCommands);
   recentCommandsRef.current = recentCommands;
   // Phase 13: 悬浮窗 ref
@@ -98,7 +100,16 @@ export function useTray({
     items.push(floatItem);
 
     const hasProject = currentProjectRef.current !== null;
-    const hasCommands = recentCommandsRef.current.length > 0;
+
+    // 预过滤：只保留当前项目指令集中仍存在的最近指令
+    const activeRecentCommands = recentCommandsRef.current
+      .map((recent) => {
+        const liveCmd = commandsRef.current.find((c) => c.command === recent.command);
+        return liveCmd ?? null;
+      })
+      .filter((c): c is CommandItem => c !== null);
+
+    const hasCommands = activeRecentCommands.length > 0;
 
     if (hasProject || hasCommands) {
       items.push(await PredefinedMenuItem.new({ item: "Separator" }));
@@ -116,9 +127,8 @@ export function useTray({
     }
 
     if (hasCommands) {
-      const cmds = recentCommandsRef.current;
-      for (let i = 0; i < cmds.length; i++) {
-        const cmd = cmds[i];
+      for (let i = 0; i < activeRecentCommands.length; i++) {
+        const cmd = activeRecentCommands[i];
         items.push(
           await MenuItem.new({
             id: `cmd-${i}`,
