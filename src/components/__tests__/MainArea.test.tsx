@@ -170,6 +170,9 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     render(<MainArea {...getDefaultProps({ onExecute })} />);
 
     fireEvent.click(screen.getByText("拉取代码"));
-    expect(onExecute).toHaveBeenCalledWith("git pull");
+    expect(onExecute).toHaveBeenCalledWith("git pull", expect.objectContaining({
+      id: "preset-git-pull",
+      command: "git pull",
+    }));
   });
 });
