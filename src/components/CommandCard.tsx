@@ -140,7 +140,7 @@ export function CommandCard({
       <span>{name}</span>
       {scriptLines && (
         <div
-          className="w-full text-[10px] text-muted-foreground/70 leading-tight line-clamp-3 text-center"
+          className="w-full text-[10px] text-muted-foreground/70 leading-tight line-clamp-3 text-center whitespace-pre-line"
           aria-label="脚本内容预览"
         >
           {scriptLines}
