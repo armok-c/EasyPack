@@ -44,6 +44,49 @@
 
 ---
 
+## Milestone: v2.0 — 能力跃升
+
+**Shipped:** 2026-06-12
+**Phases:** 6 (15-20) | **Plans:** 12 | **Timeline:** 30 days
+
+### What Was Built
+- 开机自启动 + 自愈机制（tauri-plugin-autostart）
+- 版本管理 + GitHub Releases 更新检查
+- 多行脚本指令 — 临时 .bat 文件 + CodeMirror 6 编辑器
+- VS Code 风格快捷键设置面板
+- 悬浮窗折叠/展开胶囊态 + 紧凑布局
+- 多配置 Profile 系统 — 双 store 架构 + 导入导出
+
+### What Worked
+- Phase 15 和 16 同日完成（开机启动 + 版本管理），独立功能并行推进效率高
+- Phase 17 多行脚本 Rust 后端仅 10 分钟完成，tempfile crate 选择正确
+- Phase 18 ShortcutAction 统一类型设计为面板提供了干净的数据驱动架构
+- Phase 20 双 store 重构只涉及 2 个文件修改，影响范围控制得当
+
+### What Was Inefficient
+- Phase 19 悬浮窗改进跨度较长（2026-05-15 到 2026-06-02），中间有中断
+- 6 个 debug session 在里程碑期间积累，部分根因已找到但未及时关闭
+- 4 个 verification gaps (human_needed) 贯穿多个阶段，拖到里程碑末尾才处理
+
+### Patterns Established
+- 双 store 架构模式：mainStore 管理元信息，profileStore 管理用户数据，关注点分离
+- ShortcutAction 统一操作类型：将分散的快捷键功能收拢到统一类型系统
+- tempfile::Builder + .keep()：Windows 临时文件安全创建模式
+- useRef 并发锁模式：替代 useState 避免异步状态竞争
+
+### Key Lessons
+1. 独立功能应安排在阶段初期并行开发（Phase 15+16 同日完成）
+2. debug session 应在 phase 完成时及时关闭，避免累积
+3. 双 store 重构成功的关键是最小化影响范围（只改 2 个核心文件）
+4. ref 模式是 React 中处理异步回调闭包问题的可靠方案
+
+### Cost Observations
+- Model mix: 100% sonnet (quality profile)
+- Sessions: ~6 (Phase 15-16 同 session, Phase 17-18 同 session, Phase 19-20 各一次)
+- Notable: 12 个 plan 平均执行时间 10 分钟，GSD 任务拆分粒度对效率贡献显著
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -52,6 +95,8 @@
 |-----------|----------|--------|------------|
 | v1.0 | 5 days | 5 | 从零搭建，建立核心架构 |
 | v1.1 | 11 days | 5 | 修复+增强模式，Rust 后端深度集成 |
+| v1.2 | 15 days | 4 | 快捷键+托盘+悬浮窗，多窗口架构 |
+| v2.0 | 30 days | 6 | 能力跃升，多行脚本+快捷键面板+多配置 |
 
 ### Cumulative Quality
 
@@ -59,9 +104,13 @@
 |-----------|-----------|-----|-------|
 | v1.0 | ~60 | ~3,500 | 166 |
 | v1.1 | 95+ (TS) + 17 (Rust) | ~4,500 | ~240 |
+| v1.2 | ~150 (TS) + 17 (Rust) | ~9,300 | ~240 |
+| v2.0 | 168+ (TS) + 23+ (Rust) | ~12,100 | ~240 |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. TDD 在 UI 组件中显著减少回归（TitleBar 8 tests, Dialog 9 tests, Icons 9 tests）
 2. Rust 后端测试应避免依赖 Tauri 运行时——sync core + async wrapper 模式
 3. 每次 phase 完成后立即提交原子 commit，保持 git 历史清晰
+4. 独立功能应安排在阶段初期并行开发，最大化吞吐
+5. 双 store / 分层架构重构成功的关键是最小化影响范围（改核心文件少、边界清晰）

@@ -51,3 +51,29 @@
 **Known deferred items at close:** 2 verification gaps (Phase 08, 10 human_needed)
 
 ---
+
+## v2.0 能力跃升 (Shipped: 2026-06-12)
+
+**Phases completed:** 6 phases (15-20), 12 plans
+**Timeline:** 2026-05-13 → 2026-06-12 (30 days)
+**Stats:** ~12,100 LOC (~10,887 TypeScript + ~1,230 Rust), 83 commits
+
+**Key accomplishments:**
+
+- 开机自启动 + 自愈机制（tauri-plugin-autostart + --autostart 参数 + 注册表验证）
+- 版本管理 + GitHub Releases 更新检查（24h 缓存 + semver 比较 + 浏览器跳转）
+- 多行脚本指令 — 临时 .bat 文件执行 + CodeMirror 6 编辑器 + 严格/宽松/batch 三模式
+- VS Code 风格快捷键设置面板 — ShortcutAction 统一类型 + 搜索/分组/录制/冲突检测
+- 悬浮窗折叠/展开胶囊态 — 130px 折叠态 + 项目切换 + CSS 过渡动画
+- 多配置 Profile 系统 — 双 store 架构 + 幂等迁移 + JSON 导入导出
+
+**Key decisions:**
+
+- tauri-plugin-autostart Builder API + --autostart 参数（官方推荐模式）
+- tempfile::Builder + .keep() 替代 uuid crate（减少依赖）
+- ShortcutAction 统一类型覆盖 command/window/project 三类操作
+- 快捷键 handler 使用 ref 模式避免闭包过期
+- 双 store 架构 mainStore + profileStore（分离关注点）
+- switchProfile 使用 useRef 并发锁（避免 re-render 干扰）
+
+---
