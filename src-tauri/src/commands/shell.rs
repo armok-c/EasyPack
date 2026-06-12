@@ -4,10 +4,12 @@ use std::process::Command as StdCommand;
 // 子进程脱离父进程的 Job Object，避免 tauri dev 重启时终端被一并杀死
 const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
 const DETACHED_PROCESS: u32 = 0x00000008;
+const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
 
 /// spawn cmd.exe 并尝试脱离 Job Object。
 /// 若父进程的 Job Object 不允许 breakaway (ERROR_ACCESS_DENIED)，回退到普通 spawn。
 fn spawn_detached(args: &str) -> Result<std::process::Child, std::io::Error> {
+    // 优先尝试 BREAKAWAY_FROM_JOB + DETACHED_PROCESS 脱离 Job Object
     match StdCommand::new("cmd")
         .creation_flags(CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS)
         .raw_arg(args)
@@ -15,8 +17,13 @@ fn spawn_detached(args: &str) -> Result<std::process::Child, std::io::Error> {
     {
         Ok(child) => Ok(child),
         Err(e) if e.raw_os_error() == Some(5) => {
-            // os error 5 = ACCESS_DENIED: Job Object 不允许 breakaway，回退
-            StdCommand::new("cmd").raw_arg(args).spawn()
+            // os error 5 = ACCESS_DENIED: Job Object 不允许 breakaway
+            // 仍然使用 DETACHED_PROCESS 避免继承父进程控制台，
+            // CREATE_NEW_PROCESS_GROUP 使进程组独立，降低被级联终止的风险。
+            StdCommand::new("cmd")
+                .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
+                .raw_arg(args)
+                .spawn()
         }
         Err(e) => Err(e),
     }
