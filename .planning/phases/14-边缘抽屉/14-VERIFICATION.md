@@ -209,15 +209,7 @@ All 6 requirement IDs from REQUIREMENTS.md are present in plan frontmatter and h
 
 ## 8. Items Requiring Human Verification
 
-| Item | What to test | Priority |
-|------|-------------|----------|
-| 边缘吸附端到端 | `tauri dev` 运行后拖拽窗口到边缘，确认吸附+sliver+滑出+收回完整流程 | HIGH |
-| 四边吸附 | 分别测试上/下/左/右四个边缘的吸附行为 | HIGH |
-| 延迟收回时序 | 滑出后鼠标离开，确认 400ms 后窗口收回 | MEDIUM |
-| 取消吸附 | 吸附状态下拖拽窗口 >20px，确认取消吸附恢复正常 | HIGH |
-| DPI 缩放 | 在 150%/200% DPI 显示器上验证 sliver 宽度和吸附检测 | MEDIUM |
-| SnapIndicator 视觉 | 拖拽中接近边缘时确认蓝色半透明提示条正确显示 | LOW |
-| 设置持久化 | 开启抽屉 → 重启 → 确认设置保持 | MEDIUM |
+All 7 human verification items passed (2026-06-12).
 
 ---
 

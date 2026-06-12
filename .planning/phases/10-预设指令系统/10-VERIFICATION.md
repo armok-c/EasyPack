@@ -1,7 +1,7 @@
 ---
 phase: 10-预设指令系统
 verified: 2026-04-26T05:48:29Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 overrides_applied: 0
 re_verification:
@@ -28,8 +28,8 @@ human_verification:
 
 **Phase Goal:** 用户通过分类下拉框快速选择预设指令（python/pip/git/rust/npm），降低手动配置成本
 **Verified:** 2026-04-26T05:48:29Z
-**Status:** human_needed
-**Re-verification:** Yes -- after gap closure (Plan 10-03)
+**Status:** passed
+**Re-verification:** Yes -- after gap closure (Plan 10-03), human verification passed 2026-06-12
 
 ## Goal Achievement
 
@@ -115,23 +115,7 @@ human_verification:
 
 ### Human Verification Required
 
-### 1. 双下拉框 + scope 选择器完整交互流程
-
-**Test:** 打开应用，选中一个项目，点击添加指令按钮，测试分类下拉框 -> 命令下拉框激活 -> 选择命令 -> 表单自动填充 -> scope 切换的完整流程
-**Expected:** 分类下拉框显示 Git/NPM/Node/Python/Pip/Rust/Cargo 四个选项（带图标），选择后命令下拉框激活，选择命令后名称/命令/图标自动填充，scope 选择器显示"全局指令"和"当前项目指令"两个按钮，均可点击切换
-**Why human:** UI 交互、视觉呈现、选择流畅度、scope 切换行为需要人类确认
-
-### 2. 无项目选中时 scope 选择器状态
-
-**Test:** 不选中任何项目时打开添加指令弹窗，检查 scope 选择器状态
-**Expected:** scope 选择器中"当前项目指令"选项为 disabled + 半透明样式，只能选择"全局指令"
-**Why human:** disabled 状态的视觉反馈需要人类确认
-
-### 3. 弹窗关闭状态重置
-
-**Test:** 在弹窗中选择分类和命令后关闭弹窗，再次打开，确认所有状态已重置
-**Expected:** 分类和命令下拉框回到未选择状态，名称和命令字段为空，scope 回到默认值（跟随 commandMode）
-**Why human:** 需要确认 UI 状态重置的完整性
+All 3 human verification items passed (2026-06-12).
 
 ### Gaps Summary
 

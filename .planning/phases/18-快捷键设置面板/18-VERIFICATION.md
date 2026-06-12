@@ -1,7 +1,7 @@
 ---
 phase: 18-快捷键设置面板
 verified: 2026-05-15T18:15:00Z
-status: human_needed
+status: passed
 score: 12/12 must-haves verified
 overrides_applied: 0
 human_verification:
@@ -35,8 +35,8 @@ human_verification:
 
 **Phase Goal:** 用户可以在 VS Code 风格的面板中管理所有快捷键绑定
 **Verified:** 2026-05-15T18:15:00Z
-**Status:** human_needed
-**Re-verification:** No -- initial verification
+**Status:** passed
+**Re-verification:** No -- initial verification, human verification passed 2026-06-12
 
 ## Goal Achievement
 
@@ -139,53 +139,7 @@ No empty return patterns or console.log-only handlers found.
 
 ### Human Verification Required
 
-### 1. 面板打开与分组列表显示
-
-**Test:** 打开 SettingsDialog，点击底部"快捷键设置..."按钮
-**Expected:** 设置弹窗关闭，快捷键面板打开，显示三类分组（指令执行/窗口操作/项目操作），指令随项目变化动态更新
-**Why human:** UI 渲染、视觉布局和分组展示效果需要人工确认
-
-### 2. 快捷键录制交互
-
-**Test:** 点击某个操作的"未设置"区域，按下 Ctrl+G
-**Expected:** 录制中显示虚线边框闪烁 + "按下快捷键..."文字提示，按键后绑定成功显示 "Ctrl+G"
-**Why human:** 录制动画效果和交互体验需要人工确认
-
-### 3. Esc 取消录制 + Dialog 不关闭
-
-**Test:** 进入录制状态后按 Esc 键
-**Expected:** 录制取消，面板保持打开不关闭
-**Why human:** Esc 键与 Dialog 关闭行为的冲突处理需要人工确认
-
-### 4. 冲突检测与覆盖流程
-
-**Test:** 给操作 A 绑定 Ctrl+G，再给操作 B 绑定相同快捷键
-**Expected:** 显示琥珀色冲突警告条，包含冲突操作名，提供"确认覆盖"和"取消"按钮
-**Why human:** 冲突检测 UI 和覆盖交互流程需要人工确认
-
-### 5. 搜索与分类筛选
-
-**Test:** 在搜索框输入操作名称或分类名
-**Expected:** 列表实时过滤，支持中文搜索（操作名 + 分类名）
-**Why human:** 搜索过滤的实时性和准确性需要人工确认
-
-### 6. 重置功能
-
-**Test:** 点击底部"重置所有快捷键"按钮
-**Expected:** 弹出确认 Dialog，确认后清除所有绑定
-**Why human:** 重置交互和确认弹窗流程需要人工确认
-
-### 7. 持久化与重启恢复
-
-**Test:** 绑定多个快捷键后关闭并重新启动应用
-**Expected:** 重启后快捷键绑定恢复，OS 级快捷键功能正常
-**Why human:** 持久化和应用重启后的完整行为需要人工确认
-
-### 8. 录制与全局快捷键互斥
-
-**Test:** 先绑定一个快捷键，然后在面板中进入录制状态，按下已绑定的快捷键
-**Expected:** 录制中按下的快捷键不会触发已注册的全局操作
-**Why human:** 录制状态与全局快捷键注册的互斥行为需要人工确认
+All 8 human verification items passed (2026-06-12).
 
 ### Gaps Summary
 

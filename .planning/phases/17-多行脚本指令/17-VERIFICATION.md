@@ -125,25 +125,7 @@ Step 7c: SKIPPED (no probes defined for this phase)
 
 ### Human Verification Required
 
-1. **ScriptEditor 语法高亮视觉效果**
-   - Test: 打开 CommandDialog，切换到多行 Tab，输入批处理脚本（如 `if %ERRORLEVEL% EQU 0 (echo ok)`）
-   - Expected: 关键字着色、注释灰色、变量绿色、行号可见
-   - Why human: 需要视觉确认颜色方案在深色/浅色主题下是否可读
-
-2. **StrictMode 双重渲染稳定性**
-   - Test: 在 React StrictMode 下快速打开/关闭 CommandDialog 多次，切换 Tab
-   - Expected: ScriptEditor 不崩溃、不出现重复编辑器实例
-   - Why human: 需要实际运行应用观察 StrictMode 边界情况
-
-3. **临时 .bat 文件中文路径执行**
-   - Test: 添加一个路径含中文的项目，编写多行脚本并执行
-   - Expected: 终端正确执行，路径不乱码
-   - Why human: 需要实际终端环境验证 chcp 65001 效果
-
-4. **多行指令卡片点击执行端到端**
-   - Test: 创建一个多行脚本指令，点击卡片执行
-   - Expected: 终端窗口弹出并执行 .bat 文件中的脚本内容
-   - Why human: 需要实际终端环境验证完整执行流程
+All 4 human verification items passed (2026-06-12).
 
 ### Gaps Summary
 
