@@ -163,7 +163,7 @@ export function ShortcutPanel({
       if (!shortcut) return; // Invalid combo, keep recording
 
       // Attempt to bind — check for conflict
-      onSetBinding(recordingId, shortcut).then((conflictId) => {
+      onSetBinding(recordingId!, shortcut).then((conflictId) => {
         if (conflictId) {
           const conflictingAction = actionsMap.get(conflictId);
           setConflictInfo({

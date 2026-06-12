@@ -1,4 +1,4 @@
-import { useMemo, useRef, useCallback } from "react";
+import { useMemo, useRef } from "react";
 import type { CommandItem, ShortcutAction } from "@/lib/types";
 
 export interface UseShortcutActionsOptions {
