@@ -32,7 +32,7 @@ async function positionFloatTopRight(win: WebviewWindow) {
       const scale = primary.scaleFactor;
       const logicalRight = (x + width) / scale;
       const posY = y / scale + 16;
-      const posX = logicalRight - 220 - 16;
+      const posX = logicalRight - 180 - 16;
       await win.setPosition(new LogicalPosition(posX, posY));
     }
   } catch (err) {
@@ -125,6 +125,14 @@ export function useFloatWindow({
       }
     );
     unlistenersRef.current.push(unlistenSwitchProject);
+
+    const unlistenReady = await listen(
+      "float:ready",
+      () => {
+        syncState();
+      }
+    );
+    unlistenersRef.current.push(unlistenReady);
   }
 
   const createFloat = useCallback(async (): Promise<WebviewWindow> => {
@@ -134,9 +142,8 @@ export function useFloatWindow({
 
     const floatWin = new WebviewWindow("float", {
       url,
-      width: 220,
+      width: 180,
       minWidth: 130,
-      maxWidth: 220,
       height: 300,
       minHeight: 32,
       decorations: false,

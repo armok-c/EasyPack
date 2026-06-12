@@ -29,17 +29,44 @@ function FloatApp() {
       setProjects(event.payload.projects);
       setCommands(event.payload.commands);
     });
+    emit("float:ready");
     return () => {
       cancelled = true;
       unlistenPromise.then((fn) => fn());
     };
   }, []);
 
+  useEffect(() => {
+    if (collapsed) return;
+
+    const height = project
+      ? Math.min(commands.length * 28 + 44, 400)
+      : 200;
+
+    floatWindow.setSize(new LogicalSize(180, height)).catch(() => {});
+  }, [collapsed, project, commands]);
+
   function handleDragStart(e: React.MouseEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
-    if (target.closest("button")) return;
-    floatWindow.startDragging();
+    if (target.closest("button, [data-no-drag]")) return;
+
+    const startX = e.screenX;
+    const startY = e.screenY;
+
+    const handleMove = (ev: MouseEvent) => {
+      if (Math.abs(ev.screenX - startX) > 3 || Math.abs(ev.screenY - startY) > 3) {
+        cleanup();
+        floatWindow.startDragging();
+      }
+    };
+    const handleUp = () => cleanup();
+    const cleanup = () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
   }
 
   function handleRowClick(index: number, shellCommand: string) {
@@ -61,24 +88,20 @@ function FloatApp() {
   }
 
   async function handleCollapse() {
+    try {
+      await floatWindow.setSize(new LogicalSize(180, 32));
+    } catch { /* ignore resize errors */ }
     setCollapsed(true);
-    setTimeout(async () => {
-      try {
-        await floatWindow.setSize(new LogicalSize(130, 32));
-      } catch { /* ignore resize errors */ }
-    }, 300);
   }
 
   async function handleExpand() {
     try {
-      const contentHeight = project
-        ? Math.min(commands.length * 28 + 72, 400)
+      const height = project
+        ? Math.min(commands.length * 28 + 44, 400)
         : 200;
-      await floatWindow.setSize(new LogicalSize(220, contentHeight));
+      await floatWindow.setSize(new LogicalSize(180, height));
     } catch { /* ignore resize errors */ }
-    requestAnimationFrame(() => {
-      setCollapsed(false);
-    });
+    setCollapsed(false);
   }
 
   function renderProjectIcon(size: string = "size-3.5") {
@@ -109,27 +132,38 @@ function FloatApp() {
       <div
         role="dialog"
         aria-label="EasyPack 悬浮窗（折叠）"
-        className="w-[130px] h-[32px] flex items-center gap-1 px-2 bg-background border border-white/10 rounded-full select-none transition-all duration-300 ease-in-out"
+        className="w-[180px] h-[32px] flex items-center justify-between px-1.5 bg-background border border-white/10 rounded-full select-none cursor-pointer"
         onMouseDown={handleDragStart}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest("button")) return;
+          handleExpand();
+        }}
       >
-        {project ? (
-          <>
-            {renderProjectIcon()}
-            <span
-              className="text-[11px] text-foreground truncate max-w-[60px] cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); handleSwitchProject(); }}
-            >
-              {project.name}
-            </span>
-          </>
-        ) : (
-          <>
-            <FolderOpen className="size-3.5 text-muted-foreground shrink-0" />
-            <span className="text-[11px] text-muted-foreground">EasyPack</span>
-          </>
-        )}
+        <span
+          data-no-drag
+          className={`flex items-center gap-1 truncate${project ? " cursor-pointer" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (project) handleSwitchProject();
+          }}
+        >
+          {project ? (
+            <>
+              {renderProjectIcon("size-3")}
+              <span className="text-xs font-semibold text-foreground/80 truncate max-w-[110px]">
+                {project.name}
+              </span>
+            </>
+          ) : (
+            <>
+              <FolderOpen className="size-3 text-muted-foreground shrink-0" />
+              <span className="text-xs font-semibold text-foreground/80">EasyPack</span>
+            </>
+          )}
+        </span>
         <button
-          className="flex items-center justify-center size-3 text-muted-foreground hover:text-foreground ml-auto shrink-0 transition-colors"
+          className="flex items-center justify-center size-3 text-muted-foreground hover:text-foreground shrink-0 transition-colors"
           onClick={(e) => { e.stopPropagation(); handleExpand(); }}
           aria-label="展开悬浮窗"
         >
@@ -143,17 +177,35 @@ function FloatApp() {
     <div
       role="dialog"
       aria-label="EasyPack 悬浮窗"
-      className="w-[220px] h-auto max-h-[400px] flex flex-col bg-background border border-white/10 rounded-lg overflow-hidden transition-all duration-300 ease-in-out"
+      className="w-[180px] h-auto max-h-[400px] flex flex-col bg-background border border-white/10 rounded-lg overflow-hidden"
     >
       <div
-        className="h-[24px] flex items-center justify-between px-1.5 border-b border-white/5 shrink-0"
+        className="h-[32px] flex items-center justify-between px-1.5 border-b border-white/5 shrink-0 cursor-pointer"
         onMouseDown={handleDragStart}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest("button")) return;
+          handleCollapse();
+        }}
       >
         <span
-          className="text-xs font-semibold text-foreground/80 truncate max-w-[140px]"
-          aria-live="polite"
+          data-no-drag
+          className={`flex items-center gap-1 truncate${project ? " cursor-pointer" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (project) handleSwitchProject();
+          }}
         >
-          {project ? project.name : "EasyPack"}
+          {project ? (
+            <>
+              {renderProjectIcon("size-3")}
+              <span className="text-xs font-semibold text-foreground/80 truncate max-w-[110px]">
+                {project.name}
+              </span>
+            </>
+          ) : (
+            <span className="text-xs font-semibold text-foreground/80">EasyPack</span>
+          )}
         </span>
         <div className="flex items-center gap-0.5">
           <button

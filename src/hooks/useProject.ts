@@ -81,6 +81,8 @@ export function useProject() {
 
   // Phase 18: unified shortcut bindings (independent store key)
   const [shortcutBindings, setShortcutBindings] = useState<Record<string, string>>({});
+  const shortcutBindingsRef = useRef(shortcutBindings);
+  shortcutBindingsRef.current = shortcutBindings;
 
   // Phase 8: project info (folder size + Git branch)
   const [projectInfo, setProjectInfo] = useState<ProjectInfoResult | null>(null);
@@ -680,31 +682,36 @@ export function useProject() {
   // Set a shortcut binding for an action, with full conflict detection
   const setShortcutBinding = useCallback(
     async (actionId: string, shortcut: string, skipConflictFor?: string[]) => {
-      const conflictId = findConflict(shortcutBindings, actionId, shortcut, skipConflictFor);
+      const current = shortcutBindingsRef.current;
+      const conflictId = findConflict(current, actionId, shortcut, skipConflictFor);
       if (conflictId) {
         return conflictId;
       }
-      const updated = { ...shortcutBindings, [actionId]: shortcut };
+      const updated = { ...current, [actionId]: shortcut };
+      shortcutBindingsRef.current = updated;
       setShortcutBindings(updated);
       await profileStore?.set(SHORTCUT_BINDINGS_KEY, updated);
       return null;
     },
-    [shortcutBindings, profileStore],
+    [profileStore],
   );
 
   // Clear a shortcut binding for an action
   const clearShortcutBinding = useCallback(
     async (actionId: string) => {
-      const updated = { ...shortcutBindings };
+      const current = shortcutBindingsRef.current;
+      const updated = { ...current };
       delete updated[actionId];
+      shortcutBindingsRef.current = updated;
       setShortcutBindings(updated);
       await profileStore?.set(SHORTCUT_BINDINGS_KEY, updated);
     },
-    [shortcutBindings, profileStore],
+    [profileStore],
   );
 
   // Reset all shortcut bindings
   const resetAllShortcuts = useCallback(async () => {
+    shortcutBindingsRef.current = {};
     setShortcutBindings({});
     await profileStore?.set(SHORTCUT_BINDINGS_KEY, {});
   }, [profileStore]);
@@ -931,9 +938,9 @@ export function useProject() {
     }
   }, [profileStore, activeProfileId, profileMetas]);
 
-  // 导入 JSON 文件覆盖当前 profile (per D-17/D-21/D-22)
+  // 导入 JSON 文件为新的 profile (per D-17/D-21/D-22)
   const importProfile = useCallback(async (filePath: string) => {
-    if (!profileStore) return;
+    if (!mainStore) return;
     try {
       const content = await readTextFile(filePath);
       const parsed = JSON.parse(content);
@@ -968,32 +975,43 @@ export function useProject() {
         return;
       }
 
-      // 写入各字段到 profileStore
-      if (data.projects) await profileStore.set(PROJECTS_KEY, data.projects);
-      if (data.selectedProjectId !== undefined) await profileStore.set(SELECTED_KEY, data.selectedProjectId);
-      if (data.customCommands) await profileStore.set(CUSTOM_COMMANDS_KEY, data.customCommands);
-      if (data.shortcutBindings) await profileStore.set(SHORTCUT_BINDINGS_KEY, data.shortcutBindings);
-      if (data.presetShortcuts) await profileStore.set(PRESHORTCUTS_KEY, data.presetShortcuts);
-      if (data.recentCommands) await profileStore.set("recentCommands", data.recentCommands);
+      // 创建新 profile
+      const id = crypto.randomUUID();
+      const profileName = parsed.profileName ?? `导入配置`;
+      const meta: ProfileMeta = { id, name: profileName, createdAt: Date.now() };
+      const updatedMetas = [...profileMetas, meta];
 
-      // 写入 projectCommands
+      // 创建新 profile store 并写入数据
+      const ps = await load(profileStorePath(id), { autoSave: 100, defaults: {} });
+      if (data.projects) await ps.set(PROJECTS_KEY, data.projects);
+      if (data.selectedProjectId !== undefined) await ps.set(SELECTED_KEY, data.selectedProjectId);
+      if (data.customCommands) await ps.set(CUSTOM_COMMANDS_KEY, data.customCommands);
+      if (data.shortcutBindings) await ps.set(SHORTCUT_BINDINGS_KEY, data.shortcutBindings);
+      if (data.presetShortcuts) await ps.set(PRESHORTCUTS_KEY, data.presetShortcuts);
+      if (data.recentCommands) await ps.set("recentCommands", data.recentCommands);
+
       if (data.projectCommands && typeof data.projectCommands === "object") {
         for (const [projectId, cmds] of Object.entries(data.projectCommands)) {
-          await profileStore.set(projectCommandsKey(projectId), cmds);
+          await ps.set(projectCommandsKey(projectId), cmds);
         }
       }
 
-      await profileStore.save();
+      await ps.save();
 
-      // 刷新 React state
-      await loadProfileDataIntoState(profileStore);
-      toast.success("配置导入成功");
+      // 更新主 store 的 metas
+      await mainStore.set(PROFILES_KEY, updatedMetas);
+      await mainStore.save();
+      setProfileMetas(updatedMetas);
+
+      // 切换到新 profile
+      await switchProfile(id);
+      toast.success(`已导入配置: ${profileName}`);
     } catch (error) {
       toast.error("导入失败", {
         description: String(error),
       });
     }
-  }, [profileStore, loadProfileDataIntoState]);
+  }, [mainStore, profileMetas, switchProfile]);
 
   return {
     // Legacy interface (backward compatible until Plan 02 migration)

@@ -11,6 +11,13 @@ import { cn } from "@/lib/utils";
 import { Settings } from "lucide-react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type { ProfileMeta } from "@/lib/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -99,7 +106,7 @@ export function SettingsDialog({
       });
       if (typeof selected !== "string") return;
 
-      const confirmed = window.confirm("确定要覆盖当前配置吗？此操作不可撤销");
+      const confirmed = window.confirm("确定要导入为新配置吗？");
       if (!confirmed) return;
 
       await onImportProfile(selected);
@@ -142,18 +149,22 @@ export function SettingsDialog({
 
             {/* Profile 下拉框 + 齿轮图标 */}
             <div className="flex items-center gap-2 mb-2">
-              <select
+              <Select
                 value={activeProfileId ?? ""}
-                onChange={(e) => {
-                  onSwitchProfile(e.target.value);
-                  onOpenChange(false); // per D-14: 切换后关闭 SettingsDialog
+                onValueChange={(value) => {
+                  onSwitchProfile(value);
+                  onOpenChange(false);
                 }}
-                className="flex-1 rounded-md border border-white/10 bg-background px-3 py-1.5 text-sm"
               >
-                {profileMetas.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="选择配置" />
+                </SelectTrigger>
+                <SelectContent>
+                  {profileMetas.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <button
                 onClick={() => setManageExpanded(!manageExpanded)}
                 className="p-1.5 rounded-md hover:bg-white/10 transition-colors"

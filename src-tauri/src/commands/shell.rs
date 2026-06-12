@@ -1,6 +1,27 @@
 use std::os::windows::process::CommandExt;
 use std::process::Command as StdCommand;
 
+// 子进程脱离父进程的 Job Object，避免 tauri dev 重启时终端被一并杀死
+const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+const DETACHED_PROCESS: u32 = 0x00000008;
+
+/// spawn cmd.exe 并尝试脱离 Job Object。
+/// 若父进程的 Job Object 不允许 breakaway (ERROR_ACCESS_DENIED)，回退到普通 spawn。
+fn spawn_detached(args: &str) -> Result<std::process::Child, std::io::Error> {
+    match StdCommand::new("cmd")
+        .creation_flags(CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS)
+        .raw_arg(args)
+        .spawn()
+    {
+        Ok(child) => Ok(child),
+        Err(e) if e.raw_os_error() == Some(5) => {
+            // os error 5 = ACCESS_DENIED: Job Object 不允许 breakaway，回退
+            StdCommand::new("cmd").raw_arg(args).spawn()
+        }
+        Err(e) => Err(e),
+    }
+}
+
 /// 构建 cmd.exe 启动参数字符串
 /// 使用 start 命令在新窗口中运行 cmd /K，/d 指定工作目录
 /// start 的第一个 "" 作为空标题（避免路径被误解析为标题）
@@ -28,9 +49,7 @@ pub async fn execute_command(project_path: String, shell_command: String) -> Res
         return Err("Invalid shell command: contains double quote".to_string());
     }
     let args = build_cmd_start_args(&project_path, &shell_command);
-    StdCommand::new("cmd")
-        .raw_arg(&args)
-        .spawn()
+    spawn_detached(&args)
         .map_err(|e| format!("Failed to execute command: {}", e))?;
 
     Ok(())
@@ -66,13 +85,15 @@ fn build_bat_content(
     strict: bool,
 ) -> String {
     let header = format!(
-        "@echo off\nchcp 65001 >nul\ncd /d \"{}\"",
+        "@echo off\r\nchcp 65001 >nul\r\ncd /d \"{}\"",
         project_path
     );
 
     if is_batch_script {
         // Batch script: write content verbatim (per D-05)
-        format!("{}\n{}", header, script_lines)
+        // Normalize line endings to CRLF for cmd.exe compatibility
+        let normalized = script_lines.replace("\r\n", "\n").replace('\n', "\r\n");
+        format!("{}\r\n{}", header, normalized)
     } else {
         // Simple multi-line: filter empty lines, join with && or & (per D-05, D-08)
         let separator = if strict { " && " } else { " & " };
@@ -86,7 +107,7 @@ fn build_bat_content(
         if joined.is_empty() {
             header
         } else {
-            format!("{}\n{}", header, joined)
+            format!("{}\r\n{}", header, joined)
         }
     }
 }
@@ -139,9 +160,7 @@ pub async fn execute_script(
         project_path, bat_path_str
     );
 
-    StdCommand::new("cmd")
-        .raw_arg(&args)
-        .spawn()
+    spawn_detached(&args)
         .map_err(|e| format!("Failed to execute script: {}", e))?;
 
     Ok(bat_path_str)

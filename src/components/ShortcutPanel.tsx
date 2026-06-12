@@ -2,13 +2,12 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import {
   keyboardEventToShortcut,
   shortcutToDisplay,
@@ -303,67 +302,63 @@ export function ShortcutPanel({
         >
           <DialogHeader>
             <DialogTitle>快捷键设置</DialogTitle>
+            {/* Search input — stays fixed at top */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="搜索操作..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-8 text-sm"
+                disabled={recordingId !== null}
+              />
+            </div>
           </DialogHeader>
 
-          {/* Search input */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder="搜索操作..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-8 text-sm"
-              disabled={recordingId !== null}
-            />
+          {/* Grouped action list — only this scrolls */}
+          <div className="space-y-4">
+            {CATEGORY_ORDER.map((category) => {
+              const groupActions = groupedActions[category];
+              if (groupActions.length === 0) return null;
+              const isExpanded = expandedCategories.has(category);
+
+              return (
+                <div key={category}>
+                  {/* Category header — clickable to toggle expand/collapse */}
+                  <button
+                    className="flex items-center gap-1.5 w-full py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                    onClick={() => toggleCategory(category)}
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="size-3.5" />
+                    ) : (
+                      <ChevronRight className="size-3.5" />
+                    )}
+                    {CATEGORY_LABELS[category]}
+                    <span className="text-muted-foreground/60 normal-case tracking-normal">
+                      ({groupActions.length})
+                    </span>
+                  </button>
+
+                  {/* Expanded action list */}
+                  {isExpanded && (
+                    <div className="ml-1 border-l border-white/10 pl-2">
+                      {groupActions.map(renderActionRow)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Empty state when no actions match search */}
+            {filteredActions.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                未找到匹配的操作
+              </p>
+            )}
           </div>
 
-          {/* Grouped action list */}
-          <ScrollArea className="max-h-[400px] -mx-2 px-2">
-            <div className="space-y-1">
-              {CATEGORY_ORDER.map((category) => {
-                const groupActions = groupedActions[category];
-                if (groupActions.length === 0) return null;
-                const isExpanded = expandedCategories.has(category);
-
-                return (
-                  <div key={category}>
-                    {/* Category header — clickable to toggle expand/collapse */}
-                    <button
-                      className="flex items-center gap-1.5 w-full py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-                      onClick={() => toggleCategory(category)}
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="size-3.5" />
-                      ) : (
-                        <ChevronRight className="size-3.5" />
-                      )}
-                      {CATEGORY_LABELS[category]}
-                      <span className="text-muted-foreground/60 normal-case tracking-normal">
-                        ({groupActions.length})
-                      </span>
-                    </button>
-
-                    {/* Expanded action list */}
-                    {isExpanded && (
-                      <div className="ml-1 border-l border-white/10 pl-2">
-                        {groupActions.map(renderActionRow)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Empty state when no actions match search */}
-              {filteredActions.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  未找到匹配的操作
-                </p>
-              )}
-            </div>
-          </ScrollArea>
-
-          {/* Reset all button */}
-          <div className="border-t border-white/10 pt-3">
+          <DialogFooter className="sm:justify-start border-t border-white/10 pt-3">
             <button
               onClick={() => setResetConfirmOpen(true)}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -371,7 +366,7 @@ export function ShortcutPanel({
               <RotateCcw className="size-3" />
               重置所有快捷键
             </button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

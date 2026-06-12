@@ -134,7 +134,7 @@ export function ProjectSettingsDialog({
           <div className="space-y-2">
             <Label>图标</Label>
             <div
-              className="grid grid-cols-5 gap-2"
+              className="flex flex-wrap gap-2"
               role="radiogroup"
               aria-label="选择图标"
             >
