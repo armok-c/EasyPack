@@ -1,41 +1,42 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: 能力跃升
-status: milestone_archived
-stopped_at: Milestone v2.0 archived
-last_updated: "2026-06-12T06:00:00.000Z"
-last_activity: 2026-06-12
+milestone: v2.1
+milestone_name: 项目环境管理
+status: planning
+stopped_at:
+last_updated: "2026-06-16T00:00:00.000Z"
+last_activity: 2026-06-16
 progress:
-  total_phases: 20
-  completed_phases: 20
-  total_plans: 48
-  completed_plans: 48
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Status:** Milestone v2.0 archived
-**Last Activity:** 2026-06-12
-**Current Focus:** Planning next milestone
+**Status:** Milestone v2.1 planning
+**Last Activity:** 2026-06-16
+**Current Focus:** Defining requirements for v2.1
 
 ## Current Position
 
-Phase: 20 (complete)
-Plan: All complete
-Status: Milestone v2.0 archived, awaiting next milestone definition
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-16 — Milestone v2.1 started
 
-Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (v2.0: 6/6 phases done)
+Progress: [░░░░░░░░░░] 0% (v2.1: 0/0 phases)
 
 ## Session
 
-Stopped at: Milestone v2.0 archived
-Resume: `/gsd-new-milestone` to start next milestone
+Stopped at: —
+Resume: `/gsd-new-milestone` in progress
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-12)
+See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** 选中项目 → 一键在终端执行指令，无需手动切换目录和输入命令。
-**Current focus:** Planning next milestone
+**Current focus:** Milestone v2.1 项目环境管理
