@@ -49,22 +49,22 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VER-05 | — | Pending |
-| CMD-09 | — | Pending |
-| CMD-10 | — | Pending |
-| ENV-01 | — | Pending |
-| ENV-02 | — | Pending |
-| ENV-03 | — | Pending |
-| ENV-04 | — | Pending |
-| ENV-05 | — | Pending |
-| ENV-06 | — | Pending |
-| ENV-07 | — | Pending |
-| ENV-08 | — | Pending |
+| VER-05 | Phase 21 | Pending |
+| CMD-09 | Phase 22 | Pending |
+| CMD-10 | Phase 22 | Pending |
+| ENV-01 | Phase 23 | Pending |
+| ENV-02 | Phase 23 | Pending |
+| ENV-03 | Phase 24 | Pending |
+| ENV-04 | Phase 24 | Pending |
+| ENV-05 | Phase 25 | Pending |
+| ENV-06 | Phase 24 | Pending |
+| ENV-07 | Phase 24 | Pending |
+| ENV-08 | Phase 23 | Pending |
 
 **Coverage:**
 - v2.1 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-16*
