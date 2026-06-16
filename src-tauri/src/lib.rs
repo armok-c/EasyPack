@@ -155,8 +155,9 @@ pub fn run() {
                 .tooltip("EasyPack")
                 .build(app)?;
 
-            // 全局托盘图标事件处理器：左键点击直接显示主窗口。
-            // 同样在 Rust 端直接处理，不依赖 WebView。
+            // 全局托盘图标事件处理器：左键点击切换主窗口显示/隐藏。
+            // 在 Rust 端直接处理，不依赖 WebView JS 运行时。
+            // 解决主窗口隐藏后 WebView 可能被节流导致 JS 回调不执行的问题。
             app.on_tray_icon_event(|app_handle, event| {
                 use tauri::tray::TrayIconEvent;
                 use tauri::tray::MouseButton;
@@ -171,9 +172,16 @@ pub fn run() {
                 } = event
                 {
                     if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        let _ = app_handle.emit("main:shown-from-rust", ());
+                        if let Ok(is_visible) = window.is_visible() {
+                            if is_visible {
+                                let _ = window.hide();
+                                let _ = app_handle.emit("main:hidden-from-rust", ());
+                            } else {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = app_handle.emit("main:shown-from-rust", ());
+                            }
+                        }
                     }
                 }
             });

@@ -70,20 +70,14 @@ export function useTray({
   onRestoreFromDrawerRef.current = onRestoreFromDrawer;
 
   async function buildMenu(): Promise<Menu> {
+    // toggle-window 的窗口操作由 Rust on_menu_event 独占处理，
+    // 避免 JS 端 action 与 Rust 端竞态（在打包环境中 WebView 可能被节流，
+    // 导致 JS action 与 Rust handler 执行时序不确定，相互抵消）。
+    // 前端仅负责根据 visibility 状态提供正确的菜单文本。
     const toggleText = visibilityRef.current === "VISIBLE" ? "隐藏窗口" : "显示窗口";
     const toggleItem = await MenuItem.new({
       id: "toggle-window",
       text: toggleText,
-      action: async () => {
-        if (visibilityRef.current === "VISIBLE") {
-          onHideRef.current();
-          appWindow.hide().catch((err) => { if (import.meta.env.DEV) console.error(err) });
-        } else {
-          onShowRef.current();
-          appWindow.show().catch((err) => { if (import.meta.env.DEV) console.error(err) });
-          appWindow.setFocus().catch((err) => { if (import.meta.env.DEV) console.error(err) });
-        }
-      },
     });
 
     const items: Array<MenuItem | PredefinedMenuItem> = [toggleItem];
@@ -189,6 +183,8 @@ export function useTray({
         }
 
         // fallback：如果 Rust 端未创建（不应发生），则前端自行创建。
+        // 窗口操作由 Rust on_tray_icon_event 和 on_menu_event 全局处理，
+        // 这里不设置 action 回调，避免双处理竞态。
         const icon = await defaultWindowIcon();
         if (cancelled) return;
 
@@ -198,13 +194,6 @@ export function useTray({
           tooltip: "EasyPack",
           menu,
           showMenuOnLeftClick: false,
-          action: async (event) => {
-            if (event.type === "Click" && event.button === "Left") {
-              onShowRef.current();
-              appWindow.show().catch((err) => { if (import.meta.env.DEV) console.error(err) });
-              appWindow.setFocus().catch((err) => { if (import.meta.env.DEV) console.error(err) });
-            }
-          },
         });
 
         trayRef.current = tray;
