@@ -133,8 +133,13 @@ Plans:
 **Plans:** 3/3 plans created
 
 Plans:
+**Wave 1**
 - [ ] 22-01-PLAN.md — 数据类型更新 + 启动时旧全局指令清理
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 22-02-PLAN.md — 核心逻辑重构：移除 commandMode/customCommands/global CRUD
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 22-03-PLAN.md — UI 重构：终端卡片 + Toggle 移除 + scope 选择器移除
 
 ---
