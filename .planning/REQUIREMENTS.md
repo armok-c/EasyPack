@@ -7,7 +7,7 @@
 
 ### 版本管理 (VER)
 
-- [ ] **VER-05**: 打包时 (`npm run tauri build`) 自动更新 `src-tauri/tauri.conf.json` 中的 `version` 字段为当前版本号
+- [x] **VER-05**: 打包时 (`npm run tauri build`) 自动更新 `src-tauri/tauri.conf.json` 中的 `version` 字段为当前版本号
 
 ### 指令重构 (CMD)
 
@@ -49,7 +49,7 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VER-05 | Phase 21 | Pending |
+| VER-05 | Phase 21 | Complete |
 | CMD-09 | Phase 22 | Pending |
 | CMD-10 | Phase 22 | Pending |
 | ENV-01 | Phase 23 | Pending |
