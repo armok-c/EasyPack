@@ -187,7 +187,7 @@ describe("useProject - command CRUD", () => {
         command: "echo stored",
         icon: "Terminal",
         type: "custom",
-        scope: "global",
+        scope: "project",
         addedAt: 1000,
       },
     ];
@@ -392,9 +392,9 @@ describe("useProject - project-level command override", () => {
     });
 
     expect(result.current.commandMode).toBe("global");
-    // Should have 2 global defaults (git pull + claude per D-06)
+    // Should have 2 project-level defaults (git pull + claude per D-06)
     expect(result.current.commands.length).toBe(2);
-    expect(result.current.commands.every((c) => c.scope === "global")).toBe(true);
+    expect(result.current.commands.every((c) => c.scope === "project")).toBe(true);
   });
 
   // Test 7: auto-revert — deleting the last project-level command reverts to global (per D-10)
@@ -419,7 +419,7 @@ describe("useProject - project-level command override", () => {
     expect(result.current.commandMode).toBe("global");
     // Global defaults should now be showing (2 per D-06)
     expect(result.current.commands.length).toBe(2);
-    expect(result.current.commands.every((c) => c.scope === "global")).toBe(true);
+    expect(result.current.commands.every((c) => c.scope === "project")).toBe(true);
   });
 
   // Test 8: persistence — project-level commands saved via store.set(projectCommandsKey)
@@ -538,6 +538,6 @@ describe("useProject - project-level command override", () => {
 
     expect(result.current.commandMode).toBe("global");
     expect(result.current.commands.length).toBe(2);
-    expect(result.current.commands.every((c) => c.scope === "global")).toBe(true);
+    expect(result.current.commands.every((c) => c.scope === "project")).toBe(true);
   });
 });
