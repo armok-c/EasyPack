@@ -11,16 +11,14 @@ import type { CommandItem } from "@/lib/types";
 interface MainAreaProps {
   currentProject: ProjectItem | null;
   onExecute: (command: string, cmd?: CommandItem) => void;
-  // Phase 4: command list + edit mode + mode management
+  // Phase 4: command list + edit mode
   commands: CommandItem[];
-  commandMode: "global" | "project";
   editMode: boolean;
   setEditMode: (editMode: boolean) => void;
-  addCommand: (name: string, command: string, icon?: string, scope?: "global" | "project", extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
+  addCommand: (name: string, command: string, icon?: string, extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
   updateCommand: (id: string, data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
   deleteCommand: (id: string) => Promise<void>;
   enableProjectCommands: () => Promise<void>;
-  disableProjectCommands: () => Promise<void>;
   // Phase 5 Plan 03: keyboard navigation zone management
   activeZone: "sidebar" | "main";
   onZoneSwitch: () => void;
@@ -28,9 +26,8 @@ interface MainAreaProps {
   projectInfo: { size: string; branch: string | null } | null;
   projectInfoLoading: boolean;
   projectInfoError: boolean;
-  // Phase 9: open folder + toggle disabled state
+  // Phase 9: open folder
   onOpenFolder: () => void;
-  isProjectToggleDisabled: boolean;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -41,21 +38,18 @@ export function MainArea({
   currentProject,
   onExecute,
   commands,
-  commandMode,
   editMode,
   setEditMode,
   addCommand,
   updateCommand,
   deleteCommand,
   enableProjectCommands,
-  disableProjectCommands,
   activeZone,
   onZoneSwitch,
   projectInfo,
   projectInfoLoading,
   projectInfoError,
   onOpenFolder,
-  isProjectToggleDisabled,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
@@ -75,11 +69,11 @@ export function MainArea({
   }, []);
 
   const handleDialogSubmit = useCallback(
-    async (data: { name: string; command: string; icon: string; scope?: "global" | "project"; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => {
+    async (data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => {
       if (editingCommand) {
         await updateCommand(editingCommand.id, data);
       } else {
-        await addCommand(data.name, data.command, data.icon, data.scope, {
+        await addCommand(data.name, data.command, data.icon, {
           scriptLines: data.scriptLines,
           executionMode: data.executionMode,
         });
@@ -113,7 +107,7 @@ export function MainArea({
       const buttons = gridRef.current.querySelectorAll<HTMLButtonElement>(
         ':scope > button:not([class*="border-dashed"])'
       );
-      buttons[focusedCardIndex]?.focus();
+      buttons[focusedCardIndex + 1]?.focus();
     }
   }, [activeZone, focusedCardIndex]);
 
@@ -218,44 +212,9 @@ export function MainArea({
             )}
           </div>
         )}
-        {/* Phase 9: Toggle Group + 打开文件夹 button row (per D-01, D-02, D-03, D-05, D-06) */}
+        {/* 项目环境标签 + 打开文件夹 button row */}
         <div className="flex items-center justify-between mt-2">
-          <div
-            className="inline-flex rounded-md overflow-hidden border border-white/10"
-            role="radiogroup"
-            aria-label="指令模式切换"
-          >
-            <Button
-              variant={commandMode === "global" ? "secondary" : "ghost"}
-              size="sm"
-              role="radio"
-              aria-checked={commandMode === "global"}
-              aria-label="全局指令"
-              className={cn(
-                "rounded-none border-r border-white/10",
-                commandMode === "global" && "rounded-l-md"
-              )}
-              onClick={commandMode !== "global" ? disableProjectCommands : undefined}
-            >
-              全局指令
-            </Button>
-            <Button
-              variant={commandMode === "project" ? "secondary" : "ghost"}
-              size="sm"
-              role="radio"
-              aria-checked={commandMode === "project"}
-              aria-label="项目指令"
-              aria-disabled={isProjectToggleDisabled}
-              className={cn(
-                "rounded-none",
-                commandMode === "project" && "rounded-r-md"
-              )}
-              disabled={isProjectToggleDisabled}
-              onClick={commandMode !== "project" ? enableProjectCommands : undefined}
-            >
-              项目指令
-            </Button>
-          </div>
+          <span className="text-xs text-muted-foreground">项目环境</span>
           <Button
             variant="outline"
             size="sm"
@@ -275,6 +234,15 @@ export function MainArea({
         className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3"
         onKeyDown={handleGridKeyDown}
       >
+        {/* D-03/D-04/D-05: 内置终端卡片 — 始终显示，不对应 CommandItem 数据模型 */}
+        <CommandCard
+          name="终端"
+          icon={getIconByName("Terminal")}
+          command="cmd.exe"
+          isCustom={false}
+          editMode={false}
+          onClick={() => onExecute("cmd.exe")}
+        />
         {commands.map((cmd, index) => {
           const isCustom = cmd.type === "custom";
           // canEdit: edit mode + (custom command OR project-scope command)
@@ -331,8 +299,6 @@ export function MainArea({
         onOpenChange={handleDialogOpenChange}
         onSubmit={handleDialogSubmit}
         initialData={editingCommand}
-        commandMode={commandMode}
-        hasProject={!!currentProject}
       />
     </main>
   );
