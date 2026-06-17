@@ -41,14 +41,12 @@ function App() {
     executeScriptCommand,
     // Phase 4: command management
     commands,
-    commandMode,
     editMode,
     setEditMode,
     addCommand,
     updateCommand,
     deleteCommand,
     enableProjectCommands,
-    disableProjectCommands,
     // Phase 5: project icon & color
     updateProjectStyle,
     // Phase 5: drag-and-drop reorder
@@ -84,9 +82,6 @@ function App() {
   const handleZoneSwitch = useCallback(() => {
     setActiveZone((prev) => (prev === "sidebar" ? "main" : "sidebar"));
   }, []);
-
-  // Phase 9: derive project toggle disabled state (per D-05)
-  const isProjectToggleDisabled = !currentProject;
 
   // Phase 9: open folder handler with project path bound
   const handleOpenFolder = useCallback(() => {
@@ -507,21 +502,18 @@ function App() {
           currentProject={currentProject}
           onExecute={handleExecuteWithRecent}
           commands={commands}
-          commandMode={commandMode}
           editMode={editMode}
           setEditMode={setEditMode}
           addCommand={addCommand}
           updateCommand={updateCommand}
           deleteCommand={deleteCommand}
           enableProjectCommands={enableProjectCommands}
-          disableProjectCommands={disableProjectCommands}
           activeZone={activeZone}
           onZoneSwitch={handleZoneSwitch}
           projectInfo={projectInfo}
           projectInfoLoading={projectInfoLoading}
           projectInfoError={projectInfoError}
           onOpenFolder={handleOpenFolder}
-          isProjectToggleDisabled={isProjectToggleDisabled}
         />
       </div>
       <SettingsDialog
