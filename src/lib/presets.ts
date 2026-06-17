@@ -58,6 +58,7 @@ export const ALL_PRESETS: PresetCommand[] = [
 
 /**
  * Returns only the 2 default command items for new projects.
+ * @deprecated Phase 22 — 不再用于初始化项目指令集（D-08），仅保留供外部兼容引用。
  * Per D-06: only git pull + claude retained as defaults.
  * Replaces the old getPresetAsCommandItems() which returned 4 items.
  */
@@ -69,7 +70,7 @@ export function getDefaultsAsCommandItems(): CommandItem[] {
       command: "git pull",
       icon: "GitBranch",
       type: "preset" as const,
-      scope: "global" as const,
+      scope: "project" as const,
       addedAt: 0,
     },
     {
@@ -78,7 +79,7 @@ export function getDefaultsAsCommandItems(): CommandItem[] {
       command: "claude",
       icon: "Sparkles",
       type: "preset" as const,
-      scope: "global" as const,
+      scope: "project" as const,
       addedAt: 1,
     },
   ];
