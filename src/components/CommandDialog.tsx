@@ -33,13 +33,10 @@ interface CommandDialogProps {
     name: string;
     command: string;
     icon: string;
-    scope?: "global" | "project";
     scriptLines?: string;
     executionMode?: ExecutionMode;
   }) => void;
   initialData?: CommandItem | null;
-  commandMode: "global" | "project";
-  hasProject: boolean;
 }
 
 export function CommandDialog({
@@ -47,8 +44,6 @@ export function CommandDialog({
   onOpenChange,
   onSubmit,
   initialData = null,
-  commandMode,
-  hasProject,
 }: CommandDialogProps) {
   const isEditing = initialData !== null && initialData !== undefined;
 
@@ -73,9 +68,6 @@ export function CommandDialog({
   const [commandDirty, setCommandDirty] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
-  const [selectedScope, setSelectedScope] = useState<"global" | "project">(
-    () => hasProject ? "project" : commandMode
-  );
 
   // Phase 17: batch syntax detection for multi-line scripts
   const isBatch = useBatchDetect(scriptContent);
@@ -148,7 +140,6 @@ export function CommandDialog({
         name: name.trim(),
         command: scriptContent.trim().split("\n")[0] || "",
         icon: selectedIcon,
-        scope: selectedScope,
         scriptLines: scriptContent.trim(),
         executionMode: effectiveMode,
       });
@@ -157,10 +148,9 @@ export function CommandDialog({
         name: name.trim(),
         command: command.trim(),
         icon: selectedIcon,
-        scope: selectedScope,
       });
     }
-  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, selectedScope, onSubmit]);
+  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit]);
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
@@ -173,7 +163,6 @@ export function CommandDialog({
         setCommandDirty(false);
         setSelectedCategory("");
         setSelectedPresetId("");
-        setSelectedScope(hasProject ? "project" : commandMode);
         // Phase 17: reset tab and script state
         setActiveTab(initialData?.scriptLines ? "multi" : "single");
         setScriptContent(initialData?.scriptLines ?? "");
@@ -181,7 +170,7 @@ export function CommandDialog({
       }
       onOpenChange(newOpen);
     },
-    [initialData, onOpenChange, hasProject, commandMode]
+    [initialData, onOpenChange]
   );
 
   const previewIcon = useMemo(() => getIconByName(selectedIcon), [selectedIcon]);
@@ -301,53 +290,6 @@ export function CommandDialog({
               </div>
             </div>
           </div>
-          )}
-
-          {/* Scope selector per PRE-04 */}
-          {!isEditing && (
-            <div className="pb-4 mb-4 border-b border-white/10">
-              <Label className="mb-2 block">添加到</Label>
-              <div
-                className="inline-flex rounded-md overflow-hidden border border-white/10"
-                role="radiogroup"
-                aria-label="指令作用域"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedScope === "global"}
-                  aria-label="全局指令"
-                  onClick={() => setSelectedScope("global")}
-                  className={cn(
-                    "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
-                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                    selectedScope === "global"
-                      ? "bg-white/15 text-foreground border-r border-white/10"
-                      : "bg-transparent text-muted-foreground hover:bg-white/5"
-                  )}
-                >
-                  全局指令
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedScope === "project"}
-                  aria-label="当前项目指令"
-                  disabled={!hasProject}
-                  onClick={hasProject ? () => setSelectedScope("project") : undefined}
-                  className={cn(
-                    "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
-                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                    selectedScope === "project"
-                      ? "bg-white/15 text-foreground"
-                      : "bg-transparent text-muted-foreground hover:bg-white/5",
-                    !hasProject && "opacity-40 cursor-not-allowed"
-                  )}
-                >
-                  当前项目指令
-                </button>
-              </div>
-            </div>
           )}
 
           {/* Name field */}
