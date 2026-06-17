@@ -11,8 +11,8 @@
 
 ### 指令重构 (CMD)
 
-- [ ] **CMD-09**: 移除全局指令栏目 — 去掉 MainArea 中全局/项目切换按钮组、`commandMode` 状态、全局指令 CRUD 所有相关 UI 和逻辑，`CommandItem.scope` 移除 `"global"` 值
-- [ ] **CMD-10**: 项目指令替代全局指令 — 原"项目指令"栏目移至全局指令原位置占满右侧区域，UI 标签从"项目指令"改为"项目环境"，数据模型保留但仅支持项目级指令
+- [x] **CMD-09**: 移除全局指令栏目 — 去掉 MainArea 中全局/项目切换按钮组、`commandMode` 状态、全局指令 CRUD 所有相关 UI 和逻辑，`CommandItem.scope` 移除 `"global"` 值
+- [x] **CMD-10**: 项目指令替代全局指令 — 原"项目指令"栏目移至全局指令原位置占满右侧区域，UI 标签从"项目指令"改为"项目环境"，数据模型保留但仅支持项目级指令
 
 ### 项目环境 (ENV)
 
@@ -50,8 +50,8 @@ Deferred to future release.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | VER-05 | Phase 21 | Complete |
-| CMD-09 | Phase 22 | Pending |
-| CMD-10 | Phase 22 | Pending |
+| CMD-09 | Phase 22 | Complete |
+| CMD-10 | Phase 22 | Complete |
 | ENV-01 | Phase 23 | Pending |
 | ENV-02 | Phase 23 | Pending |
 | ENV-03 | Phase 24 | Pending |
