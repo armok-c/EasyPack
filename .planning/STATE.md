@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: 项目环境管理
-status: planned
-stopped_at:
-last_updated: "2026-06-16T00:00:00.000Z"
+status: Milestone v2.1 planned
+stopped_at: Phase 21 context gathered
+last_updated: "2026-06-17T08:33:27.121Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 5
@@ -31,7 +31,7 @@ Progress: [░░░░░░░░░░] 0% (v2.1: 0/5 phases)
 
 ## Session
 
-Stopped at: Roadmap defined
+Stopped at: Phase 21 context gathered
 Resume: `/gsd-discuss-phase 21` or `/gsd-plan-phase 21`
 
 ## Project Reference
