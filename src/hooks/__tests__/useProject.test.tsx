@@ -154,7 +154,7 @@ describe("useProject - command CRUD", () => {
     return result;
   }
 
-  it("addCommand updates customCommands state with new command", async () => {
+  it("addCommand adds command to commands list", async () => {
     const result = await initHook();
 
     await act(async () => {
@@ -227,7 +227,7 @@ describe("useProject - command CRUD", () => {
     expect(found).toBeUndefined();
   });
 
-  it("commands returns merged presets + custom sorted by addedAt", async () => {
+  it("commands returns custom commands sorted by addedAt", async () => {
     const result = await initHook();
 
     await act(async () => {
@@ -235,11 +235,8 @@ describe("useProject - command CRUD", () => {
     });
 
     const cmds = result.current.commands;
-    // Should include 2 defaults + 1 custom = 3
-    expect(cmds.length).toBe(3);
-    // Defaults should be present (git pull + claude per D-06)
-    expect(cmds.some((c) => c.name === "拉取代码")).toBe(true);
-    // Custom should be present
+    // Only custom command (no auto-initialized presets in Phase 22)
+    expect(cmds.length).toBe(1);
     expect(cmds.some((c) => c.name === "Custom1")).toBe(true);
   });
 
@@ -254,13 +251,13 @@ describe("useProject - command CRUD", () => {
     expect(mockStore.set).toHaveBeenCalled();
     const lastCall = mockStore.set.mock.calls.at(-1);
     expect(lastCall![0]).toBe("projectCommands:test/crud-project");
-    // The value should include auto-initialized presets (2) + 1 custom = 3
+    // The value should include only the custom command (no auto-initialized presets in Phase 22)
     const savedValue = lastCall![1] as CommandItem[];
-    expect(savedValue.length).toBe(3);
+    expect(savedValue.length).toBe(1);
     expect(savedValue.some((c) => c.name === "Persist")).toBe(true);
   });
 
-  it("initializes customCommands from persisted store data", async () => {
+  it("initializes commands from persisted projectCommands store data", async () => {
     const persisted: CommandItem[] = [
       {
         id: "test-id-1",
@@ -275,9 +272,10 @@ describe("useProject - command CRUD", () => {
     mockStore.get.mockImplementation((key: string) => {
       if (key === "projects") return Promise.resolve([testProjectForCrud]);
       if (key === "selectedProjectId") return Promise.resolve(testProjectForCrud.id);
-      if (key === "customCommands") return Promise.resolve(persisted);
+      if (key === "projectCommands:test/crud-project") return Promise.resolve(persisted);
       return Promise.resolve(undefined);
     });
+    mockStore.keys.mockResolvedValue(["projectCommands:test/crud-project"]);
 
     const result = await initHook();
 
@@ -357,8 +355,8 @@ describe("useProject - project-level command override", () => {
     return result;
   }
 
-  // Test 1: enableProjectCommands — commands completely replaced with project-level (2 default copies)
-  it("enableProjectCommands replaces commands with 2 project-level default copies", async () => {
+  // Test 1: enableProjectCommands — initializes empty array when no commands exist
+  it("enableProjectCommands initializes with empty array when no commands exist", async () => {
     const result = await initWithProject();
 
     await act(async () => {
@@ -366,28 +364,32 @@ describe("useProject - project-level command override", () => {
     });
 
     const cmds = result.current.commands;
-    // 2 default copies (git pull + claude per D-06), no global presets/custom
-    expect(cmds.length).toBe(2);
-    expect(cmds.every((c) => c.scope === "project")).toBe(true);
-    expect(cmds.some((c) => c.name === "拉取代码")).toBe(true);
-    expect(cmds.some((c) => c.name === "启动 Claude")).toBe(true);
+    // Phase 22: no preset initialization, empty array
+    expect(cmds.length).toBe(0);
+    expect(result.current.editMode).toBe(true);
   });
 
-  // Test 2: enableProjectCommands — created commands have type='preset', scope='project'
-  it("enableProjectCommands creates commands with type=preset scope=project", async () => {
+  // Test 2: enableProjectCommands — when commands already exist, just enters edit mode
+  it("enableProjectCommands enters edit mode when commands already exist", async () => {
     const result = await initWithProject();
 
+    await act(async () => {
+      await result.current.addCommand("Existing", "echo existing");
+    });
+
+    // Now call enableProjectCommands — should just enter edit mode
     await act(async () => {
       await result.current.enableProjectCommands();
     });
 
     const cmds = result.current.commands;
-    expect(cmds.every((c) => c.type === "preset")).toBe(true);
-    expect(cmds.every((c) => c.scope === "project")).toBe(true);
+    expect(cmds.length).toBe(1);
+    expect(cmds.some((c) => c.name === "Existing")).toBe(true);
+    expect(result.current.editMode).toBe(true);
   });
 
-  // Test 3: enableProjectCommands — enterEditMode becomes true after creation (per D-22)
-  it("enableProjectCommands sets editMode to true (per D-22)", async () => {
+  // Test 3: enableProjectCommands — editMode becomes true
+  it("enableProjectCommands sets editMode to true", async () => {
     const result = await initWithProject();
 
     expect(result.current.editMode).toBe(false);
@@ -399,29 +401,7 @@ describe("useProject - project-level command override", () => {
     expect(result.current.editMode).toBe(true);
   });
 
-  // Test 4: disableProjectCommands — pure view toggle, preserves data, reverts to global mode
-  it("disableProjectCommands switches to global mode without deleting data", async () => {
-    const result = await initWithProject();
-
-    await act(async () => {
-      await result.current.enableProjectCommands();
-    });
-
-    expect(result.current.commandMode).toBe("project");
-
-    await act(async () => {
-      await result.current.disableProjectCommands();
-    });
-
-    expect(result.current.commandMode).toBe("global");
-    // Commands should now show global defaults
-    const cmds = result.current.commands;
-    expect(cmds.some((c) => c.name === "拉取代码")).toBe(true);
-    // Project command data should still exist in the map
-    expect(result.current.projectCommandsMap[testProject.id]).toBeDefined();
-    expect(result.current.projectCommandsMap[testProject.id].length).toBe(2);
-  });
-
+  // Test 4: disableProjectCommands removed in Phase 22 (no commandMode)
   // Test 5: commands switch — project with project-level set shows only project commands
   it("switching to project with project-level set shows only project commands", async () => {
     // Set up: two projects, project-a has project-level commands
@@ -452,13 +432,12 @@ describe("useProject - project-level command override", () => {
     });
 
     // project-a is selected and has project-level commands
-    expect(result.current.commandMode).toBe("project");
     expect(result.current.commands.length).toBe(1);
     expect(result.current.commands[0].name).toBe("项目专属");
   });
 
-  // Test 6: commands switch — project without project-level set shows global presets + custom
-  it("switching to project without project-level set shows global commands", async () => {
+  // Test 6: commands switch — project without project-level set shows empty commands
+  it("switching to project without project-level set shows empty commands", async () => {
     mockStore.get.mockImplementation((key: string) => {
       if (key === "projects")
         return Promise.resolve([testProject, testProject2]);
@@ -472,35 +451,31 @@ describe("useProject - project-level command override", () => {
       await vi.runOnlyPendingTimersAsync();
     });
 
-    expect(result.current.commandMode).toBe("global");
-    // Should have 2 project-level defaults (git pull + claude per D-06)
-    expect(result.current.commands.length).toBe(2);
-    expect(result.current.commands.every((c) => c.scope === "project")).toBe(true);
+    // Phase 22: no global defaults — empty commands when no project-level data
+    expect(result.current.commands.length).toBe(0);
   });
 
-  // Test 7: auto-revert — deleting the last project-level command reverts to global (per D-10)
-  it("deleting last project-level command auto-reverts to global mode (per D-10)", async () => {
+  // Test 7: deleting last project-level command removes entry, commands become empty
+  it("deleting last project-level command removes project entry", async () => {
     const result = await initWithProject();
 
+    // Add a command first
     await act(async () => {
-      await result.current.enableProjectCommands();
+      await result.current.addCommand("OnlyCmd", "echo only");
     });
 
-    expect(result.current.commandMode).toBe("project");
-    const cmds = result.current.commands;
+    expect(result.current.commands.length).toBe(1);
 
-    // Delete all 2 project-level commands one by one
-    for (const cmd of [...cmds]) {
-      await act(async () => {
-        await result.current.deleteCommand(cmd.id);
-      });
-    }
+    // Delete it
+    const onlyCmd = result.current.commands[0];
+    await act(async () => {
+      await result.current.deleteCommand(onlyCmd.id);
+    });
 
-    // Should have auto-reverted to global mode
-    expect(result.current.commandMode).toBe("global");
-    // Global defaults should now be showing (2 per D-06)
-    expect(result.current.commands.length).toBe(2);
-    expect(result.current.commands.every((c) => c.scope === "project")).toBe(true);
+    // Commands should be empty (no auto-revert to global mode)
+    expect(result.current.commands.length).toBe(0);
+    // Project entry should be removed from map
+    expect(result.current.projectCommandsMap[testProject.id]).toBeUndefined();
   });
 
   // Test 8: persistence — project-level commands saved via store.set(projectCommandsKey)
@@ -518,16 +493,17 @@ describe("useProject - project-level command override", () => {
     );
     expect(projectCmdCall).toBeDefined();
     const saved = projectCmdCall![1] as CommandItem[];
-    expect(saved.length).toBe(2);
-    expect(saved.every((c) => c.scope === "project")).toBe(true);
+    // Phase 22: enableProjectCommands saves empty array
+    expect(saved.length).toBe(0);
   });
 
-  // Test 9: deleteCommand in project mode — operates on project-level Store key
-  it("deleteCommand in project mode operates on project-level store key", async () => {
+  // Test 9: deleteCommand — operates on project-level Store key
+  it("deleteCommand operates on project-level store key", async () => {
     const result = await initWithProject();
 
+    // Add a command to delete
     await act(async () => {
-      await result.current.enableProjectCommands();
+      await result.current.addCommand("ToDelete", "echo del");
     });
 
     const cmdToDelete = result.current.commands[0];
@@ -539,7 +515,25 @@ describe("useProject - project-level command override", () => {
       await result.current.deleteCommand(cmdToDelete.id);
     });
 
-    // store.set should update projectCommands key with 1 remaining
+    // store.delete should have been called for the projectCommands key
+    expect(mockStore.delete).toHaveBeenCalledWith(
+      "projectCommands:test/project-a"
+    );
+  });
+
+  // Test 10: addCommand — appends to project-level Store key
+  it("addCommand appends to project-level store key", async () => {
+    const result = await initWithProject();
+
+    // Directly add command (no enableProjectCommands needed)
+    mockStore.set.mockClear();
+
+    await act(async () => {
+      await result.current.addCommand("项目专属指令", "npm run special");
+    });
+
+    expect(result.current.commands.length).toBe(1);
+
     const calls = mockStore.set.mock.calls;
     const projectCmdCall = calls.find(
       (c) => c[0] === "projectCommands:test/project-a"
@@ -547,32 +541,6 @@ describe("useProject - project-level command override", () => {
     expect(projectCmdCall).toBeDefined();
     const saved = projectCmdCall![1] as CommandItem[];
     expect(saved.length).toBe(1);
-  });
-
-  // Test 10: addCommand in project mode — appends to project-level Store key
-  it("addCommand in project mode appends to project-level store key", async () => {
-    const result = await initWithProject();
-
-    await act(async () => {
-      await result.current.enableProjectCommands();
-    });
-
-    // Clear mock history to isolate the add call
-    mockStore.set.mockClear();
-
-    await act(async () => {
-      await result.current.addCommand("项目专属指令", "npm run special");
-    });
-
-    expect(result.current.commands.length).toBe(3);
-
-    const calls = mockStore.set.mock.calls;
-    const projectCmdCall = calls.find(
-      (c) => c[0] === "projectCommands:test/project-a"
-    );
-    expect(projectCmdCall).toBeDefined();
-    const saved = projectCmdCall![1] as CommandItem[];
-    expect(saved.length).toBe(3);
     expect(saved.some((c) => c.name === "项目专属指令")).toBe(true);
     // New command should be custom type
     const added = saved.find((c) => c.name === "项目专属指令")!;
@@ -609,7 +577,6 @@ describe("useProject - project-level command override", () => {
     });
 
     // project-a selected: project-level commands
-    expect(result.current.commandMode).toBe("project");
     expect(result.current.commands[0].name).toBe("项目A指令");
 
     // Switch to project-b (no project-level commands)
@@ -617,8 +584,7 @@ describe("useProject - project-level command override", () => {
       await result.current.selectProject(testProject2.id);
     });
 
-    expect(result.current.commandMode).toBe("global");
-    expect(result.current.commands.length).toBe(2);
-    expect(result.current.commands.every((c) => c.scope === "project")).toBe(true);
+    // Phase 22: no global mode — commands empty when no project-level data
+    expect(result.current.commands.length).toBe(0);
   });
 });
