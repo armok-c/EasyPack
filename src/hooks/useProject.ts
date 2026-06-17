@@ -368,6 +368,16 @@ export function useProject() {
         if (!mounted) return;
 
         await loadProfileDataIntoState(ps);
+
+        // Phase 22: 检测并清理旧全局指令数据（CUSTOM_COMMANDS_KEY）
+        // D-02: 启动时一次性检测并删除旧数据，toast 通知用户
+        const oldCustomCmds = await ps.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
+        if (oldCustomCmds && oldCustomCmds.length > 0) {
+          await ps.delete(CUSTOM_COMMANDS_KEY);
+          await ps.save();
+          toast.info("全局指令已移除，请使用项目环境添加指令");
+        }
+
         setProfileStore(ps);
         // 保持 store 引用指向 profileStore（供 useRecentCommands 等使用）
         setStore(ps);
