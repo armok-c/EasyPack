@@ -90,7 +90,7 @@
 | 19. 悬浮窗改进 | v2.0 | 2/2 | Complete | 2026-06-02 |
 | 20. 多配置文件管理 | v2.0 | 2/2 | Complete | 2026-06-04 |
 | 21. 打包版本号更新 | v2.1 | 1/1 | Complete    | 2026-06-17 |
-| 22. 全局指令移除与重构 | v2.1 | 3/3 | Planned | — |
+| 22. 全局指令移除与重构 | v2.1 | 1/3 | In Progress|  |
 | 23. 环境标签页与管理 | v2.1 | 0/0 | Pending | — |
 | 24. 文件管理与编辑器 | v2.1 | 0/0 | Pending | — |
 | 25. 同步差异对比 | v2.1 | 0/0 | Pending | — |
@@ -130,11 +130,11 @@ Plans:
 4. 原"项目指令"栏目移至全局指令原位置，UI 标签显示为"项目环境"
 5. 现有项目级指令数据无损迁移，功能正常
 
-**Plans:** 3/3 plans created
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 22-01-PLAN.md — 数据类型更新 + 启动时旧全局指令清理
+- [x] 22-01-PLAN.md — 数据类型更新 + 启动时旧全局指令清理
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 22-02-PLAN.md — 核心逻辑重构：移除 commandMode/customCommands/global CRUD

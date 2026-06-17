@@ -37,6 +37,87 @@ vi.mock("sonner", () => ({
   },
 }));
 
+describe("useProject - Phase 22 simplified contract", () => {
+  const testProject = {
+    id: "test/simple-project",
+    name: "simple-project",
+    path: "C:\\test\\simple-project",
+    addedAt: 1000,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([testProject]);
+      if (key === "selectedProjectId") return Promise.resolve(testProject.id);
+      return Promise.resolve(undefined);
+    });
+    mockStore.set.mockResolvedValue(undefined);
+    mockStore.delete.mockResolvedValue(undefined);
+    mockStore.keys.mockResolvedValue([]);
+    mockStore.save.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  async function initHook() {
+    const { result } = renderHook(() => useProject());
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+    return result;
+  }
+
+  it("REGRESSION: commandMode is NOT returned (removed per D-10)", async () => {
+    const result = await initHook();
+    expect((result.current as Record<string, unknown>).commandMode).toBeUndefined();
+  });
+
+  it("REGRESSION: customCommands is NOT returned (removed per D-11)", async () => {
+    const result = await initHook();
+    expect((result.current as Record<string, unknown>).customCommands).toBeUndefined();
+  });
+
+  it("REGRESSION: disableProjectCommands is NOT returned (removed per D-15)", async () => {
+    const result = await initHook();
+    expect((result.current as Record<string, unknown>).disableProjectCommands).toBeUndefined();
+  });
+
+  it("addCommand accepts (name, command, icon?, extra?) without scope parameter", async () => {
+    const result = await initHook();
+    await act(async () => {
+      // Call with 3 args (no scope) — should not throw
+      await result.current.addCommand("NoScope", "echo ok");
+    });
+    const cmds = result.current.commands;
+    expect(cmds.some((c) => c.name === "NoScope")).toBe(true);
+  });
+
+  it("commands derived only from projectCommandsMap, not from customCommands", async () => {
+    const result = await initHook();
+    // When no project-level commands exist, commands should be empty
+    // (no global presets/customCommands leaking in)
+    expect(result.current.commands.length).toBe(0);
+  });
+
+  it("enableProjectCommands does NOT initialize with default presets", async () => {
+    const result = await initHook();
+
+    await act(async () => {
+      await result.current.enableProjectCommands();
+    });
+
+    // Should initialize with empty array, not with getDefaultsAsCommandItems()
+    const cmds = result.current.commands;
+    expect(cmds.length).toBe(0);
+    // Should enter edit mode
+    expect(result.current.editMode).toBe(true);
+  });
+});
+
 describe("useProject - command CRUD", () => {
   const testProjectForCrud = {
     id: "test/crud-project",
