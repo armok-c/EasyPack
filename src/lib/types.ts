@@ -12,7 +12,7 @@ export interface CommandItem {
   command: string;
   icon: string;
   type: "preset" | "custom";
-  scope: "global" | "project";
+  scope: "project";
   addedAt: number;
   shortcut?: string;  // Phase 11: OS-level global shortcut in Tauri Accelerator format, e.g. "CommandOrControl+G"
   scriptLines?: string;  // Phase 17: Multi-line script content, \n-separated string. Undefined = use command field (SCRIPT-05)
