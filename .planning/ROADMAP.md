@@ -57,7 +57,7 @@
 <details>
 <summary>🔜 v2.1 项目环境管理 (Phases 21-25) — PLANNING</summary>
 
-- [ ] Phase 21: 打包版本号更新 — VER-05
+- [x] Phase 21: 打包版本号更新 — VER-05 (completed 2026-06-17)
 - [ ] Phase 22: 全局指令移除与重构 — CMD-09, CMD-10
 - [ ] Phase 23: 环境标签页与管理 — ENV-01, ENV-02, ENV-08
 - [ ] Phase 24: 文件管理与编辑器 — ENV-03, ENV-04, ENV-06, ENV-07
@@ -89,7 +89,7 @@
 | 18. 快捷键设置面板 | v2.0 | 2/2 | Complete | 2026-05-15 |
 | 19. 悬浮窗改进 | v2.0 | 2/2 | Complete | 2026-06-02 |
 | 20. 多配置文件管理 | v2.0 | 2/2 | Complete | 2026-06-04 |
-| 21. 打包版本号更新 | v2.1 | 0/1 | Pending | — |
+| 21. 打包版本号更新 | v2.1 | 1/1 | Complete   | 2026-06-17 |
 | 22. 全局指令移除与重构 | v2.1 | 0/0 | Pending | — |
 | 23. 环境标签页与管理 | v2.1 | 0/0 | Pending | — |
 | 24. 文件管理与编辑器 | v2.1 | 0/0 | Pending | — |
@@ -110,10 +110,10 @@
 2. 版本号来源与 package.json 的 version 保持同步
 3. 构建产物（安装包）版本信息与实际版本一致
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 21-01-PLAN.md — 创建版本同步脚本并接入 Tauri 构建流程
+- [x] 21-01-PLAN.md — 创建版本同步脚本并接入 Tauri 构建流程
 
 ---
 
