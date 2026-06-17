@@ -14,8 +14,8 @@ const mockProject: ProjectItem = {
 
 /** Default props for tests -- matches the expanded MainAreaProps interface. */
 const defaultCommands: CommandItem[] = [
-  { id: "preset-git-pull", name: "拉取代码", command: "git pull", icon: "GitBranch", type: "preset", scope: "global", addedAt: 0 },
-  { id: "preset-claude", name: "启动 Claude", command: "claude", icon: "Sparkles", type: "preset", scope: "global", addedAt: 1 },
+  { id: "preset-git-pull", name: "拉取代码", command: "git pull", icon: "GitBranch", type: "preset", scope: "project", addedAt: 0 },
+  { id: "preset-claude", name: "启动 Claude", command: "claude", icon: "Sparkles", type: "preset", scope: "project", addedAt: 1 },
 ];
 
 function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
@@ -23,21 +23,18 @@ function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
     currentProject: mockProject as ProjectItem | null,
     onExecute: vi.fn(),
     commands: defaultCommands,
-    commandMode: "global" as const,
     editMode: false,
     setEditMode: vi.fn(),
     addCommand: vi.fn().mockResolvedValue(undefined),
     updateCommand: vi.fn().mockResolvedValue(undefined),
     deleteCommand: vi.fn().mockResolvedValue(undefined),
     enableProjectCommands: vi.fn().mockResolvedValue(undefined),
-    disableProjectCommands: vi.fn().mockResolvedValue(undefined),
     activeZone: "main" as const,
     onZoneSwitch: vi.fn(),
     projectInfo: null,
     projectInfoLoading: false,
     projectInfoError: false,
     onOpenFolder: vi.fn(),
-    isProjectToggleDisabled: false,
     ...overrides,
   };
 }
@@ -107,42 +104,13 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     expect(screen.getByLabelText("完成编辑")).toBeInTheDocument();
   });
 
-  // Test 3: Toggle Group -- "全局指令" and "项目指令" buttons
-  it("shows '全局指令' button in global mode with secondary variant", () => {
-    render(<MainArea {...getDefaultProps({ commandMode: "global" })} />);
-    const btn = screen.getByRole("radio", { name: "全局指令" });
-    expect(btn).toBeInTheDocument();
-    expect(btn).toHaveAttribute("aria-checked", "true");
-  });
-
-  it("shows '项目指令' button in project mode with secondary variant", () => {
-    render(<MainArea {...getDefaultProps({ commandMode: "project" })} />);
-    const btn = screen.getByRole("radio", { name: "项目指令" });
-    expect(btn).toBeInTheDocument();
-    expect(btn).toHaveAttribute("aria-checked", "true");
-  });
-
-  // Test 4: Toggle Group mode switch via buttons
+  // Test 3: "打开文件夹" button
   it("shows '打开文件夹' button with outline variant", () => {
     render(<MainArea {...getDefaultProps()} />);
     expect(screen.getByLabelText("打开项目文件夹")).toBeInTheDocument();
   });
 
-  it("disables '项目指令' button when isProjectToggleDisabled is true", () => {
-    render(<MainArea {...getDefaultProps({ isProjectToggleDisabled: true })} />);
-    const btn = screen.getByRole("radio", { name: "项目指令" });
-    expect(btn).toBeDisabled();
-  });
-
-  it("calls enableProjectCommands when clicking '项目指令' in global mode", () => {
-    const enableProjectCommands = vi.fn().mockResolvedValue(undefined);
-    render(<MainArea {...getDefaultProps({ commandMode: "global", enableProjectCommands })} />);
-
-    fireEvent.click(screen.getByRole("radio", { name: "项目指令" }));
-    expect(enableProjectCommands).toHaveBeenCalledOnce();
-  });
-
-  // Test 5: Edit mode shows "添加指令" placeholder card
+  // Test 4: Edit mode shows "添加指令" placeholder card
   it("shows '添加指令' placeholder card in edit mode", () => {
     render(<MainArea {...getDefaultProps({ editMode: true })} />);
     expect(screen.getByText("添加指令")).toBeInTheDocument();
@@ -157,7 +125,7 @@ describe("MainArea - Phase 4 edit mode UI", () => {
   it("renders commands array as CommandCard list", () => {
     const customCommands: CommandItem[] = [
       ...defaultCommands,
-      { id: "custom-1", name: "MyCmd", command: "echo hi", icon: "Terminal", type: "custom", scope: "global", addedAt: 100 },
+      { id: "custom-1", name: "MyCmd", command: "echo hi", icon: "Terminal", type: "custom", scope: "project", addedAt: 100 },
     ];
     render(<MainArea {...getDefaultProps({ commands: customCommands })} />);
     expect(screen.getByText("MyCmd")).toBeInTheDocument();
@@ -174,5 +142,36 @@ describe("MainArea - Phase 4 edit mode UI", () => {
       id: "preset-git-pull",
       command: "git pull",
     }));
+  });
+});
+
+describe("MainArea - Phase 22 edit mode UI", () => {
+  it("renders Terminal card when project is selected", () => {
+    render(<MainArea {...getDefaultProps()} />);
+    expect(screen.getByText("终端")).toBeInTheDocument();
+  });
+
+  it("Terminal card calls onExecute with 'cmd.exe' when clicked", () => {
+    const onExecute = vi.fn();
+    render(<MainArea {...getDefaultProps({ onExecute })} />);
+
+    fireEvent.click(screen.getByText("终端"));
+    expect(onExecute).toHaveBeenCalledWith("cmd.exe");
+  });
+
+  it("does not show Toggle Group buttons", () => {
+    render(<MainArea {...getDefaultProps()} />);
+    expect(screen.queryByRole("radio", { name: "全局指令" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "项目指令" })).not.toBeInTheDocument();
+  });
+
+  it("shows '项目环境' label when project is selected", () => {
+    render(<MainArea {...getDefaultProps()} />);
+    expect(screen.getByText("项目环境")).toBeInTheDocument();
+  });
+
+  it("original '项目指令' label not present", () => {
+    render(<MainArea {...getDefaultProps()} />);
+    expect(screen.queryByText("项目指令")).not.toBeInTheDocument();
   });
 });

@@ -45,7 +45,7 @@ describe("CommandDialog", () => {
           command: "npm test",
           icon: "Terminal",
           type: "custom" as const,
-          scope: "global" as const,
+          scope: "project",
           addedAt: 1000,
         },
       });
@@ -61,7 +61,7 @@ describe("CommandDialog", () => {
           command: "npm test",
           icon: "Package",
           type: "custom" as const,
-          scope: "global" as const,
+          scope: "project",
           addedAt: 1000,
         },
       });
@@ -121,7 +121,7 @@ describe("CommandDialog", () => {
           command: "npm run build",
           icon: "Package",
           type: "custom" as const,
-          scope: "global" as const,
+          scope: "project",
           addedAt: 1000,
         },
       });

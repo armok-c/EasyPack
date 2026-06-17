@@ -6,6 +6,11 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: [],
+    exclude: ["**/node_modules/**", "**/.claude/**"],
+  },
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "react",
   },
   resolve: {
     alias: {
