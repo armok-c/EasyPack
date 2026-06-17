@@ -140,3 +140,11 @@ Each task was committed atomically:
 *Phase: 22-global-command-removal*
 *Plan: 03*
 *Completed: 2026-06-17*
+
+## Self-Check: PASSED
+
+- All 6 source files verified present
+- All 7 commits verified (5 task commits + 1 fix + 1 metadata)
+- TypeScript compilation passes (`npx tsc --noEmit`)
+- 35 tests pass (19 MainArea + 16 CommandDialog)
+- Pre-existing failures in CommandCard.test.tsx (5) and useRecentCommands.test.ts (1) are unrelated
