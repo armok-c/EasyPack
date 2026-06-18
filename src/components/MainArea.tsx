@@ -7,6 +7,9 @@ import { EnvTabBar } from "@/components/EnvTabBar";
 import { EnvSwitchBar } from "@/components/EnvSwitchBar";
 import { ManageEnvDialog } from "@/components/ManageEnvDialog";
 import { FileList } from "@/components/FileList";
+import { EnvSelectDialog } from "@/components/EnvSelectDialog";
+import { DiffViewDialog } from "@/components/DiffViewDialog";
+import { computeMatchCounts } from "@/lib/diff-utils";
 import { getIconByName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import type { ProjectItem } from "@/hooks/useProject";
@@ -88,6 +91,13 @@ export function MainArea({
   const [manageEnvOpen, setManageEnvOpen] = useState(false);
   const [applyingEnv, setApplyingEnv] = useState(false);
 
+  // Phase 25: Sync diff state
+  const [syncDiffCheckedFiles, setSyncDiffCheckedFiles] = useState<string[]>([]);
+  const [envSelectOpen, setEnvSelectOpen] = useState(false);
+  const [diffViewOpen, setDiffViewOpen] = useState(false);
+  const [selectedTargetEnvs, setSelectedTargetEnvs] = useState<Environment[]>([]);
+  const [syncDiffSourceEnv, setSyncDiffSourceEnv] = useState<{ id: string; name: string; files: ManagedFile[] } | null>(null);
+
   // Reset dialog state on project switch to prevent stale data from other projects
   useEffect(() => {
     setEditingCommand(null);
@@ -151,6 +161,34 @@ export function MainArea({
       }
     },
     [onApplyEnv]
+  );
+
+  // Phase 25: Handle sync diff button click from FileList
+  const handleSyncDiff = useCallback((checkedFiles: string[]) => {
+    setSyncDiffCheckedFiles(checkedFiles);
+    setEnvSelectOpen(true);
+  }, []);
+
+  // Phase 25: Handle env selection confirm
+  const handleEnvSelectConfirm = useCallback(
+    async (selectedEnvIds: string[]) => {
+      const targetEnvs = envs.filter((e) => selectedEnvIds.includes(e.id));
+      setSelectedTargetEnvs(targetEnvs);
+      // Set source env for DiffViewDialog
+      if (selectedEnvId) {
+        const sourceEnv = envs.find((e) => e.id === selectedEnvId);
+        if (sourceEnv) {
+          setSyncDiffSourceEnv({
+            id: sourceEnv.id,
+            name: sourceEnv.name,
+            files: sourceEnv.files,
+          });
+        }
+      }
+      setEnvSelectOpen(false);
+      setDiffViewOpen(true);
+    },
+    [envs, selectedEnvId],
   );
 
   // Phase 23: Auto-select first env when envs change (per D-14)
@@ -328,6 +366,7 @@ export function MainArea({
               onAddFiles={(envId, files) => onAddFiles(currentProject.id, envId, files)}
               onDeleteFiles={(envId, fileNames) => onDeleteFiles(currentProject.id, envId, fileNames)}
               onUpdateFile={(envId, fileName, content) => onUpdateFile(currentProject.id, envId, fileName, content)}
+              onSyncDiff={handleSyncDiff}
             />
           );
         })()}
@@ -409,6 +448,48 @@ export function MainArea({
           </button>
         )}
       </div>
+
+      {/* Phase 25: 环境选择弹窗 */}
+      {currentProject && selectedEnvId && envs.length > 1 && (() => {
+        const sourceEnv = envs.find((e) => e.id === selectedEnvId);
+        if (!sourceEnv) return null;
+        const otherEnvs = envs
+          .filter((e) => e.id !== selectedEnvId)
+          .map((e) => {
+            const counts = computeMatchCounts(sourceEnv.files, e.files);
+            return {
+              id: e.id,
+              name: e.name,
+              matched: counts.matched,
+              missing: counts.missing,
+            };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name));
+        return (
+          <EnvSelectDialog
+            open={envSelectOpen}
+            onOpenChange={setEnvSelectOpen}
+            sourceEnvName={sourceEnv.name}
+            targetEnvs={otherEnvs}
+            onConfirm={handleEnvSelectConfirm}
+          />
+        );
+      })()}
+
+      {/* Phase 25: 差异对比模态窗 */}
+      {syncDiffSourceEnv && selectedTargetEnvs.length > 0 && (
+        <DiffViewDialog
+          open={diffViewOpen}
+          onOpenChange={setDiffViewOpen}
+          sourceEnv={syncDiffSourceEnv}
+          targetEnvs={selectedTargetEnvs}
+          fileNames={syncDiffCheckedFiles}
+          projectId={currentProject.id}
+          onUpdateFile={onUpdateFile}
+          onAddFiles={onAddFiles}
+          onDeleteFiles={onDeleteFiles}
+        />
+      )}
 
       {/* CommandDialog for add/edit — key forces remount so useState initializers re-run */}
       <CommandDialog

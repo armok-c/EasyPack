@@ -12,6 +12,7 @@
  * - Integrates AddFileDialog and FileEditorDialog
  */
 import { useState, useCallback, useMemo } from "react";
+import { GitCompare } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -44,6 +45,8 @@ export interface FileListProps {
   onAddFiles: (envId: string, files: ManagedFile[]) => Promise<void>;
   onDeleteFiles: (envId: string, fileNames: string[]) => Promise<void>;
   onUpdateFile: (envId: string, fileName: string, content: string) => Promise<void>;
+  // Phase 25: Sync diff
+  onSyncDiff?: (checkedFiles: string[]) => void;
 }
 
 /** Extract file extension from name */
@@ -66,6 +69,7 @@ export function FileList({
   onAddFiles,
   onDeleteFiles,
   onUpdateFile,
+  onSyncDiff,
 }: FileListProps) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -130,7 +134,11 @@ export function FileList({
     }
   }, [selectedNames, envId, onDeleteFiles]);
 
-  // Open AddFileDialog
+  // Handle sync diff click per D-09
+  const handleSyncDiff = useCallback(() => {
+    if (selectedNames.size === 0 || !onSyncDiff) return;
+    onSyncDiff(Array.from(selectedNames));
+  }, [selectedNames, onSyncDiff]);
   const handleOpenAddDialog = useCallback(() => {
     setAddDialogOpen(true);
   }, []);
@@ -183,6 +191,20 @@ export function FileList({
             {files.length} 个文件
           </span>
           <div className="flex items-center gap-2">
+            {/* Sync diff button per D-09, D-10, D-11 */}
+            {onSyncDiff && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleSyncDiff}
+                disabled={selectedNames.size === 0}
+                className={selectedNames.size === 0 ? "opacity-50 cursor-not-allowed" : ""}
+                title={selectedNames.size === 0 ? "请先勾选要对比的文件" : undefined}
+              >
+                <GitCompare className="size-3.5 mr-1" />
+                同步差异
+              </Button>
+            )}
             <Button
               variant="default"
               size="sm"
