@@ -793,6 +793,104 @@ export function useProject() {
     [projectEnvsMap, currentProject, setActiveEnv]
   );
 
+  // --- Phase 24: File management ---
+
+  // Add ManagedFile entries to an environment's file list (dedup by name, per D-07)
+  const addFiles = useCallback(
+    async (projectId: string, envId: string, files: ManagedFile[]): Promise<void> => {
+      const envs = projectEnvsMap[projectId] ?? [];
+      const envIdx = envs.findIndex((e) => e.id === envId);
+      if (envIdx === -1) {
+        toast.error("环境不存在");
+        return;
+      }
+      const env = envs[envIdx];
+      const existingNames = new Set(env.files.map((f) => f.name));
+      const newFiles = files.filter((f) => !existingNames.has(f.name));
+      const skippedCount = files.length - newFiles.length;
+
+      if (newFiles.length === 0) {
+        toast.info(`所有文件已存在，跳过添加`);
+        return;
+      }
+
+      const updatedEnv = {
+        ...env,
+        files: [...env.files, ...newFiles],
+        updatedAt: Date.now(),
+      };
+      const updated = envs.map((e) => (e.id === envId ? updatedEnv : e));
+      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
+      await profileStore?.set(projectEnvsKey(projectId), updated);
+      await profileStore?.save();
+
+      const summary = `已添加 ${newFiles.length} 个文件${skippedCount > 0 ? `，${skippedCount} 个已存在跳过` : ""}`;
+      toast.success(summary);
+    },
+    [projectEnvsMap, profileStore]
+  );
+
+  // Delete ManagedFile entries from an environment by file name list (per D-26)
+  const deleteFiles = useCallback(
+    async (projectId: string, envId: string, fileNames: string[]): Promise<void> => {
+      const envs = projectEnvsMap[projectId] ?? [];
+      const env = envs.find((e) => e.id === envId);
+      if (!env) {
+        toast.error("环境不存在");
+        return;
+      }
+      const nameSet = new Set(fileNames);
+      const remainingFiles = env.files.filter((f) => !nameSet.has(f.name));
+
+      if (remainingFiles.length === env.files.length) {
+        toast.info("未找到匹配的文件");
+        return;
+      }
+
+      const updatedEnv = {
+        ...env,
+        files: remainingFiles,
+        updatedAt: Date.now(),
+      };
+      const updated = envs.map((e) => (e.id === envId ? updatedEnv : e));
+      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
+      await profileStore?.set(projectEnvsKey(projectId), updated);
+      await profileStore?.save();
+      toast.success(`已删除 ${env.files.length - remainingFiles.length} 个文件`);
+    },
+    [projectEnvsMap, profileStore]
+  );
+
+  // Update a specific file's content within an environment (per D-16: no toast)
+  const updateFileContent = useCallback(
+    async (projectId: string, envId: string, fileName: string, content: string): Promise<void> => {
+      const envs = projectEnvsMap[projectId] ?? [];
+      const env = envs.find((e) => e.id === envId);
+      if (!env) {
+        toast.error("环境不存在");
+        return;
+      }
+      const fileExists = env.files.some((f) => f.name === fileName);
+      if (!fileExists) {
+        toast.error(`文件不存在: ${fileName}`);
+        return;
+      }
+
+      const updatedEnv = {
+        ...env,
+        files: env.files.map((f) =>
+          f.name === fileName ? { ...f, content } : f
+        ),
+        updatedAt: Date.now(),
+      };
+      const updated = envs.map((e) => (e.id === envId ? updatedEnv : e));
+      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
+      await profileStore?.set(projectEnvsKey(projectId), updated);
+      await profileStore?.save();
+    },
+    [projectEnvsMap, profileStore]
+  );
+
   // Convenience getter: get all environments for a project
   const getProjectEnvs = useCallback(
     (projectId: string): Environment[] => {
@@ -1216,6 +1314,11 @@ export function useProject() {
     applyEnv,                 // (projectId: string, envId: string) => Promise<boolean>
     getProjectEnvs,           // (projectId: string) => Environment[]
     getProjectActiveEnv,      // (projectId: string) => string | null
+
+    // Phase 24: File management
+    addFiles,                 // (projectId: string, envId: string, files: ManagedFile[]) => Promise<void>
+    deleteFiles,              // (projectId: string, envId: string, fileNames: string[]) => Promise<void>
+    updateFileContent,        // (projectId: string, envId: string, fileName: string, content: string) => Promise<void>
 
     // Phase 12: expose store for tray settings persistence
     store,                 // Store | null
