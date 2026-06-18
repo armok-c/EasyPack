@@ -686,6 +686,25 @@ export function useProject() {
     [projectEnvsMap, profileStore]
   );
 
+  // Set or clear the active environment for a project (per D-14)
+  const setActiveEnv = useCallback(
+    async (projectId: string, envId: string | null) => {
+      if (envId === null) {
+        setProjectActiveEnvMap((prev) => {
+          const next = { ...prev };
+          delete next[projectId];
+          return next;
+        });
+        await profileStore?.delete(projectActiveEnvKey(projectId));
+      } else {
+        setProjectActiveEnvMap((prev) => ({ ...prev, [projectId]: envId }));
+        await profileStore?.set(projectActiveEnvKey(projectId), envId);
+      }
+      await profileStore?.save();
+    },
+    [profileStore]
+  );
+
   // Delete an environment (per D-21, D-18)
   const deleteEnv = useCallback(
     async (projectId: string, envId: string) => {
@@ -716,25 +735,6 @@ export function useProject() {
       toast.success(`已删除环境: ${target.name}`);
     },
     [projectEnvsMap, projectActiveEnvMap, profileStore, setActiveEnv]
-  );
-
-  // Set or clear the active environment for a project (per D-14)
-  const setActiveEnv = useCallback(
-    async (projectId: string, envId: string | null) => {
-      if (envId === null) {
-        setProjectActiveEnvMap((prev) => {
-          const next = { ...prev };
-          delete next[projectId];
-          return next;
-        });
-        await profileStore?.delete(projectActiveEnvKey(projectId));
-      } else {
-        setProjectActiveEnvMap((prev) => ({ ...prev, [projectId]: envId }));
-        await profileStore?.set(projectActiveEnvKey(projectId), envId);
-      }
-      await profileStore?.save();
-    },
-    [profileStore]
   );
 
   // Apply an environment: write all managed files to the project directory (per D-26, D-27, D-28, D-30)
@@ -1041,8 +1041,8 @@ export function useProject() {
           presetShortcuts: await profileStore.get(PRESHORTCUTS_KEY),
           recentCommands: await profileStore.get("recentCommands"),
           // Phase 23: Export environment data
-          projectEnvs: Object.fromEntries(envEntries),
-          projectActiveEnvs: Object.fromEntries(activeEnvEntries),
+          projectEnvs: Object.fromEntries(envEntries) as Record<string, Environment[]>,
+          projectActiveEnvs: Object.fromEntries(activeEnvEntries) as Record<string, string>,
         },
       };
 

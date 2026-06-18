@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/Sidebar";
 import { MainArea } from "@/components/MainArea";
@@ -81,7 +81,6 @@ function App() {
     createEnv,
     renameEnv,
     deleteEnv,
-    setActiveEnv,
     applyEnv,
     getProjectEnvs,
     getProjectActiveEnv,
