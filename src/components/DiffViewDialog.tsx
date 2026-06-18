@@ -21,7 +21,10 @@ import {
   DiffModeEnum,
 } from "@git-diff-view/react";
 import { generateDiffFile, type DiffFile } from "@git-diff-view/file";
-import { getFileLanguage } from "@/lib/diff-utils";
+import { getDiffLanguage } from "@/lib/diff-lang";
+import { useDiffState } from "@/hooks/useDiffState";
+import { MissingFilePlaceholder } from "@/components/MissingFilePlaceholder";
+import { DiffStatusBar } from "@/components/DiffStatusBar";
 import type { Environment, ManagedFile } from "@/lib/types";
 import {
   FileX,
@@ -127,15 +130,16 @@ export function DiffViewDialog({
   const [activeEnvId, setActiveEnvId] = useState<string>("");
   const [diffMode, setDiffMode] = useState<DiffModeEnum>(DiffModeEnum.Split);
 
-  // Resolved hunks: key = `${fileName}::${envId}` → Set<hunkIndex>
-  const [resolvedMap, setResolvedMap] = useState<
-    Record<string, Set<number>>
-  >({});
-
-  // Undo snapshots: key = `${fileName}::${envId}::${hunkIndex}` → previous target content
-  const [undoSnapshots, setUndoSnapshots] = useState<Record<string, string>>(
-    {},
-  );
+  // Diff resolution state (per-file/env)
+  const {
+    resolvedHunks,
+    undoStack,
+    markResolved,
+    markUnresolved,
+    isHunkResolved,
+    pushUndo,
+    popUndo,
+  } = useDiffState();
 
   // Created file tracking: key = `${fileName}::${envId}` → boolean
   const [createdFiles, setCreatedFiles] = useState<Record<string, boolean>>(
@@ -202,7 +206,7 @@ export function DiffViewDialog({
       return state;
     }
 
-    const lang = getFileLanguage(activeFileName);
+    const lang = getDiffLanguage(activeFileName) ?? "text";
 
     // Compute structured diff hunks
     const patch = structuredPatch(
@@ -314,7 +318,6 @@ export function DiffViewDialog({
       const tgtEnd = Math.min(targetLines.length, tgtStart + hunk.newLines);
 
       // Save snapshot for undo
-      const snapshotKey = `${pairKey}::${hunkIndex}`;
       const prevContent = targetFile.content;
 
       // Build new content
@@ -326,19 +329,13 @@ export function DiffViewDialog({
       const newContent = fromLines(newLines);
 
       // Store undo snapshot
-      setUndoSnapshots((prev) => ({ ...prev, [snapshotKey]: prevContent }));
+      pushUndo(pairKey, hunkIndex, prevContent);
 
       // Write to profileStore
       try {
         await onUpdateFile(projectId, currentTargetEnv.id, activeFileName, newContent);
         // Mark hunk as resolved
-        setResolvedMap((prev) => {
-          const key = pairKey;
-          const existing = prev[key] ?? new Set();
-          const updated = new Set(existing);
-          updated.add(hunkIndex);
-          return { ...prev, [key]: updated };
-        });
+        markResolved(pairKey, hunkIndex);
         // Invalidate cache
         delete diffCacheRef.current[pairKey];
 
@@ -362,49 +359,23 @@ export function DiffViewDialog({
   // Accept target (使用目标→) — just mark resolved
   const handleAcceptTarget = useCallback(
     (hunkIndex: number) => {
-      const key = pairKey;
-      setResolvedMap((prev) => {
-        const existing = prev[key] ?? new Set();
-        const updated = new Set(existing);
-        updated.add(hunkIndex);
-        return { ...prev, [key]: updated };
-      });
+      markResolved(pairKey, hunkIndex);
       toast.success("已确认目标内容");
     },
-    [pairKey],
+    [pairKey, markResolved],
   );
 
   // Undo a previously applied hunk
   const handleUndo = useCallback(
     async (hunkIndex: number) => {
-      const snapshotKey = `${pairKey}::${hunkIndex}`;
-      const prevContent = undoSnapshots[snapshotKey];
+      const prevContent = popUndo(pairKey, hunkIndex);
       if (!prevContent || !currentTargetEnv) return;
 
       try {
         await onUpdateFile(projectId, currentTargetEnv.id, activeFileName, prevContent);
 
-        // Remove undo snapshot
-        setUndoSnapshots((prev) => {
-          const updated = { ...prev };
-          delete updated[snapshotKey];
-          return updated;
-        });
-
         // Mark as unresolved
-        setResolvedMap((prev) => {
-          const key = pairKey;
-          const existing = prev[key] ?? new Set();
-          const updated = new Set(existing);
-          updated.delete(hunkIndex);
-          // Clean up empty sets
-          if (updated.size === 0) {
-            const rest = { ...prev };
-            delete rest[key];
-            return rest;
-          }
-          return { ...prev, [key]: updated };
-        });
+        markUnresolved(pairKey, hunkIndex);
 
         // Invalidate cache
         delete diffCacheRef.current[pairKey];
@@ -415,7 +386,7 @@ export function DiffViewDialog({
         if (import.meta.env.DEV) console.error("Undo failed:", error);
       }
     },
-    [undoSnapshots, currentTargetEnv, projectId, activeFileName, onUpdateFile, pairKey],
+    [currentTargetEnv, projectId, activeFileName, onUpdateFile, pairKey, popUndo, markUnresolved],
   );
 
   // Create missing file in target env
@@ -479,13 +450,8 @@ export function DiffViewDialog({
 
   // ---- Computed values ----
 
-  const resolvedSet = useMemo(
-    () => resolvedMap[pairKey] ?? new Set<number>(),
-    [resolvedMap, pairKey],
-  );
-
   const totalHunks = currentPairState?.hunks.length ?? 0;
-  const resolvedCount = resolvedSet.size;
+  const resolvedCount = resolvedHunks[pairKey]?.size ?? 0;
   const unresolvedCount = totalHunks - resolvedCount;
   const allResolved = totalHunks > 0 && resolvedCount === totalHunks;
 
@@ -513,9 +479,8 @@ export function DiffViewDialog({
     return (
       <div className="space-y-1 px-1 pb-2">
         {currentPairState.hunks.map((hunk, idx) => {
-          const isResolved = resolvedSet.has(idx);
-          const snapshotKey = `${pairKey}::${idx}`;
-          const hasUndo = undoSnapshots[snapshotKey] !== undefined;
+          const isResolved = isHunkResolved(pairKey, idx);
+          const hasUndo = undoStack[`${pairKey}::${idx}`] !== undefined;
 
           return (
             <div
@@ -596,37 +561,13 @@ export function DiffViewDialog({
     // Missing file
     if (isFileMissing) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-muted/50 rounded-md mx-1 mb-1">
-          <FileX className="size-12 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            此文件在目标环境中不存在
-          </p>
-          {wasFileCreated ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUndoCreate}
-              >
-                <Undo2 className="size-3 mr-1" />
-                撤销
-              </Button>
-              <span className="text-xs text-green-400">已创建</span>
-            </div>
-          ) : (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleCreateFile}
-              disabled={creatingFiles[missingCreateKey]}
-            >
-              {creatingFiles[missingCreateKey] ? "创建中..." : "创建此文件"}
-            </Button>
-          )}
-          <p className="text-xs text-muted-foreground">
-            将从源环境复制内容到目标环境
-          </p>
-        </div>
+        <MissingFilePlaceholder
+          isMissing={isFileMissing}
+          wasCreated={wasFileCreated}
+          isCreating={creatingFiles[missingCreateKey] ?? false}
+          onCreate={handleCreateFile}
+          onUndoCreate={handleUndoCreate}
+        />
       );
     }
 
@@ -788,23 +729,13 @@ export function DiffViewDialog({
         </div>
 
         {/* Status bar per D-27 */}
-        <div className="flex items-center justify-between h-9 px-6 border-t border-border flex-shrink-0">
-          <span className="text-xs text-muted-foreground">
-            {totalHunks > 0
-              ? `已解决: ${resolvedCount} / 未解决: ${unresolvedCount}`
-              : isFileMissing
-                ? "文件缺失"
-                : isIdentical
-                  ? "无差异"
-                  : "差异对比"}
-          </span>
-          {allResolved && (
-            <span className="text-xs text-green-400 flex items-center gap-1">
-              <CheckCheck className="size-3" />
-              全部已解决
-            </span>
-          )}
-        </div>
+        <DiffStatusBar
+          totalHunks={totalHunks}
+          resolvedCount={resolvedCount}
+          unresolvedCount={unresolvedCount}
+          isFileMissing={isFileMissing}
+          isIdentical={isIdentical}
+        />
       </DialogContent>
     </Dialog>
   );
