@@ -2,7 +2,7 @@
  * FileList - File management list component with toolbar, table, and integrated dialogs.
  *
  * Features:
- * - Toolbar with file count, add button, and delete button per D-25
+ * - Toolbar with file count, sync diff button, add button, and delete button per D-09/D-25
  * - Five-column table: checkbox, filename, extension, modified time, view per D-22/D-23
  * - Row click toggles checkbox per D-31
  * - Max height 300px with scroll per D-28
@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { AddFileDialog } from "@/components/AddFileDialog";
 import { FileEditorDialog } from "@/components/FileEditorDialog";
 import { formatRelativeTime, getLanguageExtension } from "@/lib/file-lang";
+import { SyncDiffButton } from "@/components/SyncDiffButton";
 import type { ManagedFile } from "@/lib/types";
 
 export interface FileListProps {
@@ -44,6 +45,7 @@ export interface FileListProps {
   onAddFiles: (envId: string, files: ManagedFile[]) => Promise<void>;
   onDeleteFiles: (envId: string, fileNames: string[]) => Promise<void>;
   onUpdateFile: (envId: string, fileName: string, content: string) => Promise<void>;
+  onSyncDiff?: (checkedFiles: string[]) => void;
 }
 
 /** Extract file extension from name */
@@ -66,6 +68,7 @@ export function FileList({
   onAddFiles,
   onDeleteFiles,
   onUpdateFile,
+  onSyncDiff,
 }: FileListProps) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -177,12 +180,18 @@ export function FileList({
   return (
     <>
       <div className="rounded-lg border mt-2">
-        {/* Toolbar per D-25 */}
-        <div className="flex items-center justify-between px-4 py-2">
+        {/* Toolbar per D-25, with sync diff button per D-09 */}
+        <div className="flex items-center gap-1 px-4 py-2">
           <span className="text-xs text-muted-foreground">
             {files.length} 个文件
           </span>
-          <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">|</span>
+          <SyncDiffButton
+            checkedCount={selectedNames.size}
+            onClick={() => onSyncDiff?.(Array.from(selectedNames))}
+          />
+          <span className="text-xs text-muted-foreground">|</span>
+          <div className="flex items-center gap-2 ml-auto">
             <Button
               variant="default"
               size="sm"
