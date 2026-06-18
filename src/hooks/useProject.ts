@@ -4,7 +4,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import type { CommandItem, ProfileMeta, ProfileExportData } from "@/lib/types";
+import type { CommandItem, Environment, ProfileMeta, ProfileExportData } from "@/lib/types";
 import { DEFAULT_ICON } from "@/lib/icons";
 import { shortcutToDisplay, findConflict } from "@/lib/shortcutUtils";
 
@@ -42,6 +42,14 @@ function projectCommandsKey(projectId: string): string {
   return `projectCommands:${projectId}`;
 }
 
+// Phase 23: environment storage keys (per D-02)
+function projectEnvsKey(projectId: string): string {
+  return `projectEnvs:${projectId}`;
+}
+function projectActiveEnvKey(projectId: string): string {
+  return `projectActiveEnv:${projectId}`;
+}
+
 function profileStorePath(id: string): string {
   return `${PROFILE_STORE_PREFIX}${id}.json`;
 }
@@ -70,6 +78,9 @@ export function useProject() {
 
   // Phase 4 Plan 03: project-level command override
   const [projectCommandsMap, setProjectCommandsMap] = useState<Record<string, CommandItem[]>>({});
+  // Phase 23: environment state per project (per D-01, D-02)
+  const [projectEnvsMap, setProjectEnvsMap] = useState<Record<string, Environment[]>>({});
+  const [projectActiveEnvMap, setProjectActiveEnvMap] = useState<Record<string, string>>({});
   const [editMode, setEditMode] = useState(false);
 
   // Phase 11: preset shortcut overrides (persisted separately since presets are derived fresh)
@@ -151,6 +162,31 @@ export function useProject() {
     );
     const map = Object.fromEntries(projectCmdEntries);
     setProjectCommandsMap(map);
+
+    // Phase 23: Restore environment data (per D-05)
+    const envKeys = allKeys.filter((k) => k.startsWith("projectEnvs:"));
+    const envEntries = await Promise.all(
+      envKeys.map(async (k) => {
+        const projectId = k.replace("projectEnvs:", "");
+        const envs = await s.get<Environment[]>(k);
+        return [projectId, envs ?? []] as const;
+      })
+    );
+    const envMap = Object.fromEntries(envEntries);
+    setProjectEnvsMap(envMap);
+
+    // Restore active env per project
+    const activeEnvKeys = allKeys.filter((k) => k.startsWith("projectActiveEnv:"));
+    const activeEnvEntries = await Promise.all(
+      activeEnvKeys.map(async (k) => {
+        const projectId = k.replace("projectActiveEnv:", "");
+        const activeId = await s.get<string>(k);
+        return [projectId, activeId ?? null] as const;
+      })
+    );
+    const validActiveEntries = activeEnvEntries.filter(([, v]) => v !== null) as [string, string][];
+    const activeEnvMap = Object.fromEntries(validActiveEntries);
+    setProjectActiveEnvMap(activeEnvMap);
 
     // Restore preset shortcut overrides
     const savedPresetShortcuts = await s.get<Record<string, string>>(PRESHORTCUTS_KEY);
@@ -394,6 +430,19 @@ export function useProject() {
         delete next[id];
         return next;
       });
+      // Phase 23: Clean up environment data (per D-04)
+      await profileStore?.delete(projectEnvsKey(id));
+      await profileStore?.delete(projectActiveEnvKey(id));
+      setProjectEnvsMap((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setProjectActiveEnvMap((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       await profileStore?.save();
     },
     [projects, selectedId, profileStore]
@@ -575,6 +624,189 @@ export function useProject() {
       toast.success(`已删除指令: ${target.name}`);
     },
     [selectedId, projectCommandsMap, profileStore]
+  );
+
+  // --- Phase 23: Environment CRUD management ---
+
+  // Create a new environment for a project (per D-20: unique name check)
+  const createEnv = useCallback(
+    async (projectId: string, name: string): Promise<string | null> => {
+      const pid = projectId || selectedId;
+      if (!pid) {
+        toast.error("请先选择一个项目");
+        return null;
+      }
+      if (!name.trim()) {
+        toast.error("环境名称不能为空");
+        return null;
+      }
+      const existing = projectEnvsMap[pid] ?? [];
+      if (existing.some((e) => e.name === name)) {
+        toast.error("环境名称已存在");
+        return null;
+      }
+      const newEnv: Environment = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        files: [],
+      };
+      const updated = [...existing, newEnv];
+      setProjectEnvsMap((prev) => ({ ...prev, [pid]: updated }));
+      await profileStore?.set(projectEnvsKey(pid), updated);
+      await profileStore?.save();
+      toast.success(`已创建环境: ${name}`);
+      return newEnv.id;
+    },
+    [selectedId, projectEnvsMap, profileStore]
+  );
+
+  // Rename an environment (per D-20: unique name check excluding self)
+  const renameEnv = useCallback(
+    async (projectId: string, envId: string, newName: string) => {
+      if (!newName.trim()) {
+        toast.error("环境名称不能为空");
+        return;
+      }
+      const existing = projectEnvsMap[projectId] ?? [];
+      const hasDuplicate = existing.some((e) => e.id !== envId && e.name === newName);
+      if (hasDuplicate) {
+        toast.error("环境名称已存在");
+        return;
+      }
+      const updated = existing.map((e) =>
+        e.id === envId ? { ...e, name: newName.trim(), updatedAt: Date.now() } : e
+      );
+      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
+      await profileStore?.set(projectEnvsKey(projectId), updated);
+      await profileStore?.save();
+      toast.success(`已重命名环境: ${newName}`);
+    },
+    [projectEnvsMap, profileStore]
+  );
+
+  // Delete an environment (per D-21, D-18)
+  const deleteEnv = useCallback(
+    async (projectId: string, envId: string) => {
+      const existing = projectEnvsMap[projectId] ?? [];
+      const target = existing.find((e) => e.id === envId);
+      if (!target) return;
+      const updated = existing.filter((e) => e.id !== envId);
+
+      if (updated.length === 0) {
+        // Remove empty project entry from map
+        setProjectEnvsMap((prev) => {
+          const next = { ...prev };
+          delete next[projectId];
+          return next;
+        });
+        await profileStore?.delete(projectEnvsKey(projectId));
+      } else {
+        setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
+        await profileStore?.set(projectEnvsKey(projectId), updated);
+      }
+
+      // If deleted env was the active env, clear active env
+      if (projectActiveEnvMap[projectId] === envId) {
+        await setActiveEnv(projectId, null);
+      }
+
+      await profileStore?.save();
+      toast.success(`已删除环境: ${target.name}`);
+    },
+    [projectEnvsMap, projectActiveEnvMap, profileStore, setActiveEnv]
+  );
+
+  // Set or clear the active environment for a project (per D-14)
+  const setActiveEnv = useCallback(
+    async (projectId: string, envId: string | null) => {
+      if (envId === null) {
+        setProjectActiveEnvMap((prev) => {
+          const next = { ...prev };
+          delete next[projectId];
+          return next;
+        });
+        await profileStore?.delete(projectActiveEnvKey(projectId));
+      } else {
+        setProjectActiveEnvMap((prev) => ({ ...prev, [projectId]: envId }));
+        await profileStore?.set(projectActiveEnvKey(projectId), envId);
+      }
+      await profileStore?.save();
+    },
+    [profileStore]
+  );
+
+  // Apply an environment: write all managed files to the project directory (per D-26, D-27, D-28, D-30)
+  const applyEnv = useCallback(
+    async (projectId: string, envId: string): Promise<boolean> => {
+      const envs = projectEnvsMap[projectId] ?? [];
+      const env = envs.find((e) => e.id === envId);
+      if (!env) {
+        toast.error("环境不存在");
+        return false;
+      }
+      if (!currentProject) {
+        toast.error("请先选择一个项目");
+        return false;
+      }
+
+      const projectPath = currentProject.path;
+      const writtenFiles: string[] = [];
+
+      for (const file of env.files) {
+        try {
+          await invoke("write_file_content", {
+            projectPath,
+            fileName: file.name,
+            content: file.content,
+          });
+          writtenFiles.push(file.name);
+        } catch (error) {
+          // Write failed — attempt rollback of previously written files (best-effort per D-28)
+          let rollbackFailed = false;
+          for (const writtenName of writtenFiles) {
+            try {
+              await invoke("write_file_content", {
+                projectPath,
+                fileName: writtenName,
+                content: "",
+              });
+            } catch {
+              rollbackFailed = true;
+            }
+          }
+          if (rollbackFailed) {
+            toast.error(`启用失败，部分文件已写入：${writtenFiles.join(", ")}`);
+          } else {
+            toast.error(`启用失败: ${error}`);
+          }
+          return false;
+        }
+      }
+
+      // All files written successfully
+      await setActiveEnv(projectId, envId);
+      toast.success(`已启用环境: ${env.name}`);
+      return true;
+    },
+    [projectEnvsMap, currentProject, setActiveEnv]
+  );
+
+  // Convenience getter: get all environments for a project
+  const getProjectEnvs = useCallback(
+    (projectId: string): Environment[] => {
+      return projectEnvsMap[projectId] ?? [];
+    },
+    [projectEnvsMap]
+  );
+
+  // Convenience getter: get active environment ID for a project
+  const getProjectActiveEnv = useCallback(
+    (projectId: string): string | null => {
+      return projectActiveEnvMap[projectId] ?? null;
+    },
+    [projectActiveEnvMap]
   );
 
   // --- Phase 18: Unified shortcut binding management ---
@@ -778,6 +1010,24 @@ export function useProject() {
         }
       }
 
+      // Phase 23: Collect environment data (per D-03)
+      const envKeys = allKeys.filter((k) => k.startsWith("projectEnvs:"));
+      const envEntries = await Promise.all(
+        envKeys.map(async (k) => {
+          const projectId = k.replace("projectEnvs:", "");
+          const val = await profileStore.get(k);
+          return [projectId, val] as const;
+        })
+      );
+      const activeEnvKeys = allKeys.filter((k) => k.startsWith("projectActiveEnv:"));
+      const activeEnvEntries = await Promise.all(
+        activeEnvKeys.map(async (k) => {
+          const projectId = k.replace("projectActiveEnv:", "");
+          const val = await profileStore.get(k);
+          return [projectId, val] as const;
+        })
+      );
+
       const exportData: ProfileExportData = {
         formatVersion: 1,
         profileName,
@@ -790,6 +1040,9 @@ export function useProject() {
           shortcutBindings: await profileStore.get(SHORTCUT_BINDINGS_KEY),
           presetShortcuts: await profileStore.get(PRESHORTCUTS_KEY),
           recentCommands: await profileStore.get("recentCommands"),
+          // Phase 23: Export environment data
+          projectEnvs: Object.fromEntries(envEntries),
+          projectActiveEnvs: Object.fromEntries(activeEnvEntries),
         },
       };
 
@@ -838,6 +1091,15 @@ export function useProject() {
         toast.error("配置文件损坏：projectCommands 格式错误");
         return;
       }
+      // Phase 23: Validate env data format
+      if (data.projectEnvs && typeof data.projectEnvs !== "object") {
+        toast.error("配置文件损坏：projectEnvs 格式错误");
+        return;
+      }
+      if (data.projectActiveEnvs && typeof data.projectActiveEnvs !== "object") {
+        toast.error("配置文件损坏：projectActiveEnvs 格式错误");
+        return;
+      }
 
       // 创建新 profile
       const id = crypto.randomUUID();
@@ -857,6 +1119,20 @@ export function useProject() {
       if (data.projectCommands && typeof data.projectCommands === "object") {
         for (const [projectId, cmds] of Object.entries(data.projectCommands)) {
           await ps.set(projectCommandsKey(projectId), cmds);
+        }
+      }
+
+      // Phase 23: Import environment data
+      if (data.projectEnvs && typeof data.projectEnvs === "object") {
+        for (const [projectId, envs] of Object.entries(data.projectEnvs as Record<string, unknown>)) {
+          await ps.set(projectEnvsKey(projectId), envs);
+        }
+      }
+      if (data.projectActiveEnvs && typeof data.projectActiveEnvs === "object") {
+        for (const [projectId, activeId] of Object.entries(data.projectActiveEnvs as Record<string, unknown>)) {
+          if (activeId !== null) {
+            await ps.set(projectActiveEnvKey(projectId), activeId);
+          }
         }
       }
 
@@ -929,6 +1205,17 @@ export function useProject() {
     // Phase 9: project-level command map + open folder
     projectCommandsMap,    // Record<string, CommandItem[]>
     openFolder,            // (path: string) => Promise<void>
+
+    // Phase 23: Environment management
+    projectEnvsMap,           // Record<string, Environment[]>
+    projectActiveEnvMap,      // Record<string, string>
+    createEnv,                // (projectId: string, name: string) => Promise<string | null>
+    renameEnv,                // (projectId: string, envId: string, newName: string) => Promise<void>
+    deleteEnv,                // (projectId: string, envId: string) => Promise<void>
+    setActiveEnv,             // (projectId: string, envId: string | null) => Promise<void>
+    applyEnv,                 // (projectId: string, envId: string) => Promise<boolean>
+    getProjectEnvs,           // (projectId: string) => Environment[]
+    getProjectActiveEnv,      // (projectId: string) => string | null
 
     // Phase 12: expose store for tray settings persistence
     store,                 // Store | null

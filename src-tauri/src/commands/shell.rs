@@ -173,6 +173,62 @@ pub async fn execute_script(
     Ok(bat_path_str)
 }
 
+// --- Phase 23: Environment file read/write ---
+
+/// Read a text file from a project directory (per D-09, D-12).
+/// Returns the file content as a String on success.
+/// Returns an error if the file does not exist or cannot be read.
+/// The frontend handles "file not found = empty content" per D-09.
+#[tauri::command]
+pub async fn read_file_content(project_path: String, file_name: String) -> Result<String, String> {
+    if project_path.contains('"') {
+        return Err("Invalid project path: contains double quote".to_string());
+    }
+    if file_name.contains('"') {
+        return Err("Invalid file name: contains double quote".to_string());
+    }
+    if file_name.is_empty() {
+        return Err("File name cannot be empty".to_string());
+    }
+
+    let full_path = std::path::PathBuf::from(&project_path).join(&file_name);
+    std::fs::read_to_string(&full_path)
+        .map_err(|e| format!("Failed to read file '{}': {}", full_path.display(), e))
+}
+
+/// Write content to a text file in a project directory (per D-12, D-28).
+/// Automatically creates parent directories if they don't exist.
+/// Returns Ok(()) on success.
+#[tauri::command]
+pub async fn write_file_content(
+    project_path: String,
+    file_name: String,
+    content: String,
+) -> Result<(), String> {
+    if project_path.contains('"') {
+        return Err("Invalid project path: contains double quote".to_string());
+    }
+    if file_name.contains('"') {
+        return Err("Invalid file name: contains double quote".to_string());
+    }
+    if file_name.is_empty() {
+        return Err("File name cannot be empty".to_string());
+    }
+
+    let full_path = std::path::PathBuf::from(&project_path).join(&file_name);
+
+    // Create parent directories (per D-12: auto create_dir_all)
+    if let Some(parent) = full_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directories for '{}': {}", full_path.display(), e))?;
+    }
+
+    std::fs::write(&full_path, content.as_bytes())
+        .map_err(|e| format!("Failed to write file '{}': {}", full_path.display(), e))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,5 +388,93 @@ mod tests {
 
         // Clean up
         let _ = std::fs::remove_file(&bat_path);
+    }
+
+    // --- Phase 23: read_file_content tests ---
+
+    #[test]
+    fn test_read_file_content_ok() {
+        let dir = std::env::temp_dir().join(format!("easypack-test-read-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let file_path = dir.join("test.txt");
+        std::fs::write(&file_path, "hello world").expect("Should write test file");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(read_file_content(
+            dir.to_string_lossy().to_string(),
+            "test.txt".to_string(),
+        ));
+        assert!(result.is_ok(), "read_file_content should succeed: {:?}", result.err());
+        assert_eq!(result.unwrap(), "hello world");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_read_file_content_not_found() {
+        let dir = std::env::temp_dir().join(format!("easypack-test-read-missing-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(read_file_content(
+            dir.to_string_lossy().to_string(),
+            "nonexistent.txt".to_string(),
+        ));
+        assert!(result.is_err(), "read_file_content should fail for missing file");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- Phase 23: write_file_content tests ---
+
+    #[test]
+    fn test_write_file_content_creates_file() {
+        let dir = std::env::temp_dir().join(format!("easypack-test-write-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(write_file_content(
+            dir.to_string_lossy().to_string(),
+            "output.txt".to_string(),
+            "test content".to_string(),
+        ));
+        assert!(result.is_ok(), "write_file_content should succeed: {:?}", result.err());
+
+        let written = std::fs::read_to_string(dir.join("output.txt")).expect("Should read written file");
+        assert_eq!(written, "test content");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_write_file_content_nested_path() {
+        let dir = std::env::temp_dir().join(format!("easypack-test-write-nested-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(write_file_content(
+            dir.to_string_lossy().to_string(),
+            "config/settings.json".to_string(),
+            r#"{"key": "value"}"#.to_string(),
+        ));
+        assert!(result.is_ok(), "write_file_content nested should succeed: {:?}", result.err());
+
+        let written = std::fs::read_to_string(dir.join("config").join("settings.json"))
+            .expect("Should read nested file");
+        assert_eq!(written, r#"{"key": "value"}"#);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_write_file_content_rejects_quoted_path() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(write_file_content(
+            "E:\\git\\EasyPack".to_string(),
+            "\"badname.txt".to_string(),
+            "content".to_string(),
+        ));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("double quote"));
     }
 }
