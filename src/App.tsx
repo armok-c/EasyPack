@@ -75,7 +75,27 @@ function App() {
     importProfile,
     exportProfile,
     mainStore,
+    // Phase 23: Environment management
+    projectEnvsMap,
+    projectActiveEnvMap,
+    createEnv,
+    renameEnv,
+    deleteEnv,
+    setActiveEnv,
+    applyEnv,
+    getProjectEnvs,
+    getProjectActiveEnv,
   } = useProject();
+
+  // Phase 23: Derived env state for current project
+  const envList = useMemo(
+    () => selectedId ? getProjectEnvs(selectedId) : [],
+    [selectedId, getProjectEnvs, projectEnvsMap]
+  );
+  const activeEnvIdDerived = useMemo(
+    () => selectedId ? getProjectActiveEnv(selectedId) : null,
+    [selectedId, getProjectActiveEnv, projectActiveEnvMap]
+  );
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
   const [activeZone, setActiveZone] = useState<"sidebar" | "main">("sidebar");
@@ -89,6 +109,28 @@ function App() {
       openFolder(currentProject.path);
     }
   }, [currentProject, openFolder]);
+
+  // Phase 23: Environment wrapper handlers
+  const handleCreateEnv = useCallback(
+    async (name: string) => selectedId ? createEnv(selectedId, name) : null,
+    [selectedId, createEnv]
+  );
+  const handleRenameEnv = useCallback(
+    async (envId: string, newName: string) => {
+      if (selectedId) await renameEnv(selectedId, envId, newName);
+    },
+    [selectedId, renameEnv]
+  );
+  const handleDeleteEnvFn = useCallback(
+    async (envId: string) => {
+      if (selectedId) await deleteEnv(selectedId, envId);
+    },
+    [selectedId, deleteEnv]
+  );
+  const handleApplyEnv = useCallback(
+    async (envId: string) => selectedId ? applyEnv(selectedId, envId) : false,
+    [selectedId, applyEnv]
+  );
 
   // Phase 5 Plan 03: global number key shortcuts (per D-13)
   useKeyboard({
@@ -514,6 +556,12 @@ function App() {
           projectInfoLoading={projectInfoLoading}
           projectInfoError={projectInfoError}
           onOpenFolder={handleOpenFolder}
+          envs={envList}
+          activeEnvId={activeEnvIdDerived}
+          onCreateEnv={handleCreateEnv}
+          onRenameEnv={handleRenameEnv}
+          onDeleteEnv={handleDeleteEnvFn}
+          onApplyEnv={handleApplyEnv}
         />
       </div>
       <SettingsDialog
