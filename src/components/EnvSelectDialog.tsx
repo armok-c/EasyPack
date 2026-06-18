@@ -1,203 +1,206 @@
 /**
- * EnvSelectDialog - Multi-select environment picker dialog for sync diff.
+ * EnvSelectDialog - 多选目标环境弹窗组件
  *
- * Features:
- * - Shows all target environments (source env excluded) with match/missing file counts per D-01
- * - Select-all header checkbox with indeterminate state per D-02
- * - Sorted alphabetically per D-07
- * - Opens with all unselected per D-08
- * - Confirm button disabled when no env selected per D-03
+ * 用户点击「同步差异」按钮后打开，展示所有其他环境（排除源环境），
+ * 显示各环境与勾选文件的匹配/缺失文件数，支持多选。
+ *
+ * 决策参考: CONTEXT.md D-01 ~ D-08, D-36
  */
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { FileX } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileX } from "lucide-react";
-
-export interface EnvTargetItem {
-  id: string;
-  name: string;
-  matched: number;
-  missing: number;
-}
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { Environment } from "@/lib/types";
 
 export interface EnvSelectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Name of the source (current browsing) environment for the title */
-  sourceEnvName: string;
-  /** List of selectable target environments (source env excluded, counts pre-computed) */
-  targetEnvs: EnvTargetItem[];
-  /** Called with selected env IDs when user confirms */
-  onConfirm: (selectedEnvIds: string[]) => Promise<void>;
+  sourceEnvId: string;
+  envs: Environment[];
+  checkedFiles: string[];
+  onConfirm: (targetEnvIds: string[]) => void;
+}
+
+/**
+ * Compute match and missing file counts for a target environment.
+ * @param checkedFiles - files checked in source env
+ * @param targetEnv - target environment to compare against
+ */
+function computeFileCounts(
+  checkedFiles: string[],
+  targetEnv: Environment
+): { matchCount: number; missingCount: number } {
+  const targetFileNames = new Set(targetEnv.files.map((f) => f.name));
+  let matchCount = 0;
+  let missingCount = 0;
+
+  for (const fileName of checkedFiles) {
+    if (targetFileNames.has(fileName)) {
+      matchCount++;
+    } else {
+      missingCount++;
+    }
+  }
+
+  return { matchCount, missingCount };
 }
 
 export function EnvSelectDialog({
   open,
   onOpenChange,
-  sourceEnvName,
-  targetEnvs,
+  sourceEnvId,
+  envs,
+  checkedFiles,
   onConfirm,
 }: EnvSelectDialogProps) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
-  // Track the last known open state to reset on open
-  const prevOpenRef = useRef(open);
+  const [selectedEnvIds, setSelectedEnvIds] = useState<string[]>([]);
 
-  // Reset all selections when dialog opens (D-08)
-  if (open && !prevOpenRef.current) {
-    setSelectedIds(new Set());
-  }
-  prevOpenRef.current = open;
+  // D-08: Reset selection when dialog opens
+  useEffect(() => {
+    if (open) {
+      setSelectedEnvIds([]);
+    }
+  }, [open]);
 
-  // Sorted alphabetically per D-07
-  const sortedEnvs = useMemo(
-    () => [...targetEnvs].sort((a, b) => a.name.localeCompare(b.name)),
-    [targetEnvs],
-  );
+  // D-07: Filter out source env, sort remaining by name alphabetically
+  const filteredEnvs = useMemo(() => {
+    const otherEnvs = envs.filter((env) => env.id !== sourceEnvId);
+    return [...otherEnvs].sort((a, b) => a.name.localeCompare(b.name));
+  }, [envs, sourceEnvId]);
 
-  // Derived state
-  const allSelected = sortedEnvs.length > 0 && selectedIds.size === sortedEnvs.length;
-  const someSelected = selectedIds.size > 0 && !allSelected;
+  // D-05: Get source env name for title
+  const sourceEnvName = useMemo(() => {
+    const source = envs.find((env) => env.id === sourceEnvId);
+    return source?.name ?? "";
+  }, [envs, sourceEnvId]);
 
-  const handleToggle = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
+  // Pre-compute match/missing counts for each filtered env
+  const envItems = useMemo(() => {
+    return filteredEnvs.map((env) => ({
+      env,
+      ...computeFileCounts(checkedFiles, env),
+    }));
+  }, [filteredEnvs, checkedFiles]);
+
+  // D-02: Select-all state
+  const allSelected = envItems.length > 0 && selectedEnvIds.length === envItems.length;
+  const someSelected = selectedEnvIds.length > 0 && selectedEnvIds.length < envItems.length;
+
+  // D-02: Toggle select-all
+  const handleToggleAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedEnvIds([]);
+    } else {
+      setSelectedEnvIds(envItems.map((item) => item.env.id));
+    }
+  }, [allSelected, envItems]);
+
+  // Toggle single env
+  const handleToggleEnv = useCallback((envId: string) => {
+    setSelectedEnvIds((prev) => {
+      if (prev.includes(envId)) {
+        return prev.filter((id) => id !== envId);
       }
-      return next;
+      return [...prev, envId];
     });
   }, []);
 
-  const handleToggleAll = useCallback(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === sortedEnvs.length) {
-        return new Set();
-      }
-      return new Set(sortedEnvs.map((e) => e.id));
-    });
-  }, [sortedEnvs]);
+  // D-03: Confirm handler
+  const handleConfirm = useCallback(() => {
+    if (selectedEnvIds.length === 0) return;
+    onConfirm(selectedEnvIds);
+    onOpenChange(false);
+  }, [selectedEnvIds, onConfirm, onOpenChange]);
 
-  const handleConfirm = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    setLoading(true);
-    try {
-      await onConfirm(Array.from(selectedIds));
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedIds, onConfirm]);
-
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        setSelectedIds(new Set());
-      }
-      onOpenChange(open);
-    },
-    [onOpenChange],
-  );
+  const confirmDisabled = selectedEnvIds.length === 0;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          {/* D-05: title includes source env name */}
           <DialogTitle>同步差异 — {sourceEnvName}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-1">
-          {/* Select-all header row per D-02 */}
-          {sortedEnvs.length > 0 && (
-            <div
-              className="flex items-center gap-2 px-1 py-1.5 cursor-pointer hover:bg-accent rounded-sm"
-              onClick={handleToggleAll}
-            >
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={(el) => {
-                  if (el) el.indeterminate = someSelected;
-                }}
-                onChange={handleToggleAll}
-                className="size-4 cursor-pointer accent-primary"
-              />
-              <span className="text-xs text-muted-foreground select-none">全选</span>
-            </div>
-          )}
+        <div className="space-y-2">
+          {/* Header: D-02 Select-all row */}
+          {envItems.length > 0 ? (
+            <>
+              <div className="flex items-center gap-2 px-1 py-1.5">
+                <Checkbox
+                  checked={someSelected ? "indeterminate" : allSelected}
+                  onCheckedChange={handleToggleAll}
+                />
+                <span className="text-xs text-muted-foreground select-none">
+                  全选
+                </span>
+              </div>
 
-          {/* Separator */}
-          {sortedEnvs.length > 0 && <div className="border-t border-border my-1" />}
-
-          {/* Environment list */}
-          <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-            {sortedEnvs.length > 0 ? (
-              sortedEnvs.map((env) => {
-                const isChecked = selectedIds.has(env.id);
-                return (
-                  <div
-                    key={env.id}
-                    className="flex items-center gap-2 px-1 py-2 cursor-pointer hover:bg-accent rounded-sm"
-                    onClick={() => handleToggle(env.id)}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleToggle(env.id)}
-                      className="size-4 cursor-pointer accent-primary flex-shrink-0"
-                    />
-                    {/* Env name with truncation per D-07 */}
-                    <span
-                      className="text-sm truncate flex-1 min-w-0"
-                      title={env.name}
+              {/* Environment list */}
+              <ScrollArea className="max-h-[260px]">
+                <div className="space-y-1">
+                  {envItems.map(({ env, matchCount, missingCount }) => (
+                    <div
+                      key={env.id}
+                      className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-accent cursor-pointer"
+                      onClick={() => handleToggleEnv(env.id)}
                     >
-                      {env.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">
-                      {env.matched} 个匹配
-                    </span>
-                    {env.missing > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground flex-shrink-0">
-                        <FileX className="size-3" />
-                        {env.missing} 个缺失
+                      <Checkbox
+                        checked={selectedEnvIds.includes(env.id)}
+                        onCheckedChange={() => handleToggleEnv(env.id)}
+                      />
+                      {/* D-07: Truncate long env names with title tooltip */}
+                      <span
+                        className="text-sm truncate flex-1"
+                        title={env.name}
+                      >
+                        {env.name}
                       </span>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                没有其他环境可供选择
-              </p>
-            )}
-          </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        <span>· {matchCount} 个匹配, {missingCount} 个缺失</span>
+                        {/* D-36: FileX icon for missing files */}
+                        {missingCount > 0 && (
+                          <FileX className="size-3.5 inline-block mr-0.5 text-muted-foreground ml-1" />
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </>
+          ) : (
+            // D-06: Empty state when no other environments
+            <p className="text-sm text-muted-foreground text-center py-6">
+              没有其他可选环境
+            </p>
+          )}
         </div>
 
-        {/* Footer per D-02 */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+        {/* D-03: Footer with cancel/confirm */}
+        <DialogFooter className="mt-2">
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
-            disabled={loading}
+            onClick={() => onOpenChange(false)}
           >
             取消
           </Button>
           <Button
             variant="default"
+            disabled={confirmDisabled}
             onClick={handleConfirm}
-            disabled={selectedIds.size === 0 || loading}
-            title={selectedIds.size === 0 ? "请至少选择一个目标环境" : undefined}
+            title={confirmDisabled ? "请至少选择一个目标环境" : undefined}
+            className={confirmDisabled ? "opacity-50 cursor-not-allowed" : ""}
           >
-            {loading ? "处理中..." : "确认"}
+            确认
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

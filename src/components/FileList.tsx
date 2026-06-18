@@ -2,7 +2,7 @@
  * FileList - File management list component with toolbar, table, and integrated dialogs.
  *
  * Features:
- * - Toolbar with file count, add button, and delete button per D-25
+ * - Toolbar with file count, sync diff button, add button, and delete button per D-09/D-25
  * - Five-column table: checkbox, filename, extension, modified time, view per D-22/D-23
  * - Row click toggles checkbox per D-31
  * - Max height 300px with scroll per D-28
@@ -12,7 +12,6 @@
  * - Integrates AddFileDialog and FileEditorDialog
  */
 import { useState, useCallback, useMemo } from "react";
-import { GitCompare } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -36,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { AddFileDialog } from "@/components/AddFileDialog";
 import { FileEditorDialog } from "@/components/FileEditorDialog";
 import { formatRelativeTime, getLanguageExtension } from "@/lib/file-lang";
+import { SyncDiffButton } from "@/components/SyncDiffButton";
 import type { ManagedFile } from "@/lib/types";
 
 export interface FileListProps {
@@ -45,7 +45,6 @@ export interface FileListProps {
   onAddFiles: (envId: string, files: ManagedFile[]) => Promise<void>;
   onDeleteFiles: (envId: string, fileNames: string[]) => Promise<void>;
   onUpdateFile: (envId: string, fileName: string, content: string) => Promise<void>;
-  // Phase 25: Sync diff
   onSyncDiff?: (checkedFiles: string[]) => void;
 }
 
@@ -134,11 +133,7 @@ export function FileList({
     }
   }, [selectedNames, envId, onDeleteFiles]);
 
-  // Handle sync diff click per D-09
-  const handleSyncDiff = useCallback(() => {
-    if (selectedNames.size === 0 || !onSyncDiff) return;
-    onSyncDiff(Array.from(selectedNames));
-  }, [selectedNames, onSyncDiff]);
+  // Open AddFileDialog
   const handleOpenAddDialog = useCallback(() => {
     setAddDialogOpen(true);
   }, []);
@@ -185,26 +180,18 @@ export function FileList({
   return (
     <>
       <div className="rounded-lg border mt-2">
-        {/* Toolbar per D-25 */}
-        <div className="flex items-center justify-between px-4 py-2">
+        {/* Toolbar per D-25, with sync diff button per D-09 */}
+        <div className="flex items-center gap-1 px-4 py-2">
           <span className="text-xs text-muted-foreground">
             {files.length} 个文件
           </span>
-          <div className="flex items-center gap-2">
-            {/* Sync diff button per D-09, D-10, D-11 */}
-            {onSyncDiff && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleSyncDiff}
-                disabled={selectedNames.size === 0}
-                className={selectedNames.size === 0 ? "opacity-50 cursor-not-allowed" : ""}
-                title={selectedNames.size === 0 ? "请先勾选要对比的文件" : undefined}
-              >
-                <GitCompare className="size-3.5 mr-1" />
-                同步差异
-              </Button>
-            )}
+          <span className="text-xs text-muted-foreground">|</span>
+          <SyncDiffButton
+            checkedCount={selectedNames.size}
+            onClick={() => onSyncDiff?.(Array.from(selectedNames))}
+          />
+          <span className="text-xs text-muted-foreground">|</span>
+          <div className="flex items-center gap-2 ml-auto">
             <Button
               variant="default"
               size="sm"
