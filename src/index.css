@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@git-diff-view/react/styles/diff-view.css";
 
 @custom-variant dark (&:is(.dark *));
 
