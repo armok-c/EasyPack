@@ -588,6 +588,189 @@ export function useProject() {
     [selectedId, projectCommandsMap, profileStore]
   );
 
+  // --- Phase 23: Environment CRUD management ---
+
+  // Create a new environment for a project (per D-20: unique name check)
+  const createEnv = useCallback(
+    async (projectId: string, name: string): Promise<string | null> => {
+      const pid = projectId || selectedId;
+      if (!pid) {
+        toast.error("请先选择一个项目");
+        return null;
+      }
+      if (!name.trim()) {
+        toast.error("环境名称不能为空");
+        return null;
+      }
+      const existing = projectEnvsMap[pid] ?? [];
+      if (existing.some((e) => e.name === name)) {
+        toast.error("环境名称已存在");
+        return null;
+      }
+      const newEnv: Environment = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        files: [],
+      };
+      const updated = [...existing, newEnv];
+      setProjectEnvsMap((prev) => ({ ...prev, [pid]: updated }));
+      await profileStore?.set(projectEnvsKey(pid), updated);
+      await profileStore?.save();
+      toast.success(`已创建环境: ${name}`);
+      return newEnv.id;
+    },
+    [selectedId, projectEnvsMap, profileStore]
+  );
+
+  // Rename an environment (per D-20: unique name check excluding self)
+  const renameEnv = useCallback(
+    async (projectId: string, envId: string, newName: string) => {
+      if (!newName.trim()) {
+        toast.error("环境名称不能为空");
+        return;
+      }
+      const existing = projectEnvsMap[projectId] ?? [];
+      const hasDuplicate = existing.some((e) => e.id !== envId && e.name === newName);
+      if (hasDuplicate) {
+        toast.error("环境名称已存在");
+        return;
+      }
+      const updated = existing.map((e) =>
+        e.id === envId ? { ...e, name: newName.trim(), updatedAt: Date.now() } : e
+      );
+      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
+      await profileStore?.set(projectEnvsKey(projectId), updated);
+      await profileStore?.save();
+      toast.success(`已重命名环境: ${newName}`);
+    },
+    [projectEnvsMap, profileStore]
+  );
+
+  // Delete an environment (per D-21, D-18)
+  const deleteEnv = useCallback(
+    async (projectId: string, envId: string) => {
+      const existing = projectEnvsMap[projectId] ?? [];
+      const target = existing.find((e) => e.id === envId);
+      if (!target) return;
+      const updated = existing.filter((e) => e.id !== envId);
+
+      if (updated.length === 0) {
+        // Remove empty project entry from map
+        setProjectEnvsMap((prev) => {
+          const next = { ...prev };
+          delete next[projectId];
+          return next;
+        });
+        await profileStore?.delete(projectEnvsKey(projectId));
+      } else {
+        setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
+        await profileStore?.set(projectEnvsKey(projectId), updated);
+      }
+
+      // If deleted env was the active env, clear active env
+      if (projectActiveEnvMap[projectId] === envId) {
+        await setActiveEnv(projectId, null);
+      }
+
+      await profileStore?.save();
+      toast.success(`已删除环境: ${target.name}`);
+    },
+    [projectEnvsMap, projectActiveEnvMap, profileStore, setActiveEnv]
+  );
+
+  // Set or clear the active environment for a project (per D-14)
+  const setActiveEnv = useCallback(
+    async (projectId: string, envId: string | null) => {
+      if (envId === null) {
+        setProjectActiveEnvMap((prev) => {
+          const next = { ...prev };
+          delete next[projectId];
+          return next;
+        });
+        await profileStore?.delete(projectActiveEnvKey(projectId));
+      } else {
+        setProjectActiveEnvMap((prev) => ({ ...prev, [projectId]: envId }));
+        await profileStore?.set(projectActiveEnvKey(projectId), envId);
+      }
+      await profileStore?.save();
+    },
+    [profileStore]
+  );
+
+  // Apply an environment: write all managed files to the project directory (per D-26, D-27, D-28, D-30)
+  const applyEnv = useCallback(
+    async (projectId: string, envId: string): Promise<boolean> => {
+      const envs = projectEnvsMap[projectId] ?? [];
+      const env = envs.find((e) => e.id === envId);
+      if (!env) {
+        toast.error("环境不存在");
+        return false;
+      }
+      if (!currentProject) {
+        toast.error("请先选择一个项目");
+        return false;
+      }
+
+      const projectPath = currentProject.path;
+      const writtenFiles: string[] = [];
+
+      for (const file of env.files) {
+        try {
+          await invoke("write_file_content", {
+            projectPath,
+            fileName: file.name,
+            content: file.content,
+          });
+          writtenFiles.push(file.name);
+        } catch (error) {
+          // Write failed — attempt rollback of previously written files (best-effort per D-28)
+          let rollbackFailed = false;
+          for (const writtenName of writtenFiles) {
+            try {
+              await invoke("write_file_content", {
+                projectPath,
+                fileName: writtenName,
+                content: "",
+              });
+            } catch {
+              rollbackFailed = true;
+            }
+          }
+          if (rollbackFailed) {
+            toast.error(`启用失败，部分文件已写入：${writtenFiles.join(", ")}`);
+          } else {
+            toast.error(`启用失败: ${error}`);
+          }
+          return false;
+        }
+      }
+
+      // All files written successfully
+      await setActiveEnv(projectId, envId);
+      toast.success(`已启用环境: ${env.name}`);
+      return true;
+    },
+    [projectEnvsMap, currentProject, setActiveEnv]
+  );
+
+  // Convenience getter: get all environments for a project
+  const getProjectEnvs = useCallback(
+    (projectId: string): Environment[] => {
+      return projectEnvsMap[projectId] ?? [];
+    },
+    [projectEnvsMap]
+  );
+
+  // Convenience getter: get active environment ID for a project
+  const getProjectActiveEnv = useCallback(
+    (projectId: string): string | null => {
+      return projectActiveEnvMap[projectId] ?? null;
+    },
+    [projectActiveEnvMap]
+  );
+
   // --- Phase 18: Unified shortcut binding management ---
 
   // Set a shortcut binding for an action, with full conflict detection
