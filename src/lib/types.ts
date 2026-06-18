@@ -37,6 +37,28 @@ export interface ProfileMeta {
   createdAt: number; // Date.now() 时间戳
 }
 
+/**
+ * Phase 23: 环境数据模型 (per D-07)
+ * 环境是项目配置文件的命名集合。
+ */
+export interface Environment {
+  id: string;        // UUID
+  name: string;      // 环境名称，在同一项目内唯一
+  createdAt: number; // Date.now() 时间戳
+  updatedAt: number; // Date.now() 时间戳
+  files: ManagedFile[]; // 此环境管理的配置文件列表
+}
+
+/**
+ * Phase 23: 受管理的配置文件 (per D-08)
+ * name 存储相对路径（如 ".env"、"config/settings.json"），支持嵌套目录
+ */
+export interface ManagedFile {
+  name: string;    // 相对路径
+  content: string; // 文件完整文本内容
+  addedAt: number; // Date.now() 时间戳
+}
+
 /** Phase 20: 导出 JSON 文件格式 (per D-20) */
 export interface ProfileExportData {
   formatVersion: number;
@@ -50,5 +72,8 @@ export interface ProfileExportData {
     shortcutBindings: unknown;
     presetShortcuts: unknown;
     recentCommands: unknown;
+    // Phase 23: environment data (per D-03)
+    projectEnvs: Record<string, Environment[]>;
+    projectActiveEnvs: Record<string, string>;
   };
 }

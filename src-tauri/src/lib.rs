@@ -27,6 +27,8 @@ pub fn run() {
             commands::project_info::scan_project_icons,
             commands::project_info::get_project_info,
             commands::shell::open_folder,
+            commands::shell::read_file_content,
+            commands::shell::write_file_content,
             commands::update::check_for_updates,
             commands::update::open_release_page,
         ])
