@@ -59,7 +59,7 @@
 
 - [x] Phase 21: 打包版本号更新 — VER-05 (completed 2026-06-17)
 - [x] Phase 22: 全局指令移除与重构 — CMD-09, CMD-10 (planning complete) (completed 2026-06-17)
-- [ ] Phase 23: 环境标签页与管理 — ENV-01, ENV-02, ENV-08
+- [x] Phase 23: 环境标签页与管理 — ENV-01, ENV-02, ENV-08 (completed 2026-06-18)
 - [ ] Phase 24: 文件管理与编辑器 — ENV-03, ENV-04, ENV-06, ENV-07
 - [ ] Phase 25: 同步差异对比 — ENV-05
 
@@ -91,7 +91,7 @@
 | 20. 多配置文件管理 | v2.0 | 2/2 | Complete | 2026-06-04 |
 | 21. 打包版本号更新 | v2.1 | 1/1 | Complete    | 2026-06-17 |
 | 22. 全局指令移除与重构 | v2.1 | 3/3 | Complete    | 2026-06-17 |
-| 23. 环境标签页与管理 | v2.1 | 2/3 | In Progress|  |
+| 23. 环境标签页与管理 | v2.1 | 3/3 | Complete   | 2026-06-18 |
 | 24. 文件管理与编辑器 | v2.1 | 0/0 | Pending | — |
 | 25. 同步差异对比 | v2.1 | 0/0 | Pending | — |
 
@@ -157,7 +157,7 @@ Plans:
 4. 重命名环境功能正常，删除环境有二次确认弹窗
 5. 环境切换栏：下拉框选择目标环境 + 启用按钮，点击启用将所选环境的配置文件内容写入项目根目录
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -165,7 +165,7 @@ Plans:
 - [x] 23-02-PLAN.md — useProject 环境状态管理（CRUD + apply + 持久化 + 生命周期集成）
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 23-03-PLAN.md — UI 组件（EnvTabBar/EnvSwitchBar/ManageEnvDialog）+ MainArea/App.tsx 集成
+- [x] 23-03-PLAN.md — UI 组件（EnvTabBar/EnvSwitchBar/ManageEnvDialog）+ MainArea/App.tsx 集成
 
 ---
 
