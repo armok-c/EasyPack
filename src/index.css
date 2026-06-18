@@ -40,6 +40,15 @@ body {
   color-scheme: dark;
 }
 
+/* Utility: hide scrollbar but keep scroll functionality */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Thin, subtle scrollbar */
 * {
   scrollbar-width: thin;

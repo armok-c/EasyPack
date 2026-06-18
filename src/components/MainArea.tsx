@@ -3,10 +3,13 @@ import { FolderOpen, Settings, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandCard } from "@/components/CommandCard";
 import { CommandDialog } from "@/components/CommandDialog";
+import { EnvTabBar } from "@/components/EnvTabBar";
+import { EnvSwitchBar } from "@/components/EnvSwitchBar";
+import { ManageEnvDialog } from "@/components/ManageEnvDialog";
 import { getIconByName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import type { ProjectItem } from "@/hooks/useProject";
-import type { CommandItem } from "@/lib/types";
+import type { CommandItem, Environment } from "@/lib/types";
 
 interface MainAreaProps {
   currentProject: ProjectItem | null;
@@ -28,6 +31,13 @@ interface MainAreaProps {
   projectInfoError: boolean;
   // Phase 9: open folder
   onOpenFolder: () => void;
+  // Phase 23: Environment management
+  envs: Environment[];
+  activeEnvId: string | null;
+  onCreateEnv: (name: string) => Promise<string | null>;
+  onRenameEnv: (envId: string, newName: string) => Promise<void>;
+  onDeleteEnv: (envId: string) => Promise<void>;
+  onApplyEnv: (envId: string) => Promise<boolean>;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -50,12 +60,24 @@ export function MainArea({
   projectInfoLoading,
   projectInfoError,
   onOpenFolder,
+  // Phase 23: Environment management
+  envs,
+  activeEnvId,
+  onCreateEnv,
+  onRenameEnv,
+  onDeleteEnv,
+  onApplyEnv,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
   // Phase 5 Plan 03: card focus state (-1 = no focus)
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const gridRef = useRef<HTMLDivElement | null>(null);
+
+  // Phase 23: Env UI state (D-14: selectedEnvId independent from activeEnvId)
+  const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
+  const [manageEnvOpen, setManageEnvOpen] = useState(false);
+  const [applyingEnv, setApplyingEnv] = useState(false);
 
   // Reset dialog state on project switch to prevent stale data from other projects
   useEffect(() => {
@@ -90,6 +112,47 @@ export function MainArea({
     }
     setDialogOpen(open);
   }, []);
+
+  // Phase 23: Delete env handler with auto-switch per D-18
+  const handleDeleteEnv = useCallback(
+    async (envId: string) => {
+      await onDeleteEnv(envId);
+      // D-18: auto-switch to nearest neighbor tab
+      setSelectedEnvId((prev) => {
+        if (prev !== envId) return prev; // wasn't selected, no change
+        const remaining = envs.filter((e) => e.id !== envId);
+        if (remaining.length === 0) return null;
+        const deletedIdx = envs.findIndex((e) => e.id === envId);
+        // right neighbor first, then left neighbor
+        const nextIdx = Math.min(deletedIdx, remaining.length - 1);
+        return remaining[nextIdx].id;
+      });
+    },
+    [envs, onDeleteEnv]
+  );
+
+  // Phase 23: Apply env handler with loading state
+  const handleApplyEnv = useCallback(
+    async (envId: string) => {
+      setApplyingEnv(true);
+      try {
+        await onApplyEnv(envId);
+      } finally {
+        setApplyingEnv(false);
+      }
+    },
+    [onApplyEnv]
+  );
+
+  // Phase 23: Auto-select first env when envs change (per D-14)
+  useEffect(() => {
+    if (envs.length > 0 && selectedEnvId === null) {
+      setSelectedEnvId(envs[0].id);
+    }
+    if (envs.length === 0) {
+      setSelectedEnvId(null);
+    }
+  }, [envs, selectedEnvId]);
 
   // Auto-focus first card when main zone becomes active
   useEffect(() => {
@@ -175,7 +238,7 @@ export function MainArea({
   return (
     <main className="flex-1 flex flex-col p-8 overflow-auto">
       {/* Project info area */}
-      <div className="mb-6">
+      <div className="mb-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-foreground">
             当前项目: {currentProject.name}
@@ -212,7 +275,28 @@ export function MainArea({
             )}
           </div>
         )}
-        {/* 项目环境标签 + 打开文件夹 button row */}
+        {/* Phase 23: 环境切换栏（ENV-08）- 项目信息下方，标签页上方 */}
+        {currentProject && (
+          <EnvSwitchBar
+            envs={envs}
+            activeEnvId={activeEnvId}
+            onApply={handleApplyEnv}
+            applying={applyingEnv}
+          />
+        )}
+
+        {/* Phase 23: 环境标签页 + 管理按钮（ENV-01/ENV-02） */}
+        {currentProject && (
+          <EnvTabBar
+            envs={envs}
+            selectedEnvId={selectedEnvId}
+            activeEnvId={activeEnvId}
+            onSelectEnv={setSelectedEnvId}
+            onManageEnv={() => setManageEnvOpen(true)}
+          />
+        )}
+
+        {/* 打开文件夹 button */}
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-muted-foreground">项目环境</span>
           <Button
@@ -227,6 +311,19 @@ export function MainArea({
           </Button>
         </div>
       </div>
+
+      {/* Phase 23: 管理环境模态窗 */}
+      {currentProject && (
+        <ManageEnvDialog
+          open={manageEnvOpen}
+          onOpenChange={setManageEnvOpen}
+          envs={envs}
+          activeEnvId={activeEnvId}
+          onCreateEnv={onCreateEnv}
+          onRenameEnv={onRenameEnv}
+          onDeleteEnv={handleDeleteEnv}
+        />
+      )}
 
       {/* Command cards grid (per UI-SPEC Grid: auto-fill adaptive) */}
       <div
