@@ -91,7 +91,7 @@
 | 20. 多配置文件管理 | v2.0 | 2/2 | Complete | 2026-06-04 |
 | 21. 打包版本号更新 | v2.1 | 1/1 | Complete    | 2026-06-17 |
 | 22. 全局指令移除与重构 | v2.1 | 3/3 | Complete    | 2026-06-17 |
-| 23. 环境标签页与管理 | v2.1 | 0/0 | Pending | — |
+| 23. 环境标签页与管理 | v2.1 | 2/3 | In Progress|  |
 | 24. 文件管理与编辑器 | v2.1 | 0/0 | Pending | — |
 | 25. 同步差异对比 | v2.1 | 0/0 | Pending | — |
 
@@ -157,6 +157,16 @@ Plans:
 4. 重命名环境功能正常，删除环境有二次确认弹窗
 5. 环境切换栏：下拉框选择目标环境 + 启用按钮，点击启用将所选环境的配置文件内容写入项目根目录
 
+**Plans:** 2/3 plans executed
+
+Plans:
+**Wave 1**
+- [x] 23-01-PLAN.md — 数据类型（Environment/ManagedFile）+ Rust 文件读写命令（read_file_content/write_file_content）
+- [x] 23-02-PLAN.md — useProject 环境状态管理（CRUD + apply + 持久化 + 生命周期集成）
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 23-03-PLAN.md — UI 组件（EnvTabBar/EnvSwitchBar/ManageEnvDialog）+ MainArea/App.tsx 集成
+
 ---
 
 ### Phase 24: 文件管理与编辑器
@@ -171,7 +181,7 @@ Plans:
 3. 文件列表正确显示勾选框、文件名+后缀、修改时间、查看按钮
 4. 查看按钮打开文本模态窗，支持 xml/yml/json/toml 语法高亮（CodeMirror 6）
 5. 编辑器支持语法错误检测，错误行有视觉标记
-6. 右下角保存按钮将修改写入磁盘文件
+6. 右下角保存按钮将修改保存到当前环境存储的副本（不直接写磁盘，需通过 ENV-08「启用」才应用到项目目录）
 
 ---
 
@@ -187,3 +197,7 @@ Plans:
 3. 选择目标环境后展示 IDE Git 冲突风格对比模态窗（@git-diff-view/react）
 4. 对比视图支持 split/unified 双模式，内置语法高亮
 5. 差异对比内容可复制/查看，支持暗色主题
+
+---
+
+*Roadmap last updated: 2026-06-18 after Phase 23 planning*
