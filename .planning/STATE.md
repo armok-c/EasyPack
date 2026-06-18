@@ -2,27 +2,27 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: 项目环境管理
-status: executing
+status: ready_to_plan
 stopped_at: Phase 24 plans created
 last_updated: "2026-06-18T06:18:53.747Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
   completed_plans: 7
-  percent: 70
+  percent: 80
 ---
 
 # Project State
 
-**Status:** Ready to execute
+**Status:** Ready to plan
 **Last Activity:** 2026-06-18
 **Current Focus:** Phase 24 — 文件管理与编辑器
 
 ## Current Position
 
-Phase: 24
+Phase: 25
 Plan: Not started
 Status: Ready to execute
 Last activity: 2026-06-18 -- Phase 24 planning complete
