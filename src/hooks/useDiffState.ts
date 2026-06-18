@@ -39,10 +39,10 @@ export interface UseDiffStateReturn {
   hasUnresolved: (fileEnvKey: string) => boolean;
   /** Number of resolved hunks for a file/env pair. */
   getResolvedCount: (fileEnvKey: string) => number;
-  /** Number of unresolved hunks for a file/env pair. */
-  getUnresolvedCount: (fileEnvKey: string) => number;
-  /** Whether ALL hunks are resolved (true when hunks exist and all resolved). */
-  isAllResolved: (fileEnvKey: string) => boolean;
+  /** Number of unresolved hunks for a file/env pair. Requires totalHunks as second argument. */
+  getUnresolvedCount: (fileEnvKey: string, totalHunks: number) => number;
+  /** Whether ALL hunks are resolved (true when hunks exist and all resolved). Requires totalHunks. */
+  isAllResolved: (fileEnvKey: string, totalHunks: number) => boolean;
   /** Build the undo key for a file/env pair + hunk index. */
   undoKey: (fileEnvKey: string, hunkIndex: number) => string;
 }

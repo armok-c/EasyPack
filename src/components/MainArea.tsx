@@ -9,7 +9,6 @@ import { ManageEnvDialog } from "@/components/ManageEnvDialog";
 import { FileList } from "@/components/FileList";
 import { EnvSelectDialog } from "@/components/EnvSelectDialog";
 import { DiffViewDialog } from "@/components/DiffViewDialog";
-import { computeMatchCounts } from "@/lib/diff-utils";
 import { getIconByName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import type { ProjectItem } from "@/hooks/useProject";
@@ -450,31 +449,16 @@ export function MainArea({
       </div>
 
       {/* Phase 25: 环境选择弹窗 */}
-      {currentProject && selectedEnvId && envs.length > 1 && (() => {
-        const sourceEnv = envs.find((e) => e.id === selectedEnvId);
-        if (!sourceEnv) return null;
-        const otherEnvs = envs
-          .filter((e) => e.id !== selectedEnvId)
-          .map((e) => {
-            const counts = computeMatchCounts(sourceEnv.files, e.files);
-            return {
-              id: e.id,
-              name: e.name,
-              matched: counts.matched,
-              missing: counts.missing,
-            };
-          })
-          .sort((a, b) => a.name.localeCompare(b.name));
-        return (
-          <EnvSelectDialog
-            open={envSelectOpen}
-            onOpenChange={setEnvSelectOpen}
-            sourceEnvName={sourceEnv.name}
-            targetEnvs={otherEnvs}
-            onConfirm={handleEnvSelectConfirm}
-          />
-        );
-      })()}
+      {currentProject && selectedEnvId && (
+        <EnvSelectDialog
+          open={envSelectOpen}
+          onOpenChange={setEnvSelectOpen}
+          sourceEnvId={selectedEnvId}
+          envs={envs}
+          checkedFiles={syncDiffCheckedFiles}
+          onConfirm={handleEnvSelectConfirm}
+        />
+      )}
 
       {/* Phase 25: 差异对比模态窗 */}
       {syncDiffSourceEnv && selectedTargetEnvs.length > 0 && (

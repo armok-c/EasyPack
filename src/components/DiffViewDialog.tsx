@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   DiffView,
@@ -98,19 +98,6 @@ function fromLines(lines: string[]): string {
   return lines.join("\n");
 }
 
-/**
- * Extract text content for a given hunk from the full source text.
- * Returns lines [oldStart - 1, oldStart - 1 + oldLines) from source content.
- */
-function extractSourceHunkContent(
-  sourceContent: string,
-  hunk: HunkInfo,
-): string {
-  const lines = toLines(sourceContent);
-  const start = Math.max(0, hunk.oldStart - 1);
-  const end = Math.min(lines.length, start + hunk.oldLines);
-  return fromLines(lines.slice(start, end));
-}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -281,13 +268,6 @@ export function DiffViewDialog({
 
   // ---- Handlers ----
 
-  // Toggle diff mode
-  const handleToggleMode = useCallback(() => {
-    setDiffMode((prev) =>
-      prev === DiffModeEnum.Split ? DiffModeEnum.Unified : DiffModeEnum.Split,
-    );
-  }, []);
-
   // Apply source hunk to target (←使用源)
   const handleApplySource = useCallback(
     async (hunkIndex: number) => {
@@ -453,8 +433,6 @@ export function DiffViewDialog({
   const totalHunks = currentPairState?.hunks.length ?? 0;
   const resolvedCount = resolvedHunks[pairKey]?.size ?? 0;
   const unresolvedCount = totalHunks - resolvedCount;
-  const allResolved = totalHunks > 0 && resolvedCount === totalHunks;
-
   const isFileMissing =
     currentPairState !== null && !currentPairState.fileExists;
 
