@@ -4,7 +4,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import type { CommandItem, ProfileMeta, ProfileExportData } from "@/lib/types";
+import type { CommandItem, Environment, ProfileMeta, ProfileExportData } from "@/lib/types";
 import { DEFAULT_ICON } from "@/lib/icons";
 import { shortcutToDisplay, findConflict } from "@/lib/shortcutUtils";
 
@@ -42,6 +42,14 @@ function projectCommandsKey(projectId: string): string {
   return `projectCommands:${projectId}`;
 }
 
+// Phase 23: environment storage keys (per D-02)
+function projectEnvsKey(projectId: string): string {
+  return `projectEnvs:${projectId}`;
+}
+function projectActiveEnvKey(projectId: string): string {
+  return `projectActiveEnv:${projectId}`;
+}
+
 function profileStorePath(id: string): string {
   return `${PROFILE_STORE_PREFIX}${id}.json`;
 }
@@ -70,6 +78,9 @@ export function useProject() {
 
   // Phase 4 Plan 03: project-level command override
   const [projectCommandsMap, setProjectCommandsMap] = useState<Record<string, CommandItem[]>>({});
+  // Phase 23: environment state per project (per D-01, D-02)
+  const [projectEnvsMap, setProjectEnvsMap] = useState<Record<string, Environment[]>>({});
+  const [projectActiveEnvMap, setProjectActiveEnvMap] = useState<Record<string, string>>({});
   const [editMode, setEditMode] = useState(false);
 
   // Phase 11: preset shortcut overrides (persisted separately since presets are derived fresh)
