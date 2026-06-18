@@ -6,10 +6,11 @@ import { CommandDialog } from "@/components/CommandDialog";
 import { EnvTabBar } from "@/components/EnvTabBar";
 import { EnvSwitchBar } from "@/components/EnvSwitchBar";
 import { ManageEnvDialog } from "@/components/ManageEnvDialog";
+import { FileList } from "@/components/FileList";
 import { getIconByName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import type { ProjectItem } from "@/hooks/useProject";
-import type { CommandItem, Environment } from "@/lib/types";
+import type { CommandItem, Environment, ManagedFile } from "@/lib/types";
 
 interface MainAreaProps {
   currentProject: ProjectItem | null;
@@ -38,6 +39,10 @@ interface MainAreaProps {
   onRenameEnv: (envId: string, newName: string) => Promise<void>;
   onDeleteEnv: (envId: string) => Promise<void>;
   onApplyEnv: (envId: string) => Promise<boolean>;
+  // Phase 24: File management
+  onAddFiles: (projectId: string, envId: string, files: ManagedFile[]) => Promise<void>;
+  onDeleteFiles: (projectId: string, envId: string, fileNames: string[]) => Promise<void>;
+  onUpdateFile: (projectId: string, envId: string, fileName: string, content: string) => Promise<void>;
 }
 
 // Approximate grid column count for arrow key navigation.
@@ -67,6 +72,10 @@ export function MainArea({
   onRenameEnv,
   onDeleteEnv,
   onApplyEnv,
+  // Phase 24: File management
+  onAddFiles,
+  onDeleteFiles,
+  onUpdateFile,
 }: MainAreaProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
@@ -258,7 +267,18 @@ export function MainArea({
             <Settings className="size-4" />
           </button>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">{currentProject.path}</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {currentProject.path}
+          {/* "打开文件夹" link moved from below to project info area */}
+          <button
+            onClick={onOpenFolder}
+            className="inline-flex items-center gap-0.5 ml-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer align-baseline"
+            aria-label="打开项目文件夹"
+          >
+            <FolderOpen className="size-3" />
+            打开文件夹
+          </button>
+        </p>
         {/* Phase 8: folder size + Git branch (per D-04, D-07, D-08) */}
         {(projectInfo || projectInfoLoading) && (
           <div className="flex items-center gap-1 mt-1" aria-live="polite">
@@ -296,20 +316,21 @@ export function MainArea({
           />
         )}
 
-        {/* 打开文件夹 button */}
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-muted-foreground">项目环境</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenFolder}
-            disabled={!currentProject}
-            aria-label="打开项目文件夹"
-          >
-            <FolderOpen className="size-3.5" />
-            打开文件夹
-          </Button>
-        </div>
+        {/* Phase 24: 文件管理列表 */}
+        {currentProject && selectedEnvId && (() => {
+          const currentEnv = envs.find((e) => e.id === selectedEnvId);
+          if (!currentEnv) return null;
+          return (
+            <FileList
+              envId={currentEnv.id}
+              files={currentEnv.files}
+              projectPath={currentProject.path}
+              onAddFiles={(envId, files) => onAddFiles(currentProject.id, envId, files)}
+              onDeleteFiles={(envId, fileNames) => onDeleteFiles(currentProject.id, envId, fileNames)}
+              onUpdateFile={(envId, fileName, content) => onUpdateFile(currentProject.id, envId, fileName, content)}
+            />
+          );
+        })()}
       </div>
 
       {/* Phase 23: 管理环境模态窗 */}
