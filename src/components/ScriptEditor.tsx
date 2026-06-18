@@ -1,22 +1,16 @@
 /**
  * CodeMirror 6 editor component for multi-line script editing.
  *
- * Uses a custom useCodeMirror hook (not @uiw/react-codemirror) for
- * lightweight, fully controlled integration with React lifecycle.
- *
- * Handles React StrictMode double-render by:
- * 1. Destroying EditorView in useEffect cleanup
- * 2. Checking parentRef for existing children before creating view
+ * Uses the generic useCodeMirror hook from @/hooks/useCodeMirror, with
+ * batchSupport() injected as a ScriptEditor-specific extension.
  *
  * Content sync: When value prop changes and differs from editor content,
  * dispatches a transaction to update. Prevents infinite loop by tracking
  * whether the change originated from user input (onChange callback).
  */
 import { useRef, useEffect } from "react";
-import { EditorState } from "@codemirror/state";
-import { EditorView, lineNumbers } from "@codemirror/view";
-import { basicSetup } from "codemirror";
-import { oneDark } from "@codemirror/theme-one-dark";
+import type { Extension } from "@codemirror/state";
+import { useCodeMirror } from "@/hooks/useCodeMirror";
 import { batchSupport } from "@/lib/batch-lang";
 
 interface ScriptEditorProps {
@@ -24,68 +18,6 @@ interface ScriptEditorProps {
   onChange: (value: string) => void;
   height?: string;
   darkMode?: boolean;
-}
-
-/**
- * Custom hook managing CodeMirror 6 EditorView lifecycle in React.
- *
- * Creates the editor on mount, destroys on unmount (StrictMode safe).
- * Syncs external value changes into the editor without causing cursor jumps.
- */
-function useCodeMirror(
-  parentRef: React.RefObject<HTMLDivElement | null>,
-  initialContent: string,
-  onChange: (value: string) => void,
-  darkMode: boolean,
-) {
-  const viewRef = useRef<EditorView | null>(null);
-  const isSyncUpdate = useRef(false);
-
-  useEffect(() => {
-    const parent = parentRef.current;
-    if (!parent) return;
-
-    // StrictMode guard: if children already exist from a previous mount,
-    // clear them before creating a new editor
-    while (parent.firstChild) {
-      parent.removeChild(parent.firstChild);
-    }
-
-    const state = EditorState.create({
-      doc: initialContent,
-      extensions: [
-        basicSetup,
-        lineNumbers(),
-        batchSupport(),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged && !isSyncUpdate.current) {
-            onChange(update.state.doc.toString());
-          }
-        }),
-        // Editor styling: constrain height with scrolling
-        EditorView.theme({
-          "&": { height: "100%" },
-          ".cm-scroller": { overflow: "auto" },
-        }),
-        darkMode ? oneDark : [],
-      ],
-    });
-
-    const view = new EditorView({
-      state,
-      parent,
-    });
-
-    viewRef.current = view;
-
-    return () => {
-      view.destroy();
-      viewRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [darkMode]); // Re-create on theme change
-
-  return { viewRef, isSyncUpdate };
 }
 
 /**
@@ -104,7 +36,13 @@ export function ScriptEditor({
   darkMode = false,
 }: ScriptEditorProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const { viewRef, isSyncUpdate } = useCodeMirror(parentRef, value, onChange, darkMode);
+  const isSyncUpdate = useRef(false);
+  const { viewRef } = useCodeMirror(parentRef, {
+    value,
+    onChange,
+    darkMode,
+    extensions: [batchSupport()],
+  });
 
   // Sync external value changes into the editor
   useEffect(() => {
