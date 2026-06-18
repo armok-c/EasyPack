@@ -17,7 +17,7 @@ import { useEdgeDrawer } from "@/hooks/useEdgeDrawer";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { SnapIndicator } from "@/components/SnapIndicator";
 import { detectSnapEdge } from "@/lib/drawer-geometry";
-import type { CommandItem } from "@/lib/types";
+import type { CommandItem, ManagedFile } from "@/lib/types";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
 import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
@@ -84,6 +84,10 @@ function App() {
     applyEnv,
     getProjectEnvs,
     getProjectActiveEnv,
+    // Phase 24: File management
+    addFiles,
+    deleteFiles,
+    updateFileContent,
   } = useProject();
 
   // Phase 23: Derived env state for current project
@@ -129,6 +133,26 @@ function App() {
   const handleApplyEnv = useCallback(
     async (envId: string) => selectedId ? applyEnv(selectedId, envId) : false,
     [selectedId, applyEnv]
+  );
+
+  // Phase 24: File management wrapper handlers
+  const handleAddFiles = useCallback(
+    async (projectId: string, envId: string, files: ManagedFile[]) => {
+      if (selectedId) await addFiles(selectedId, envId, files);
+    },
+    [selectedId, addFiles]
+  );
+  const handleDeleteFiles = useCallback(
+    async (projectId: string, envId: string, fileNames: string[]) => {
+      if (selectedId) await deleteFiles(selectedId, envId, fileNames);
+    },
+    [selectedId, deleteFiles]
+  );
+  const handleUpdateFile = useCallback(
+    async (projectId: string, envId: string, fileName: string, content: string) => {
+      if (selectedId) await updateFileContent(selectedId, envId, fileName, content);
+    },
+    [selectedId, updateFileContent]
   );
 
   // Phase 5 Plan 03: global number key shortcuts (per D-13)
@@ -561,6 +585,9 @@ function App() {
           onRenameEnv={handleRenameEnv}
           onDeleteEnv={handleDeleteEnvFn}
           onApplyEnv={handleApplyEnv}
+          onAddFiles={handleAddFiles}
+          onDeleteFiles={handleDeleteFiles}
+          onUpdateFile={handleUpdateFile}
         />
       </div>
       <SettingsDialog
