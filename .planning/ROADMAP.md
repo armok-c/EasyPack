@@ -60,7 +60,7 @@
 - [x] Phase 21: 打包版本号更新 — VER-05 (completed 2026-06-17)
 - [x] Phase 22: 全局指令移除与重构 — CMD-09, CMD-10 (planning complete) (completed 2026-06-17)
 - [x] Phase 23: 环境标签页与管理 — ENV-01, ENV-02, ENV-08 (completed 2026-06-18)
-- [ ] Phase 24: 文件管理与编辑器 — ENV-03, ENV-04, ENV-06, ENV-07
+- [x] Phase 24: 文件管理与编辑器 — ENV-03, ENV-04, ENV-06, ENV-07 (completed 2026-06-18)
 - [ ] Phase 25: 同步差异对比 — ENV-05
 
 </details>
@@ -92,7 +92,7 @@
 | 21. 打包版本号更新 | v2.1 | 1/1 | Complete    | 2026-06-17 |
 | 22. 全局指令移除与重构 | v2.1 | 3/3 | Complete    | 2026-06-17 |
 | 23. 环境标签页与管理 | v2.1 | 3/3 | Complete    | 2026-06-18 |
-| 24. 文件管理与编辑器 | v2.1 | 2/3 | In Progress|  |
+| 24. 文件管理与编辑器 | v2.1 | 3/3 | Complete   | 2026-06-18 |
 | 25. 同步差异对比 | v2.1 | 0/0 | Pending | — |
 
 ---
@@ -183,7 +183,7 @@ Plans:
 5. 编辑器支持语法错误检测，错误行有视觉标记
 6. 右下角保存按钮将修改保存到当前环境存储的副本（不直接写磁盘，需通过 ENV-08「启用」才应用到项目目录）
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -191,7 +191,7 @@ Plans:
 - [x] 24-02-PLAN.md — useProject 文件 CRUD 方法：addFiles/deleteFiles/updateFileContent
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 24-03-PLAN.md — 文件管理 UI：FileList（文件列表+删除确认）、AddFileDialog（文件选择对话框）、FileEditorDialog（CodeMirror编辑模态窗）、MainArea 集成
+- [x] 24-03-PLAN.md — 文件管理 UI：FileList（文件列表+删除确认）、AddFileDialog（文件选择对话框）、FileEditorDialog（CodeMirror编辑模态窗）、MainArea 集成
 
 ---
 
