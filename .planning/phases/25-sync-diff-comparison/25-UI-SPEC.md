@@ -1,10 +1,11 @@
 ---
 phase: 25
 slug: sync-diff-comparison
-status: draft
+status: approved
 shadcn_initialized: true
 preset: new-york-zinc-dark
 created: 2026-06-18
+reviewed_at: 2026-06-18
 ---
 
 # Phase 25 — UI Design Contract: 同步差异对比
@@ -56,7 +57,7 @@ Using Tailwind CSS v4 text size tokens (mapped to rem). All existing project tex
 | Body | `text-sm` | 14px | 400 (normal) | 1.25 (20px) | File list text, diff content, status bar, toast messages |
 | Label | `text-xs` | 12px | 400 (normal) | 1 (16px) | File counts, secondary info, tabs subtitle, metadata |
 | Heading | `text-base` | 16px | 600 (semibold) | 1.5 (24px) | Dialog title, dynamic title bar, empty state heading |
-| Subheading | `text-sm` | 14px | 500 (medium) | 1.25 (20px) | File tab labels, environment sub-tab labels, section headers |
+| Subheading | `text-sm` | 14px | 600 (semibold) | 1.25 (20px) | File tab labels, environment sub-tab labels, section headers |
 
 **Line height defaults:** Body 1.5 when used outside tables (shadcn `text-sm` is 1.25 by default; for paragraph text in empty states use `leading-normal`). The existing `text-sm` at 1.25 is appropriate for table/list contexts.
 
