@@ -23,3 +23,6 @@ Thumbs.db
 
 # GSD planning artifacts
 .planning/
+
+# pnpm workspace build config (auto-generated)
+pnpm-workspace.yaml
