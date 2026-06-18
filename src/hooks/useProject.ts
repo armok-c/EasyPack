@@ -163,6 +163,31 @@ export function useProject() {
     const map = Object.fromEntries(projectCmdEntries);
     setProjectCommandsMap(map);
 
+    // Phase 23: Restore environment data (per D-05)
+    const envKeys = allKeys.filter((k) => k.startsWith("projectEnvs:"));
+    const envEntries = await Promise.all(
+      envKeys.map(async (k) => {
+        const projectId = k.replace("projectEnvs:", "");
+        const envs = await s.get<Environment[]>(k);
+        return [projectId, envs ?? []] as const;
+      })
+    );
+    const envMap = Object.fromEntries(envEntries);
+    setProjectEnvsMap(envMap);
+
+    // Restore active env per project
+    const activeEnvKeys = allKeys.filter((k) => k.startsWith("projectActiveEnv:"));
+    const activeEnvEntries = await Promise.all(
+      activeEnvKeys.map(async (k) => {
+        const projectId = k.replace("projectActiveEnv:", "");
+        const activeId = await s.get<string>(k);
+        return [projectId, activeId ?? null] as const;
+      })
+    );
+    const validActiveEntries = activeEnvEntries.filter(([, v]) => v !== null) as [string, string][];
+    const activeEnvMap = Object.fromEntries(validActiveEntries);
+    setProjectActiveEnvMap(activeEnvMap);
+
     // Restore preset shortcut overrides
     const savedPresetShortcuts = await s.get<Record<string, string>>(PRESHORTCUTS_KEY);
     if (savedPresetShortcuts) setPresetShortcutsMap(savedPresetShortcuts);
@@ -401,6 +426,19 @@ export function useProject() {
       // Clean up project-level command data (both store and in-memory)
       await profileStore?.delete(projectCommandsKey(id));
       setProjectCommandsMap((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      // Phase 23: Clean up environment data (per D-04)
+      await profileStore?.delete(projectEnvsKey(id));
+      await profileStore?.delete(projectActiveEnvKey(id));
+      setProjectEnvsMap((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setProjectActiveEnvMap((prev) => {
         const next = { ...prev };
         delete next[id];
         return next;
@@ -972,6 +1010,24 @@ export function useProject() {
         }
       }
 
+      // Phase 23: Collect environment data (per D-03)
+      const envKeys = allKeys.filter((k) => k.startsWith("projectEnvs:"));
+      const envEntries = await Promise.all(
+        envKeys.map(async (k) => {
+          const projectId = k.replace("projectEnvs:", "");
+          const val = await profileStore.get(k);
+          return [projectId, val] as const;
+        })
+      );
+      const activeEnvKeys = allKeys.filter((k) => k.startsWith("projectActiveEnv:"));
+      const activeEnvEntries = await Promise.all(
+        activeEnvKeys.map(async (k) => {
+          const projectId = k.replace("projectActiveEnv:", "");
+          const val = await profileStore.get(k);
+          return [projectId, val] as const;
+        })
+      );
+
       const exportData: ProfileExportData = {
         formatVersion: 1,
         profileName,
@@ -984,6 +1040,9 @@ export function useProject() {
           shortcutBindings: await profileStore.get(SHORTCUT_BINDINGS_KEY),
           presetShortcuts: await profileStore.get(PRESHORTCUTS_KEY),
           recentCommands: await profileStore.get("recentCommands"),
+          // Phase 23: Export environment data
+          projectEnvs: Object.fromEntries(envEntries),
+          projectActiveEnvs: Object.fromEntries(activeEnvEntries),
         },
       };
 
@@ -1032,6 +1091,15 @@ export function useProject() {
         toast.error("配置文件损坏：projectCommands 格式错误");
         return;
       }
+      // Phase 23: Validate env data format
+      if (data.projectEnvs && typeof data.projectEnvs !== "object") {
+        toast.error("配置文件损坏：projectEnvs 格式错误");
+        return;
+      }
+      if (data.projectActiveEnvs && typeof data.projectActiveEnvs !== "object") {
+        toast.error("配置文件损坏：projectActiveEnvs 格式错误");
+        return;
+      }
 
       // 创建新 profile
       const id = crypto.randomUUID();
@@ -1051,6 +1119,20 @@ export function useProject() {
       if (data.projectCommands && typeof data.projectCommands === "object") {
         for (const [projectId, cmds] of Object.entries(data.projectCommands)) {
           await ps.set(projectCommandsKey(projectId), cmds);
+        }
+      }
+
+      // Phase 23: Import environment data
+      if (data.projectEnvs && typeof data.projectEnvs === "object") {
+        for (const [projectId, envs] of Object.entries(data.projectEnvs as Record<string, unknown>)) {
+          await ps.set(projectEnvsKey(projectId), envs);
+        }
+      }
+      if (data.projectActiveEnvs && typeof data.projectActiveEnvs === "object") {
+        for (const [projectId, activeId] of Object.entries(data.projectActiveEnvs as Record<string, unknown>)) {
+          if (activeId !== null) {
+            await ps.set(projectActiveEnvKey(projectId), activeId);
+          }
         }
       }
 
@@ -1123,6 +1205,17 @@ export function useProject() {
     // Phase 9: project-level command map + open folder
     projectCommandsMap,    // Record<string, CommandItem[]>
     openFolder,            // (path: string) => Promise<void>
+
+    // Phase 23: Environment management
+    projectEnvsMap,           // Record<string, Environment[]>
+    projectActiveEnvMap,      // Record<string, string>
+    createEnv,                // (projectId: string, name: string) => Promise<string | null>
+    renameEnv,                // (projectId: string, envId: string, newName: string) => Promise<void>
+    deleteEnv,                // (projectId: string, envId: string) => Promise<void>
+    setActiveEnv,             // (projectId: string, envId: string | null) => Promise<void>
+    applyEnv,                 // (projectId: string, envId: string) => Promise<boolean>
+    getProjectEnvs,           // (projectId: string) => Environment[]
+    getProjectActiveEnv,      // (projectId: string) => string | null
 
     // Phase 12: expose store for tray settings persistence
     store,                 // Store | null
