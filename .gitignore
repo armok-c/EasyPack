@@ -19,7 +19,7 @@ Thumbs.db
 *.log
 
 # Claude Code local config
-.claude/settings.local.json
+.claude/
 
 # GSD planning artifacts
 .planning/
