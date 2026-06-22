@@ -46,7 +46,6 @@ function App() {
     addCommand,
     updateCommand,
     deleteCommand,
-    enableProjectCommands,
     // Phase 5: project icon & color
     updateProjectStyle,
     // Phase 5: drag-and-drop reorder
@@ -135,24 +134,28 @@ function App() {
     [selectedId, applyEnv]
   );
 
-  // Phase 24: File management wrapper handlers
+  // Phase 24: File management wrapper handlers.
+  // IN-03 (Phase 22 review): use the passed projectId (MainArea forwards
+  // currentProject.id) instead of shadowing it with the closure-captured
+  // selectedId. Resolves TS6133 and stabilizes callback identity across
+  // project switches (no selectedId dependency).
   const handleAddFiles = useCallback(
     async (projectId: string, envId: string, files: ManagedFile[]) => {
-      if (selectedId) await addFiles(selectedId, envId, files);
+      await addFiles(projectId, envId, files);
     },
-    [selectedId, addFiles]
+    [addFiles]
   );
   const handleDeleteFiles = useCallback(
     async (projectId: string, envId: string, fileNames: string[]) => {
-      if (selectedId) await deleteFiles(selectedId, envId, fileNames);
+      await deleteFiles(projectId, envId, fileNames);
     },
-    [selectedId, deleteFiles]
+    [deleteFiles]
   );
   const handleUpdateFile = useCallback(
     async (projectId: string, envId: string, fileName: string, content: string) => {
-      if (selectedId) await updateFileContent(selectedId, envId, fileName, content);
+      await updateFileContent(projectId, envId, fileName, content);
     },
-    [selectedId, updateFileContent]
+    [updateFileContent]
   );
 
   // Phase 5 Plan 03: global number key shortcuts (per D-13)
@@ -572,7 +575,6 @@ function App() {
           addCommand={addCommand}
           updateCommand={updateCommand}
           deleteCommand={deleteCommand}
-          enableProjectCommands={enableProjectCommands}
           activeZone={activeZone}
           onZoneSwitch={handleZoneSwitch}
           projectInfo={projectInfo}
