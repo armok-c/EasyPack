@@ -11,7 +11,9 @@ function makeCommand(overrides: Partial<CommandItem> & { id: string; shortcut?: 
     command: "echo test",
     icon: "Terminal",
     type: "custom",
-    scope: "global" as const,
+    // IN-01 (Phase 22 review): scope narrowed to the single literal "project"
+    // (src/lib/types.ts:15). The old "global" value was removed by Phase 22.
+    scope: "project" as const,
     addedAt: Date.now(),
     ...overrides,
   };
