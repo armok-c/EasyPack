@@ -24,6 +24,9 @@ const targets = [
   {
     path: resolve(ROOT, 'src-tauri/Cargo.toml'),
     name: 'Cargo.toml',
+    // 假设（D-06）：[package] 段是文件第一个 section，且 version 是该段第一个字段。
+    // 正则不锚定段名，会替换文件中第一个匹配 `version = "..."` 的行。
+    // 若未来 Cargo.toml 在 [package] 之前出现其他段的独立 version 字段，需改用 TOML 解析或段内替换。
     regex: /^version\s*=\s*"[^"]*"/m,
     replacement: 'version = "' + sourceVersion + '"',
   },
