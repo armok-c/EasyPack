@@ -18,8 +18,10 @@ const targets = [
   {
     path: resolve(ROOT, 'src-tauri/tauri.conf.json'),
     name: 'tauri.conf.json',
-    regex: /"version"\s*:\s*"[^"]*"/,
-    replacement: '"version": "' + sourceVersion + '"',
+    // 锁定行首紧跟 2 空格缩进（JSON.stringify 默认输出顶层字段为 2 空格缩进），
+    // 避免未来插件配置中出现嵌套 "version": 字段时误伤（D-04）。
+    regex: /^  "version"\s*:\s*"[^"]*"/m,
+    replacement: '  "version": "' + sourceVersion + '"',
   },
   {
     path: resolve(ROOT, 'src-tauri/Cargo.toml'),
