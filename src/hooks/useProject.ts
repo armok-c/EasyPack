@@ -946,48 +946,6 @@ export function useProject() {
     await profileStore?.set(SHORTCUT_BINDINGS_KEY, {});
   }, [profileStore]);
 
-  // --- Phase 11: Shortcut assignment (@deprecated — use setShortcutBinding/clearShortcutBinding instead) ---
-
-  // Assign a shortcut to a command (Phase 22: only projectCommandsMap)
-  const assignShortcut = useCallback(
-    async (commandId: string, shortcut: string) => {
-      // Check for within-app conflict across current project's commands
-      const conflict = commands.find(
-        (c) => c.shortcut === shortcut && c.id !== commandId
-      );
-      if (conflict) {
-        toast.error("快捷键冲突", {
-          description: `快捷键 ${shortcutToDisplay(shortcut)} 已被指令 "${conflict.name}" 使用`,
-        });
-        return false;
-      }
-
-      if (!selectedId) return false;
-      const updated = (projectCommandsMap[selectedId] ?? []).map((c) =>
-        c.id === commandId ? { ...c, shortcut } : c
-      );
-      setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
-      await profileStore?.set(projectCommandsKey(selectedId), updated);
-      toast.success(`已绑定快捷键: ${shortcutToDisplay(shortcut)}`);
-      return true;
-    },
-    [selectedId, projectCommandsMap, profileStore, commands]
-  );
-
-  // Clear a shortcut binding from a command (Phase 22: only projectCommandsMap)
-  const clearShortcut = useCallback(
-    async (commandId: string) => {
-      if (!selectedId) return;
-      const updated = (projectCommandsMap[selectedId] ?? []).map((c) =>
-        c.id === commandId ? { ...c, shortcut: undefined } : c
-      );
-      setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
-      await profileStore?.set(projectCommandsKey(selectedId), updated);
-      toast.success("已清除快捷键");
-    },
-    [selectedId, projectCommandsMap, profileStore]
-  );
-
   // --- Project-level command set management ---
 
   // Enable project-level commands: init empty set and enter edit mode (Phase 22: no defaults)
@@ -1267,10 +1225,6 @@ export function useProject() {
 
     // Phase 17: script command execution (dispatches single-line or multi-line)
     executeScriptCommand, // (cmd: CommandItem) => Promise<boolean>
-
-    // Phase 11: shortcut assignment (legacy, preserved for transition)
-    assignShortcut, // (commandId: string, shortcut: string) => Promise<boolean>
-    clearShortcut, // (commandId: string) => Promise<void>
 
     // Phase 18: unified shortcut bindings
     shortcutBindings,    // Record<string, string>
