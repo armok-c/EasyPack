@@ -40,11 +40,14 @@ for (const target of targets) {
   let content;
 
   // Check file exists and is readable/writable (D-10)
+  // 注：Windows 上 accessSync 的 W_OK 检查基于只读属性，可靠性有限（WR-04）。
+  // 此处为尽力而为的预检，最终错误处理依赖下方 writeFileSync 的 try-catch。
   try {
     accessSync(target.path, constants.R_OK | constants.W_OK);
     content = readFileSync(target.path, 'utf-8');
   } catch (err) {
-    console.error('Error: Cannot read/write ' + target.path + ': ' + err.message);
+    console.error('Error: Cannot read/write ' + target.path + ': ' + err.message +
+      ' (check if file is read-only or locked by another process)');
     process.exit(1);
   }
 
