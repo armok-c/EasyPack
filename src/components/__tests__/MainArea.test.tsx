@@ -28,7 +28,6 @@ function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
     addCommand: vi.fn().mockResolvedValue(undefined),
     updateCommand: vi.fn().mockResolvedValue(undefined),
     deleteCommand: vi.fn().mockResolvedValue(undefined),
-    enableProjectCommands: vi.fn().mockResolvedValue(undefined),
     activeZone: "main" as const,
     onZoneSwitch: vi.fn(),
     projectInfo: null,

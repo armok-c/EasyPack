@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { FolderOpen, Settings, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { CommandCard } from "@/components/CommandCard";
 import { CommandDialog } from "@/components/CommandDialog";
 import { EnvTabBar } from "@/components/EnvTabBar";
@@ -24,7 +23,6 @@ interface MainAreaProps {
   addCommand: (name: string, command: string, icon?: string, extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
   updateCommand: (id: string, data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
   deleteCommand: (id: string) => Promise<void>;
-  enableProjectCommands: () => Promise<void>;
   // Phase 5 Plan 03: keyboard navigation zone management
   activeZone: "sidebar" | "main";
   onZoneSwitch: () => void;
@@ -60,7 +58,6 @@ export function MainArea({
   addCommand,
   updateCommand,
   deleteCommand,
-  enableProjectCommands,
   activeZone,
   onZoneSwitch,
   projectInfo,
