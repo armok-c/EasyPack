@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import type { CommandItem } from "@/lib/types";
 import { ICON_OPTIONS, DEFAULT_ICON, getIconByName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,24 @@ export function CommandDialog({
   const [commandDirty, setCommandDirty] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+
+  // IN-03 (Phase 22 review): track the html.dark class in React state so the
+  // ScriptEditor darkMode prop is reactive to runtime theme changes instead
+  // of reading document.documentElement.classList once at render time (which
+  // produced stale results under jsdom tests and on theme toggle without a
+  // re-render). A MutationObserver on <html>'s class attribute updates the
+  // state when the dark class is added or removed.
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Phase 17: batch syntax detection for multi-line scripts
   const isBatch = useBatchDetect(scriptContent);
@@ -332,7 +350,7 @@ export function CommandDialog({
                 value={scriptContent}
                 onChange={setScriptContent}
                 height="270px"
-                darkMode={document.documentElement.classList.contains("dark")}
+                darkMode={isDark}
               />
             )}
             {activeTab === "single" && commandDirty && command.trim().length === 0 && (
