@@ -66,6 +66,13 @@ export function CommandDialog({
   const [executionMode, setExecutionMode] = useState<ExecutionMode>(
     () => initialData?.executionMode ?? "strict"
   );
+  // WR-01 (Phase 22 review, iter 3): tracks whether the user has typed in
+  // the multi-line ScriptEditor. Distinguishes "multi-line tab never
+  // visited" (preserve initialData script) from "visited and cleared"
+  // (respect the clear → drop scriptLines). Without this, a user who clears
+  // the script body then saves from the single-line tab silently has the
+  // stale original re-persisted.
+  const [scriptTouched, setScriptTouched] = useState(false);
 
   const [name, setName] = useState(() => initialData?.name ?? "");
   const [command, setCommand] = useState(() => initialData?.command ?? "");
@@ -136,6 +143,15 @@ export function CommandDialog({
     setActiveTab(tab);
   }, [activeTab, command]);
 
+  // WR-01 (iter 3): wrap ScriptEditor's onChange so direct user edits mark
+  // the script as touched. The tab-switch carry above deliberately does NOT
+  // mark touched — only real editor input should override the initialData
+  // fallback.
+  const handleScriptChange = useCallback((value: string) => {
+    setScriptContent(value);
+    setScriptTouched(true);
+  }, []);
+
   const handleCategoryChange = useCallback((categoryId: string) => {
     setSelectedCategory(categoryId);
     setSelectedPresetId("");
@@ -172,23 +188,27 @@ export function CommandDialog({
     } else {
       // WR-07/WR-01 (Phase 22 review): when submitting from the single-line
       // tab, preserve the LIVE multi-line state, not the frozen initialData
-      // prop. scriptContent holds whatever the user last edited on the
-      // multi-line tab (or the value seeded from initialData on mount via
-      // the useState initializer — so behavior is unchanged when the
-      // multi-line tab was never visited). Reading initialData directly
-      // would silently drop multi-line edits because props don't update on
-      // each keystroke. New commands (initialData === null, scriptContent
-      // empty) keep both fields undefined, matching prior behavior.
-      const hasScript = scriptContent.trim().length > 0;
+      // prop. scriptTouched distinguishes "user edited the multi-line tab"
+      // (respect their intent — including clearing the script, which yields
+      // undefined scriptLines) from "multi-line tab never visited" (fall
+      // back to initialData so an existing script is preserved). Reading
+      // initialData directly would silently drop edits (props don't update
+      // per keystroke); the earlier hasScript guard also dropped a clear.
+      const scriptLines = scriptTouched
+        ? (scriptContent.trim() || undefined)
+        : initialData?.scriptLines;
+      const effectiveMode = scriptTouched
+        ? executionMode
+        : initialData?.executionMode;
       onSubmit({
         name: name.trim(),
         command: command.trim(),
         icon: selectedIcon,
-        scriptLines: hasScript ? scriptContent : initialData?.scriptLines,
-        executionMode: hasScript ? executionMode : initialData?.executionMode,
+        scriptLines,
+        executionMode: effectiveMode,
       });
     }
-  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit, initialData]);
+  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit, initialData, scriptTouched]);
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
@@ -205,6 +225,7 @@ export function CommandDialog({
         setActiveTab(initialData?.scriptLines ? "multi" : "single");
         setScriptContent(initialData?.scriptLines ?? "");
         setExecutionMode(initialData?.executionMode ?? "strict");
+        setScriptTouched(false);
       }
       onOpenChange(newOpen);
     },
@@ -359,7 +380,7 @@ export function CommandDialog({
             ) : (
               <ScriptEditor
                 value={scriptContent}
-                onChange={setScriptContent}
+                onChange={handleScriptChange}
                 height="270px"
                 darkMode={isDark}
               />
