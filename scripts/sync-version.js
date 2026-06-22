@@ -1,7 +1,10 @@
 import { readFileSync, writeFileSync, accessSync, constants } from 'fs';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const ROOT = process.cwd();
+// 基于脚本自身位置推导项目根目录（scripts/ 的父目录），
+// 避免依赖 process.cwd()（IN-04）：开发者从任意目录运行均可正确定位文件。
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // 1. Read source version from package.json (D-09)
 let sourceVersion;
