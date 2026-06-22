@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import type { CommandItem, Environment, ManagedFile, ProfileMeta, ProfileExportData } from "@/lib/types";
 import { DEFAULT_ICON } from "@/lib/icons";
-import { shortcutToDisplay, findConflict } from "@/lib/shortcutUtils";
+import { findConflict } from "@/lib/shortcutUtils";
 
 export interface ProjectItem {
   id: string;       // normalized path as ID (lowercase, forward slashes)
