@@ -83,8 +83,10 @@ export function useProject() {
   const [projectActiveEnvMap, setProjectActiveEnvMap] = useState<Record<string, string>>({});
   const [editMode, setEditMode] = useState(false);
 
-  // Phase 11: preset shortcut overrides (persisted separately since presets are derived fresh)
-  const [presetShortcutsMap, setPresetShortcutsMap] = useState<Record<string, string>>({});
+  // Phase 11/WR-04 (Phase 22 review): preset shortcut overrides persist at
+  // PRESHORTCUTS_KEY. The store value is read directly on export, so there
+  // is no React state mirror — the former presetShortcutsMap state was
+  // write-only dead code (set on load, never read) and was removed.
   const PRESHORTCUTS_KEY = "presetShortcuts";
 
   // Phase 18: unified shortcut bindings (independent store key)
@@ -184,19 +186,19 @@ export function useProject() {
         return [projectId, activeId ?? null] as const;
       })
     );
-    // IN-06 (Phase 22 review): use a type guard instead of a runtime filter
-    // plus `as [string, string][]` so the narrowing flows through the type
-    // system honestly (no assertion bypassing the check).
-    const isStringEntry = (entry: readonly [string, string | null]): entry is [string, string] =>
-      entry[1] !== null;
+    // IN-06/WR-02 (Phase 22 review): use a type guard instead of a runtime
+    // filter plus `as [string, string][]` so narrowing flows through the
+    // type system honestly. The annotation includes `undefined` (WR-02)
+    // because the upstream store read resolves missing keys to undefined;
+    // `!= null` rejects both null and undefined as defense-in-depth, even
+    // though the local `?? null` coercion above already normalizes to null.
+    const isStringEntry = (
+      entry: readonly [string, string | null | undefined]
+    ): entry is [string, string] =>
+      entry[1] != null;
     const validActiveEntries = activeEnvEntries.filter(isStringEntry);
     const activeEnvMap = Object.fromEntries(validActiveEntries);
     setProjectActiveEnvMap(activeEnvMap);
-
-    // Restore preset shortcut overrides
-    const savedPresetShortcuts = await s.get<Record<string, string>>(PRESHORTCUTS_KEY);
-    if (savedPresetShortcuts) setPresetShortcutsMap(savedPresetShortcuts);
-    else setPresetShortcutsMap({});
 
     // Restore shortcut bindings
     const savedBindings = await s.get<Record<string, string>>(SHORTCUT_BINDINGS_KEY);
@@ -306,6 +308,18 @@ export function useProject() {
         if (key.startsWith("projectCommands:")) {
           await ms.delete(key);
         }
+      }
+
+      // Phase 22 (WR-03): purge legacy CUSTOM_COMMANDS_KEY from the MAIN
+      // store. Pre-Phase-22 installs wrote global commands here (the profile
+      // store did not exist yet) and CUSTOM_COMMANDS_KEY was never in
+      // keysToMigrate, so without this the cleanup advertised by the boot
+      // toast never fires for the legacy users who need it most. Relies on
+      // the ms.save() at the end of this function to persist the delete.
+      const legacyCustomCmds = await ms.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
+      if (legacyCustomCmds && legacyCustomCmds.length > 0) {
+        await ms.delete(CUSTOM_COMMANDS_KEY);
+        toast.info("全局指令已移除，请使用项目环境添加指令");
       }
     } else {
       // 全新安装：创建空默认 profile
