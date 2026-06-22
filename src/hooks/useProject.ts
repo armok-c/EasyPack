@@ -1133,7 +1133,6 @@ export function useProject() {
         data: {
           projects: await profileStore.get(PROJECTS_KEY),
           selectedProjectId: await profileStore.get(SELECTED_KEY),
-          customCommands: await profileStore.get(CUSTOM_COMMANDS_KEY),
           projectCommands,
           shortcutBindings: await profileStore.get(SHORTCUT_BINDINGS_KEY),
           presetShortcuts: await profileStore.get(PRESHORTCUTS_KEY),
@@ -1177,10 +1176,6 @@ export function useProject() {
         toast.error("配置文件损坏：projects 不是数组");
         return;
       }
-      if (data.customCommands && !Array.isArray(data.customCommands)) {
-        toast.error("配置文件损坏：customCommands 不是数组");
-        return;
-      }
       if (data.shortcutBindings && typeof data.shortcutBindings !== "object") {
         toast.error("配置文件损坏：shortcutBindings 格式错误");
         return;
@@ -1209,7 +1204,6 @@ export function useProject() {
       const ps = await load(profileStorePath(id), { autoSave: 100, defaults: {} });
       if (data.projects) await ps.set(PROJECTS_KEY, data.projects);
       if (data.selectedProjectId !== undefined) await ps.set(SELECTED_KEY, data.selectedProjectId);
-      if (data.customCommands) await ps.set(CUSTOM_COMMANDS_KEY, data.customCommands);
       if (data.shortcutBindings) await ps.set(SHORTCUT_BINDINGS_KEY, data.shortcutBindings);
       if (data.presetShortcuts) await ps.set(PRESHORTCUTS_KEY, data.presetShortcuts);
       if (data.recentCommands) await ps.set("recentCommands", data.recentCommands);

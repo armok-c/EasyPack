@@ -67,7 +67,11 @@ export interface ProfileExportData {
   data: {
     projects: unknown;
     selectedProjectId: unknown;
-    customCommands: unknown;
+    // Phase 22 (WR-01): `customCommands` removed from the export schema.
+    // Legacy global commands are deleted on startup (CUSTOM_COMMANDS_KEY
+    // cleanup), so re-exporting/importing the key resurrected dead data.
+    // Old export files with a `customCommands` field still parse — the
+    // extra property is simply ignored on import.
     projectCommands: Record<string, unknown>;
     shortcutBindings: unknown;
     presetShortcuts: unknown;
