@@ -460,7 +460,10 @@ export function useProject() {
         fetchProjectInfo(project.path);
       }
     },
-    [profileStore, projects, fetchProjectInfo, projectCommandsMap]
+    // projectCommandsMap intentionally omitted — the body above does not read it
+    // (WR-04): including it widened the callback's invalidation scope on every
+    // command mutation, busting memoized consumers without affecting behavior.
+    [profileStore, projects, fetchProjectInfo]
   );
 
   // Folder picker (inherits Phase 1 logic, calls addProject internally)
