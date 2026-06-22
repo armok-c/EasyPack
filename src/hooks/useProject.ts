@@ -4,7 +4,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import type { CommandItem, Environment, ProfileMeta, ProfileExportData } from "@/lib/types";
+import type { CommandItem, Environment, ManagedFile, ProfileMeta, ProfileExportData } from "@/lib/types";
 import { DEFAULT_ICON } from "@/lib/icons";
 import { shortcutToDisplay, findConflict } from "@/lib/shortcutUtils";
 
