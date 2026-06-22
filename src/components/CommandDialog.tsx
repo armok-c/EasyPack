@@ -45,6 +45,14 @@ export function CommandDialog({
   onSubmit,
   initialData = null,
 }: CommandDialogProps) {
+  // IN-05 (Phase 22 review): the useState initializers below seed from
+  // initialData once, on mount. They are NOT re-run when the parent passes a
+  // different initialData on a subsequent open. The parent MUST remount this
+  // component via a `key` tied to the editing target (MainArea.tsx uses
+  // `key={editingCommand?.id ?? "add"}`) so that switching from editing one
+  // command to another (or to add mode) resets all form state. The
+  // handleOpenChange(false) path also resets tab/script state on close, but
+  // it cannot cover the open-then-edit-different-command transition alone.
   const isEditing = initialData !== null && initialData !== undefined;
 
   // Phase 17: Tab state -- "single" for single-line, "multi" for multi-line script
