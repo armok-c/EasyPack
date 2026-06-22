@@ -35,6 +35,16 @@ function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
     projectInfoLoading: false,
     projectInfoError: false,
     onOpenFolder: vi.fn(),
+    // Phase 23/24 required props — MainArea unconditionally renders EnvSwitchBar/EnvTabBar with envs.
+    envs: [],
+    activeEnvId: null,
+    onCreateEnv: vi.fn().mockResolvedValue(null),
+    onRenameEnv: vi.fn().mockResolvedValue(undefined),
+    onDeleteEnv: vi.fn().mockResolvedValue(undefined),
+    onApplyEnv: vi.fn().mockResolvedValue(false),
+    onAddFiles: vi.fn().mockResolvedValue(undefined),
+    onDeleteFiles: vi.fn().mockResolvedValue(undefined),
+    onUpdateFile: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
