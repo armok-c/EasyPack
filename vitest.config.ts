@@ -6,7 +6,10 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: [],
-    exclude: ["**/node_modules/**", "**/.claude/**"],
+    // IN-02 (Phase 22 review): also exclude .planning/ so stray generated
+    // fixtures (e.g. ad-hoc .test.ts files produced by the GSD workflow)
+    // cannot be picked up by vitest's glob.
+    exclude: ["**/node_modules/**", "**/.claude/**", "**/.planning/**"],
   },
   esbuild: {
     jsx: "automatic",
