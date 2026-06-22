@@ -169,12 +169,6 @@ describe("MainArea - Phase 22 edit mode UI", () => {
     expect(onExecute).toHaveBeenCalledWith("cmd.exe");
   });
 
-  it("does not show Toggle Group buttons", () => {
-    render(<MainArea {...getDefaultProps()} />);
-    expect(screen.queryByRole("radio", { name: "全局指令" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: "项目指令" })).not.toBeInTheDocument();
-  });
-
   // CR-03 (Phase 22 review): the section-label tests ("项目环境" present,
   // "项目指令" absent) were removed. Neither string is rendered by MainArea
   // or any child component — the Phase 22 plan's section-label rename was
@@ -182,6 +176,12 @@ describe("MainArea - Phase 22 edit mode UI", () => {
   // which replaced the old "项目指令" section header wholesale. Adding a
   // new "项目环境" heading would introduce UI surface not requested by
   // this review, so the detached assertions are dropped rather than
-  // forcing a label into production code. Toggle Group absence test above
-  // still guards against regression of the removed scope selector.
+  // forcing a label into production code.
+  //
+  // WR-06 (Phase 22 review): the Toggle Group absence test was also removed.
+  // It guarded a removed UI element (scope selector with radio roles named
+  // "全局指令"/"项目指令") that no code path can re-introduce — the scope
+  // concept itself was narrowed to the single literal "project" in
+  // src/lib/types.ts:15, so no <ToggleGroup> with per-scope radios can be
+  // rendered. Keeping the test would let it silently rot.
 });
