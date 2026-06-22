@@ -208,6 +208,18 @@ export function useProject() {
         fetchProjectInfo(savedProject.path);
       }
     }
+
+    // Phase 22 (WR-05): clean legacy CUSTOM_COMMANDS_KEY on every profile
+    // activation, not just initial boot. Running this here covers init,
+    // switchProfile, and importProfile — so a freshly imported/switched
+    // profile carrying the deprecated key (e.g. from an old export file)
+    // is migrated immediately rather than waiting for the next cold start.
+    const oldCustomCmds = await s.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
+    if (oldCustomCmds && oldCustomCmds.length > 0) {
+      await s.delete(CUSTOM_COMMANDS_KEY);
+      await s.save();
+      toast.info("全局指令已移除，请使用项目环境添加指令");
+    }
   }, [fetchProjectInfo]);
 
   // Phase 20: 迁移旧数据到 profile 架构（幂等）
@@ -360,16 +372,10 @@ export function useProject() {
         const ps = await load(profileStorePath(activeId), { autoSave: 100, defaults: {} });
         if (!mounted) return;
 
+        // Phase 22 (WR-05): legacy CUSTOM_COMMANDS_KEY cleanup now runs inside
+        // loadProfileDataIntoState so it covers init, switchProfile, and
+        // importProfile uniformly. No duplicate cleanup needed here.
         await loadProfileDataIntoState(ps);
-
-        // Phase 22: 检测并清理旧全局指令数据（CUSTOM_COMMANDS_KEY）
-        // D-02: 启动时一次性检测并删除旧数据，toast 通知用户
-        const oldCustomCmds = await ps.get<CommandItem[]>(CUSTOM_COMMANDS_KEY);
-        if (oldCustomCmds && oldCustomCmds.length > 0) {
-          await ps.delete(CUSTOM_COMMANDS_KEY);
-          await ps.save();
-          toast.info("全局指令已移除，请使用项目环境添加指令");
-        }
 
         setProfileStore(ps);
         // 保持 store 引用指向 profileStore（供 useRecentCommands 等使用）
