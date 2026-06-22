@@ -144,13 +144,22 @@ export function CommandDialog({
         executionMode: effectiveMode,
       });
     } else {
+      // WR-07 (Phase 22 review): when editing an existing multi-line command
+      // from the single-line tab, preserve the existing scriptLines and
+      // executionMode instead of letting updateCommand overwrite them with
+      // undefined. The single-line tab edits only the one-line summary
+      // (`command`) — the underlying multi-line script body and its
+      // execution mode are kept intact. New commands (initialData === null)
+      // have nothing to preserve, so the fields stay undefined as before.
       onSubmit({
         name: name.trim(),
         command: command.trim(),
         icon: selectedIcon,
+        scriptLines: initialData?.scriptLines,
+        executionMode: initialData?.executionMode,
       });
     }
-  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit]);
+  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit, initialData]);
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
