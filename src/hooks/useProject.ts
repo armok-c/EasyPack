@@ -184,7 +184,12 @@ export function useProject() {
         return [projectId, activeId ?? null] as const;
       })
     );
-    const validActiveEntries = activeEnvEntries.filter(([, v]) => v !== null) as [string, string][];
+    // IN-06 (Phase 22 review): use a type guard instead of a runtime filter
+    // plus `as [string, string][]` so the narrowing flows through the type
+    // system honestly (no assertion bypassing the check).
+    const isStringEntry = (entry: readonly [string, string | null]): entry is [string, string] =>
+      entry[1] !== null;
+    const validActiveEntries = activeEnvEntries.filter(isStringEntry);
     const activeEnvMap = Object.fromEntries(validActiveEntries);
     setProjectActiveEnvMap(activeEnvMap);
 
