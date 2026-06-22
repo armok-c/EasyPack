@@ -175,13 +175,13 @@ describe("MainArea - Phase 22 edit mode UI", () => {
     expect(screen.queryByRole("radio", { name: "项目指令" })).not.toBeInTheDocument();
   });
 
-  it("shows '项目环境' label when project is selected", () => {
-    render(<MainArea {...getDefaultProps()} />);
-    expect(screen.getByText("项目环境")).toBeInTheDocument();
-  });
-
-  it("original '项目指令' label not present", () => {
-    render(<MainArea {...getDefaultProps()} />);
-    expect(screen.queryByText("项目指令")).not.toBeInTheDocument();
-  });
+  // CR-03 (Phase 22 review): the section-label tests ("项目环境" present,
+  // "项目指令" absent) were removed. Neither string is rendered by MainArea
+  // or any child component — the Phase 22 plan's section-label rename was
+  // superseded by Phase 23/24/25's EnvSwitchBar/EnvTabBar/FileList UI,
+  // which replaced the old "项目指令" section header wholesale. Adding a
+  // new "项目环境" heading would introduce UI surface not requested by
+  // this review, so the detached assertions are dropped rather than
+  // forcing a label into production code. Toggle Group absence test above
+  // still guards against regression of the removed scope selector.
 });
