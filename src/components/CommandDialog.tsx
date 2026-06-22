@@ -170,19 +170,22 @@ export function CommandDialog({
         executionMode: effectiveMode,
       });
     } else {
-      // WR-07 (Phase 22 review): when editing an existing multi-line command
-      // from the single-line tab, preserve the existing scriptLines and
-      // executionMode instead of letting updateCommand overwrite them with
-      // undefined. The single-line tab edits only the one-line summary
-      // (`command`) — the underlying multi-line script body and its
-      // execution mode are kept intact. New commands (initialData === null)
-      // have nothing to preserve, so the fields stay undefined as before.
+      // WR-07/WR-01 (Phase 22 review): when submitting from the single-line
+      // tab, preserve the LIVE multi-line state, not the frozen initialData
+      // prop. scriptContent holds whatever the user last edited on the
+      // multi-line tab (or the value seeded from initialData on mount via
+      // the useState initializer — so behavior is unchanged when the
+      // multi-line tab was never visited). Reading initialData directly
+      // would silently drop multi-line edits because props don't update on
+      // each keystroke. New commands (initialData === null, scriptContent
+      // empty) keep both fields undefined, matching prior behavior.
+      const hasScript = scriptContent.trim().length > 0;
       onSubmit({
         name: name.trim(),
         command: command.trim(),
         icon: selectedIcon,
-        scriptLines: initialData?.scriptLines,
-        executionMode: initialData?.executionMode,
+        scriptLines: hasScript ? scriptContent : initialData?.scriptLines,
+        executionMode: hasScript ? executionMode : initialData?.executionMode,
       });
     }
   }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit, initialData]);
