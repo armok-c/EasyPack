@@ -1,5 +1,3 @@
-import type { CommandItem } from "./types";
-
 export interface PresetCategory {
   id: string;
   label: string;
@@ -55,32 +53,3 @@ export const ALL_PRESETS: PresetCommand[] = [
   { id: "preset-rs-fmt",       name: "格式化代码",  command: "cargo fmt",                 icon: "Ship", category: "rust" },
   { id: "preset-rs-check",     name: "检查编译",    command: "cargo check",               icon: "Ship", category: "rust" },
 ];
-
-/**
- * Returns only the 2 default command items for new projects.
- * @deprecated Phase 22 — 不再用于初始化项目指令集（D-08），仅保留供外部兼容引用。
- * Per D-06: only git pull + claude retained as defaults.
- * Replaces the old getPresetAsCommandItems() which returned 4 items.
- */
-export function getDefaultsAsCommandItems(): CommandItem[] {
-  return [
-    {
-      id: "preset-git-pull",
-      name: "拉取代码",
-      command: "git pull",
-      icon: "GitBranch",
-      type: "preset" as const,
-      scope: "project" as const,
-      addedAt: 0,
-    },
-    {
-      id: "preset-claude",
-      name: "启动 Claude",
-      command: "claude",
-      icon: "Sparkles",
-      type: "preset" as const,
-      scope: "project" as const,
-      addedAt: 1,
-    },
-  ];
-}
