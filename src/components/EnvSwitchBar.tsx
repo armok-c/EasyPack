@@ -24,10 +24,19 @@ export function EnvSwitchBar({
 }: EnvSwitchBarProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Reset local selection when envs array changes
+  // WR-07: do NOT reset selection on every envs reference change. The parent
+  // passes a fresh array reference on any unrelated useProject state change
+  // (e.g. editing a command in another project), which would silently clear
+  // the user's pending selection mid-interaction. Only clear the selection
+  // when the currently-selected id is no longer present in envs, keyed on a
+  // stable signature so re-renders with the same env ids do not fire.
+  const envIdSignature = envs.map((e) => e.id).join(",");
   useEffect(() => {
-    setSelectedId(null);
-  }, [envs]);
+    if (selectedId !== null && !envs.some((e) => e.id === selectedId)) {
+      setSelectedId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envIdSignature]);
 
   const handleApply = useCallback(() => {
     if (selectedId) {
