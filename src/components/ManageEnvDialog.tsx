@@ -156,13 +156,21 @@ export function ManageEnvDialog({
     [activeEnvId]
   );
 
+  // IN-01: re-derive isActive at confirm time from the live activeEnvId. The
+  // snapshot captured at open time can go stale if the active env changes
+  // while the dialog is open, allowing deletion of a now-active env or
+  // blocking deletion of a now-inactive one.
+  const isDeleteTargetActive =
+    deleteState !== null && deleteState.envId === activeEnvId;
+
   // Confirm delete
   const handleConfirmDelete = useCallback(async () => {
-    if (!deleteState || deleteState.isActive) return;
+    if (!deleteState) return;
+    if (deleteState.envId === activeEnvId) return; // re-derived guard
     await onDeleteEnv(deleteState.envId);
     toast.success(`已删除环境: ${deleteState.envName}`);
     setDeleteState(null);
-  }, [deleteState, onDeleteEnv]);
+  }, [deleteState, activeEnvId, onDeleteEnv]);
 
   return (
     <>
@@ -312,7 +320,7 @@ export function ManageEnvDialog({
             <AlertDialogHeader>
               <AlertDialogTitle>确认删除环境?</AlertDialogTitle>
               <AlertDialogDescription>
-                {deleteState.isActive ? (
+                {isDeleteTargetActive ? (
                   <>
                     环境「{deleteState.envName}」当前已应用，请先切换到其他环境后再删除。
                   </>
@@ -326,15 +334,15 @@ export function ManageEnvDialog({
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
               <AlertDialogAction
-                disabled={deleteState.isActive}
+                disabled={isDeleteTargetActive}
                 className={cn(
-                  deleteState.isActive
+                  isDeleteTargetActive
                     ? "opacity-50 cursor-not-allowed"
                     : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 )}
-                onClick={deleteState.isActive ? undefined : handleConfirmDelete}
+                onClick={isDeleteTargetActive ? undefined : handleConfirmDelete}
               >
-                {deleteState.isActive ? "无法删除" : "删除"}
+                {isDeleteTargetActive ? "无法删除" : "删除"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
