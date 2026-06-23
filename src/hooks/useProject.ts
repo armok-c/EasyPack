@@ -62,6 +62,72 @@ function generateProjectId(path: string): string {
     .toLowerCase();
 }
 
+/**
+ * Phase 23 review WR-04 / CR-01: validate an imported `ManagedFile.name`.
+ *
+ * Managed file names store project-relative paths (e.g. `.env`,
+ * `config/settings.json`). They must NOT be absolute and must not traverse
+ * out of the project directory. Rejecting malformed names at import time
+ * closes the upstream feeder for the path-traversal / arbitrary-write bug
+ * fixed in `resolve_safe_path` (CR-01).
+ *
+ * Returns `true` if the name is a safe relative path, `false` otherwise.
+ */
+function isSafeRelativeFileName(name: unknown): name is string {
+  if (typeof name !== "string" || name.length === 0) return false;
+  if (name.includes('"')) return false;
+  // Absolute path (Windows drive letter, UNC, POSIX leading slash, POSIX ~).
+  if (/^[A-Za-z]:[\\/]/.test(name)) return false;
+  if (name.startsWith("\\\\")) return false;
+  if (name.startsWith("/")) return false;
+  if (name.startsWith("~")) return false;
+  // Any `..` segment — split on both separators and reject the ParentDir token.
+  const segments = name.split(/[\\/]/);
+  if (segments.some((seg) => seg === "..")) return false;
+  return true;
+}
+
+/**
+ * Phase 23 review WR-04: validate an imported `Environment` value.
+ *
+ * Returns the normalized `Environment` if the shape is correct and every
+ * managed file name is a safe relative path, otherwise `null` (caller
+ * rejects the whole import).
+ */
+function validateImportedEnvironment(value: unknown): Environment | null {
+  if (!value || typeof value !== "object") return null;
+  const env = value as Record<string, unknown>;
+  if (
+    typeof env.id !== "string" ||
+    typeof env.name !== "string" ||
+    typeof env.createdAt !== "number" ||
+    typeof env.updatedAt !== "number" ||
+    !Array.isArray(env.files)
+  ) {
+    return null;
+  }
+  const files: ManagedFile[] = [];
+  for (const f of env.files) {
+    if (!f || typeof f !== "object") return null;
+    const mf = f as Record<string, unknown>;
+    if (
+      !isSafeRelativeFileName(mf.name) ||
+      typeof mf.content !== "string" ||
+      typeof mf.addedAt !== "number"
+    ) {
+      return null;
+    }
+    files.push({ name: mf.name, content: mf.content, addedAt: mf.addedAt });
+  }
+  return {
+    id: env.id,
+    name: env.name,
+    createdAt: env.createdAt,
+    updatedAt: env.updatedAt,
+    files,
+  };
+}
+
 export function useProject() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -664,57 +730,82 @@ export function useProject() {
         toast.error("请先选择一个项目");
         return null;
       }
-      if (!name.trim()) {
+      const trimmed = name.trim();
+      if (!trimmed) {
         toast.error("环境名称不能为空");
         return null;
       }
-      const existing = projectEnvsMap[pid] ?? [];
-      if (existing.some((e) => e.name === name)) {
+      // WR-05: do the uniqueness check inside the setProjectEnvsMap updater
+      // (functional form) so two rapid successive calls cannot both pass the
+      // check against the same stale snapshot and create duplicate names.
+      let createdId: string | null = null;
+      let updated: Environment[] | null = null;
+      setProjectEnvsMap((prev) => {
+        const existing = prev[pid] ?? [];
+        if (existing.some((e) => e.name === trimmed)) {
+          // Duplicate observed inside the updater — abort.
+          return prev;
+        }
+        const newEnv: Environment = {
+          id: crypto.randomUUID(),
+          name: trimmed,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          files: [],
+        };
+        createdId = newEnv.id;
+        updated = [...existing, newEnv];
+        return { ...prev, [pid]: updated };
+      });
+      if (!createdId || !updated) {
         toast.error("环境名称已存在");
         return null;
       }
-      const newEnv: Environment = {
-        id: crypto.randomUUID(),
-        name: name.trim(),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        files: [],
-      };
-      const updated = [...existing, newEnv];
-      setProjectEnvsMap((prev) => ({ ...prev, [pid]: updated }));
       await profileStore?.set(projectEnvsKey(pid), updated);
       await profileStore?.save();
-      toast.success(`已创建环境: ${name}`);
-      return newEnv.id;
+      toast.success(`已创建环境: ${trimmed}`);
+      return createdId;
     },
-    [selectedId, projectEnvsMap, profileStore]
+    [selectedId, profileStore]
   );
 
   // Rename an environment (per D-20: unique name check excluding self)
   const renameEnv = useCallback(
     async (projectId: string, envId: string, newName: string) => {
-      if (!newName.trim()) {
+      const trimmed = newName.trim();
+      if (!trimmed) {
         toast.error("环境名称不能为空");
         return;
       }
-      const existing = projectEnvsMap[projectId] ?? [];
-      const hasDuplicate = existing.some((e) => e.id !== envId && e.name === newName);
-      if (hasDuplicate) {
+      // WR-05: uniqueness check inside the updater to close the re-entrant race.
+      let renamed = false;
+      let updated: Environment[] | null = null;
+      setProjectEnvsMap((prev) => {
+        const existing = prev[projectId] ?? [];
+        if (existing.some((e) => e.id !== envId && e.name === trimmed)) {
+          return prev;
+        }
+        updated = existing.map((e) =>
+          e.id === envId ? { ...e, name: trimmed, updatedAt: Date.now() } : e
+        );
+        renamed = true;
+        return { ...prev, [projectId]: updated };
+      });
+      if (!renamed || !updated) {
         toast.error("环境名称已存在");
         return;
       }
-      const updated = existing.map((e) =>
-        e.id === envId ? { ...e, name: newName.trim(), updatedAt: Date.now() } : e
-      );
-      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
       await profileStore?.set(projectEnvsKey(projectId), updated);
       await profileStore?.save();
-      toast.success(`已重命名环境: ${newName}`);
+      toast.success(`已重命名环境: ${trimmed}`);
     },
-    [projectEnvsMap, profileStore]
+    [profileStore]
   );
 
   // Set or clear the active environment for a project (per D-14)
+  // WR-06: hoisted above deleteEnv so the deleteEnv dependency array reads an
+  // already-initialized binding, making the dependency honest and the control
+  // flow easier to follow.
   const setActiveEnv = useCallback(
     async (projectId: string, envId: string | null) => {
       if (envId === null) {
@@ -754,12 +845,14 @@ export function useProject() {
         await profileStore?.set(projectEnvsKey(projectId), updated);
       }
 
-      // If deleted env was the active env, clear active env
+      // If deleted env was the active env, clear active env. setActiveEnv
+      // performs its own profileStore.save(), so we only save again when the
+      // active-env branch did NOT run (WR-06: single save per mutation).
       if (projectActiveEnvMap[projectId] === envId) {
         await setActiveEnv(projectId, null);
+      } else {
+        await profileStore?.save();
       }
-
-      await profileStore?.save();
       toast.success(`已删除环境: ${target.name}`);
     },
     [projectEnvsMap, projectActiveEnvMap, profileStore, setActiveEnv]
@@ -774,38 +867,82 @@ export function useProject() {
         toast.error("环境不存在");
         return false;
       }
-      if (!currentProject) {
-        toast.error("请先选择一个项目");
+      // CR-02: resolve the target project path from the projectId parameter,
+      // NOT from the closure-captured currentProject. The old code wrote env
+      // files for project A into project B's directory whenever a caller
+      // invoked applyEnv for a non-selected project (silent cross-project
+      // data corruption).
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) {
+        toast.error("项目不存在");
         return false;
       }
+      const projectPath = project.path;
 
-      const projectPath = currentProject.path;
-      const writtenFiles: string[] = [];
-
+      // CR-03: snapshot prior content (or absence) of every managed file
+      // BEFORE overwriting, so a mid-apply failure can restore the exact
+      // previous bytes instead of truncating files. Writing an empty string
+      // on rollback destroyed user data on the very path rollback protects.
+      type Snapshot = { name: string; existed: boolean; prior: string };
+      const snapshots: Snapshot[] = [];
       for (const file of env.files) {
+        let existed = false;
+        let prior = "";
+        try {
+          prior = await invoke<string>("read_file_content", {
+            projectPath,
+            fileName: file.name,
+          });
+          existed = true;
+        } catch {
+          // Treat any read error (including "not found") as "file did not
+          // exist before apply" — rollback will delete it.
+          existed = false;
+          prior = "";
+        }
+        snapshots.push({ name: file.name, existed, prior });
+      }
+
+      for (let i = 0; i < env.files.length; i++) {
+        const file = env.files[i];
         try {
           await invoke("write_file_content", {
             projectPath,
             fileName: file.name,
             content: file.content,
           });
-          writtenFiles.push(file.name);
         } catch (error) {
-          // Write failed — attempt rollback of previously written files (best-effort per D-28)
+          // Rollback every file written so far by restoring its snapshot.
+          // Files that did not exist before apply are deleted via the new
+          // delete_file_content command; files that existed are restored to
+          // their exact prior content. Best-effort: if a rollback step
+          // itself fails we surface which managed files may be left dirty.
           let rollbackFailed = false;
-          for (const writtenName of writtenFiles) {
+          const dirtyFiles: string[] = [];
+          for (let j = 0; j <= i; j++) {
+            const snap = snapshots[j];
             try {
-              await invoke("write_file_content", {
-                projectPath,
-                fileName: writtenName,
-                content: "",
-              });
+              if (snap.existed) {
+                await invoke("write_file_content", {
+                  projectPath,
+                  fileName: snap.name,
+                  content: snap.prior,
+                });
+              } else {
+                await invoke("delete_file_content", {
+                  projectPath,
+                  fileName: snap.name,
+                });
+              }
             } catch {
               rollbackFailed = true;
+              dirtyFiles.push(snap.name);
             }
           }
           if (rollbackFailed) {
-            toast.error(`启用失败，部分文件已写入：${writtenFiles.join(", ")}`);
+            toast.error(
+              `启用失败且回滚不完整，以下文件可能需要手动检查：${dirtyFiles.join(", ")}`
+            );
           } else {
             toast.error(`启用失败: ${error}`);
           }
@@ -818,7 +955,7 @@ export function useProject() {
       toast.success(`已启用环境: ${env.name}`);
       return true;
     },
-    [projectEnvsMap, currentProject, setActiveEnv]
+    [projectEnvsMap, projects, setActiveEnv]
   );
 
   // --- Phase 24: File management ---
@@ -1201,14 +1338,40 @@ export function useProject() {
       }
 
       // Phase 23: Import environment data
+      // WR-04 / CR-01: schema-validate every Environment and every ManagedFile
+      // name (reject absolute / `..` traversal paths). Reject the whole import
+      // if any entry is malformed — these values feed the IPC file-I/O surface
+      // and a malicious or corrupt profile could otherwise arrange arbitrary
+      // file writes.
       if (data.projectEnvs && typeof data.projectEnvs === "object") {
-        for (const [projectId, envs] of Object.entries(data.projectEnvs as Record<string, unknown>)) {
+        const validatedEnvs: Record<string, Environment[]> = {};
+        for (const [projectId, envs] of Object.entries(
+          data.projectEnvs as Record<string, unknown>
+        )) {
+          if (!Array.isArray(envs)) {
+            toast.error("配置文件损坏：projectEnvs 条目不是数组");
+            return;
+          }
+          const normalized: Environment[] = [];
+          for (const env of envs) {
+            const validated = validateImportedEnvironment(env);
+            if (!validated) {
+              toast.error("配置文件损坏：环境数据格式错误（可能包含不安全的文件路径）");
+              return;
+            }
+            normalized.push(validated);
+          }
+          validatedEnvs[projectId] = normalized;
+        }
+        for (const [projectId, envs] of Object.entries(validatedEnvs)) {
           await ps.set(projectEnvsKey(projectId), envs);
         }
       }
       if (data.projectActiveEnvs && typeof data.projectActiveEnvs === "object") {
-        for (const [projectId, activeId] of Object.entries(data.projectActiveEnvs as Record<string, unknown>)) {
-          if (activeId !== null) {
+        for (const [projectId, activeId] of Object.entries(
+          data.projectActiveEnvs as Record<string, unknown>
+        )) {
+          if (typeof activeId === "string") {
             await ps.set(projectActiveEnvKey(projectId), activeId);
           }
         }
