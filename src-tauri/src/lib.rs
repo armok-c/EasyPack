@@ -29,6 +29,7 @@ pub fn run() {
             commands::shell::open_folder,
             commands::shell::read_file_content,
             commands::shell::write_file_content,
+            commands::shell::delete_file_content,
             commands::update::check_for_updates,
             commands::update::open_release_page,
         ])

@@ -175,58 +175,134 @@ pub async fn execute_script(
 
 // --- Phase 23: Environment file read/write ---
 
+/// Resolve and validate a relative file path inside a project directory.
+///
+/// Phase 23 review CR-01: `PathBuf::join` is absolute-path-aware — if
+/// `file_name` is absolute (e.g. `C:\Windows\system32\config\SAM`), `join`
+/// discards `project_path` entirely, allowing arbitrary reads/writes outside
+/// the project. Even relative `..\..\` traverses out. This helper rejects:
+///   - empty names
+///   - any double quote (cmd.exe quoting hazard)
+///   - absolute paths
+///   - any `..` (ParentDir) component
+/// and canonicalizes the project root, confirming the resolved target stays
+/// within it. Only `Normal` components are permitted.
+fn resolve_safe_path(
+    project_path: &str,
+    file_name: &str,
+) -> Result<std::path::PathBuf, String> {
+    if file_name.is_empty() {
+        return Err("File name cannot be empty".to_string());
+    }
+    if file_name.contains('"') {
+        return Err("Invalid file name: contains double quote".to_string());
+    }
+    if project_path.contains('"') {
+        return Err("Invalid project path: contains double quote".to_string());
+    }
+    let rel = std::path::Path::new(file_name);
+    if rel.is_absolute() {
+        return Err("File name must be a relative path".to_string());
+    }
+    // Reject any ParentDir component; only Normal (and CurDir, which is a no-op)
+    // components are allowed. Prefix/RootDir are already excluded by is_absolute.
+    if rel
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err("File name must not contain '..'".to_string());
+    }
+
+    // Canonicalize the project root so that symlink/junction traversal cannot
+    // escape the project either. The project dir must already exist.
+    let root = std::fs::canonicalize(project_path)
+        .map_err(|_| "Invalid project path".to_string())?;
+    let full = root.join(rel);
+
+    // Defense-in-depth: walk the relative components and ensure the resolved
+    // path remains inside the canonical root. Because we already rejected
+    // ParentDir/absolute components, `full` is guaranteed to be a descendant,
+    // but this assert is cheap and documents the invariant.
+    if !full.starts_with(&root) {
+        return Err("Resolved path escapes project directory".to_string());
+    }
+    Ok(full)
+}
+
 /// Read a text file from a project directory (per D-09, D-12).
 /// Returns the file content as a String on success.
 /// Returns an error if the file does not exist or cannot be read.
 /// The frontend handles "file not found = empty content" per D-09.
+///
+/// WR-02: this is a *synchronous* Tauri command. Tauri runs sync commands on
+/// its blocking thread pool, so the `std::fs` call below does not stall the
+/// async executor (which was the WR-02 concern with the previous `async fn`
+/// variant that did blocking I/O inline).
 #[tauri::command]
-pub async fn read_file_content(project_path: String, file_name: String) -> Result<String, String> {
-    if project_path.contains('"') {
-        return Err("Invalid project path: contains double quote".to_string());
-    }
-    if file_name.contains('"') {
-        return Err("Invalid file name: contains double quote".to_string());
-    }
-    if file_name.is_empty() {
-        return Err("File name cannot be empty".to_string());
-    }
-
-    let full_path = std::path::PathBuf::from(&project_path).join(&file_name);
-    std::fs::read_to_string(&full_path)
-        .map_err(|e| format!("Failed to read file '{}': {}", full_path.display(), e))
+pub fn read_file_content(project_path: String, file_name: String) -> Result<String, String> {
+    let full_path = resolve_safe_path(&project_path, &file_name)?;
+    std::fs::read_to_string(&full_path).map_err(|_| "Failed to read file".to_string())
 }
 
 /// Write content to a text file in a project directory (per D-12, D-28).
 /// Automatically creates parent directories if they don't exist.
-/// Returns Ok(()) on success.
+/// Individual writes are atomic: write to a sibling temp file then rename
+/// over the target (WR-01 / D-28 atomic-write guarantee). Returns Ok(()) on
+/// success.
+///
+/// WR-02: synchronous Tauri command (runs on the blocking pool).
 #[tauri::command]
-pub async fn write_file_content(
+pub fn write_file_content(
     project_path: String,
     file_name: String,
     content: String,
 ) -> Result<(), String> {
-    if project_path.contains('"') {
-        return Err("Invalid project path: contains double quote".to_string());
-    }
-    if file_name.contains('"') {
-        return Err("Invalid file name: contains double quote".to_string());
-    }
-    if file_name.is_empty() {
-        return Err("File name cannot be empty".to_string());
-    }
-
-    let full_path = std::path::PathBuf::from(&project_path).join(&file_name);
+    let full_path = resolve_safe_path(&project_path, &file_name)?;
 
     // Create parent directories (per D-12: auto create_dir_all)
     if let Some(parent) = full_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directories for '{}': {}", full_path.display(), e))?;
+        std::fs::create_dir_all(parent).map_err(|_| "Failed to create directories")?;
     }
 
-    std::fs::write(&full_path, content.as_bytes())
-        .map_err(|e| format!("Failed to write file '{}': {}", full_path.display(), e))?;
+    // WR-01: atomic write — write to sibling temp then rename.
+    // The temp file lives in the same directory so the rename is atomic on the
+    // same filesystem (NTFS rename is atomic for same-volume moves).
+    let mut tmp_name = full_path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+    tmp_name.push(".easypack-tmp");
+    let tmp_path = full_path.with_file_name(tmp_name);
 
+    if std::fs::write(&tmp_path, content.as_bytes()).is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err("Failed to write file".to_string());
+    }
+    if std::fs::rename(&tmp_path, &full_path).is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err("Failed to write file".to_string());
+    }
     Ok(())
+}
+
+/// Delete a file inside a project directory.
+///
+/// Phase 23 review CR-03: `applyEnv` rollback must be able to remove a managed
+/// file that did not exist before the apply, rather than leaving an empty file
+/// behind. This command mirrors `write_file_content`'s path-safety validation
+/// (rejects absolute / `..` / quote paths, confirms the resolved path stays
+/// inside the canonical project root). Deleting a non-existent file is a
+/// no-op success (rollback may target a file that was never written).
+///
+/// WR-02: synchronous Tauri command (runs on the blocking pool).
+#[tauri::command]
+pub fn delete_file_content(project_path: String, file_name: String) -> Result<(), String> {
+    let full_path = resolve_safe_path(&project_path, &file_name)?;
+    match std::fs::remove_file(&full_path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("Failed to delete file".to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -399,11 +475,10 @@ mod tests {
         let file_path = dir.join("test.txt");
         std::fs::write(&file_path, "hello world").expect("Should write test file");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(read_file_content(
+        let result = read_file_content(
             dir.to_string_lossy().to_string(),
             "test.txt".to_string(),
-        ));
+        );
         assert!(result.is_ok(), "read_file_content should succeed: {:?}", result.err());
         assert_eq!(result.unwrap(), "hello world");
 
@@ -415,11 +490,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("easypack-test-read-missing-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(read_file_content(
+        let result = read_file_content(
             dir.to_string_lossy().to_string(),
             "nonexistent.txt".to_string(),
-        ));
+        );
         assert!(result.is_err(), "read_file_content should fail for missing file");
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -432,12 +506,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("easypack-test-write-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(write_file_content(
+        let result = write_file_content(
             dir.to_string_lossy().to_string(),
             "output.txt".to_string(),
             "test content".to_string(),
-        ));
+        );
         assert!(result.is_ok(), "write_file_content should succeed: {:?}", result.err());
 
         let written = std::fs::read_to_string(dir.join("output.txt")).expect("Should read written file");
@@ -451,12 +524,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("easypack-test-write-nested-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(write_file_content(
+        let result = write_file_content(
             dir.to_string_lossy().to_string(),
             "config/settings.json".to_string(),
             r#"{"key": "value"}"#.to_string(),
-        ));
+        );
         assert!(result.is_ok(), "write_file_content nested should succeed: {:?}", result.err());
 
         let written = std::fs::read_to_string(dir.join("config").join("settings.json"))
@@ -468,13 +540,151 @@ mod tests {
 
     #[test]
     fn test_write_file_content_rejects_quoted_path() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(write_file_content(
+        let result = write_file_content(
             "E:\\git\\EasyPack".to_string(),
             "\"badname.txt".to_string(),
             "content".to_string(),
-        ));
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("double quote"));
+    }
+
+    // --- Phase 23 review CR-01: resolve_safe_path tests ---
+
+    #[test]
+    fn test_resolve_safe_path_rejects_empty() {
+        let dir = std::env::temp_dir();
+        let result = resolve_safe_path(&dir.to_string_lossy(), "");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("empty"));
+    }
+
+    #[test]
+    fn test_resolve_safe_path_rejects_double_quote() {
+        let dir = std::env::temp_dir();
+        let result = resolve_safe_path(&dir.to_string_lossy(), "bad\"name.txt");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("double quote"));
+    }
+
+    #[test]
+    fn test_resolve_safe_path_rejects_absolute() {
+        let dir = std::env::temp_dir();
+        let abs = if cfg!(windows) {
+            "C:\\Windows\\system32\\drivers\\etc\\hosts"
+        } else {
+            "/etc/hosts"
+        };
+        let result = resolve_safe_path(&dir.to_string_lossy(), abs);
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("relative") || msg.contains("escapes"),
+            "should reject absolute, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_resolve_safe_path_rejects_parent_dir() {
+        let dir = std::env::temp_dir();
+        let traversal = if cfg!(windows) {
+            "..\\..\\..\\Windows\\Start Menu\\Programs\\Startup\\updater.bat"
+        } else {
+            "../../../etc/passwd"
+        };
+        let result = resolve_safe_path(&dir.to_string_lossy(), traversal);
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("..") || msg.contains("escapes"),
+            "should reject parent-dir traversal, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_resolve_safe_path_accepts_normal_relative() {
+        let dir_raw = std::env::temp_dir();
+        let _ = std::fs::create_dir_all(&dir_raw);
+        // resolve_safe_path canonicalizes the root, so compare against the
+        // canonical form (temp_dir() may return a short-name path on Windows).
+        let dir_canon = std::fs::canonicalize(&dir_raw).expect("canonicalize temp_dir");
+        let result = resolve_safe_path(&dir_raw.to_string_lossy(), "config/settings.json");
+        // Sanity: accepted and resolves inside the temp dir.
+        assert!(result.is_ok(), "should accept nested relative, got: {:?}", result.err());
+        let resolved = result.unwrap();
+        assert!(
+            resolved.starts_with(&dir_canon),
+            "resolved {:?} must stay inside canonical root {:?}",
+            resolved,
+            dir_canon
+        );
+        assert!(resolved.ends_with("settings.json"));
+    }
+
+    // --- Phase 23 review CR-01: write_file_content rejects traversal ---
+
+    #[test]
+    fn test_write_file_content_rejects_absolute_path() {
+        let result = write_file_content(
+            std::env::temp_dir().to_string_lossy().to_string(),
+            "C:\\Windows\\evil.txt".to_string(),
+            "content".to_string(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_file_content_rejects_traversal() {
+        let result = write_file_content(
+            std::env::temp_dir().to_string_lossy().to_string(),
+            "../../../evil.txt".to_string(),
+            "content".to_string(),
+        );
+        assert!(result.is_err());
+    }
+
+    // --- Phase 23 review CR-01/CR-03: read_file_content / delete_file_content ---
+
+    #[test]
+    fn test_read_file_content_rejects_absolute() {
+        let result = read_file_content(
+            std::env::temp_dir().to_string_lossy().to_string(),
+            "C:\\Windows\\system32\\drivers\\etc\\hosts".to_string(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_file_content_ok() {
+        let dir = std::env::temp_dir().join(format!("easypack-test-delete-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(dir.join("goner.txt"), "bye").expect("Should write test file");
+
+        let result = delete_file_content(
+            dir.to_string_lossy().to_string(),
+            "goner.txt".to_string(),
+        );
+        assert!(result.is_ok(), "delete_file_content should succeed: {:?}", result.err());
+        assert!(!dir.join("goner.txt").exists(), "file should be gone");
+
+        // Deleting again (idempotent) should still be Ok.
+        let result2 = delete_file_content(
+            dir.to_string_lossy().to_string(),
+            "goner.txt".to_string(),
+        );
+        assert!(result2.is_ok(), "delete of missing file should be Ok");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_delete_file_content_rejects_traversal() {
+        let result = delete_file_content(
+            std::env::temp_dir().to_string_lossy().to_string(),
+            "../../../evil.txt".to_string(),
+        );
+        assert!(result.is_err());
     }
 }
