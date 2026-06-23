@@ -184,10 +184,15 @@ export function AddFileDialog({
         }
 
         try {
-          const content = await invoke<string>("read_file_content", {
+          const content = await invoke<string | null>("read_file_content", {
             projectPath,
             fileName: relativeName,
           });
+          if (content === null) {
+            // NotFound — treat as a failure (D-08 partial-failure tolerance).
+            failCount++;
+            continue;
+          }
           managedFiles.push({
             name: relativeName,
             content,

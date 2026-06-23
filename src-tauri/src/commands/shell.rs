@@ -230,18 +230,31 @@ fn resolve_safe_path(
 }
 
 /// Read a text file from a project directory (per D-09, D-12).
-/// Returns the file content as a String on success.
-/// Returns an error if the file does not exist or cannot be read.
-/// The frontend handles "file not found = empty content" per D-09.
+///
+/// Returns:
+///   - `Ok(Some(content))` when the file exists and is readable.
+///   - `Ok(None)` when the file does not exist (NotFound).
+///   - `Err(..)` for any other read failure (permission denied, sharing
+///     violation, I/O error). This distinct signaling is load-bearing for
+///     `applyEnv`'s rollback: a non-NotFound error must NOT be masked as
+///     "absent", or rollback would delete a user file the app could not
+///     read but could delete (Phase 23 iteration-2 WR-01).
 ///
 /// WR-02: this is a *synchronous* Tauri command. Tauri runs sync commands on
 /// its blocking thread pool, so the `std::fs` call below does not stall the
 /// async executor (which was the WR-02 concern with the previous `async fn`
 /// variant that did blocking I/O inline).
 #[tauri::command]
-pub fn read_file_content(project_path: String, file_name: String) -> Result<String, String> {
+pub fn read_file_content(
+    project_path: String,
+    file_name: String,
+) -> Result<Option<String>, String> {
     let full_path = resolve_safe_path(&project_path, &file_name)?;
-    std::fs::read_to_string(&full_path).map_err(|_| "Failed to read file".to_string())
+    match std::fs::read_to_string(&full_path) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err("Failed to read file".to_string()),
+    }
 }
 
 /// Write content to a text file in a project directory (per D-12, D-28).
@@ -480,13 +493,14 @@ mod tests {
             "test.txt".to_string(),
         );
         assert!(result.is_ok(), "read_file_content should succeed: {:?}", result.err());
-        assert_eq!(result.unwrap(), "hello world");
+        // Phase 23 iter-2 WR-01: existing file returns Some(content).
+        assert_eq!(result.unwrap(), Some("hello world".to_string()));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn test_read_file_content_not_found() {
+    fn test_read_file_content_not_found_returns_none() {
         let dir = std::env::temp_dir().join(format!("easypack-test-read-missing-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
 
@@ -494,7 +508,11 @@ mod tests {
             dir.to_string_lossy().to_string(),
             "nonexistent.txt".to_string(),
         );
-        assert!(result.is_err(), "read_file_content should fail for missing file");
+        // Phase 23 iter-2 WR-01: NotFound must surface as Ok(None), NOT Err,
+        // so the frontend snapshot loop can safely treat it as "absent" while
+        // other read errors hard-abort.
+        assert!(result.is_ok(), "NotFound should be Ok(None), got: {:?}", result.err());
+        assert_eq!(result.unwrap(), None);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

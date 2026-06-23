@@ -107,6 +107,7 @@ function validateImportedEnvironment(value: unknown): Environment | null {
     return null;
   }
   const files: ManagedFile[] = [];
+  const seenNames = new Set<string>();
   for (const f of env.files) {
     if (!f || typeof f !== "object") return null;
     const mf = f as Record<string, unknown>;
@@ -117,6 +118,11 @@ function validateImportedEnvironment(value: unknown): Environment | null {
     ) {
       return null;
     }
+    // Phase 23 iter-2 IN-02: reject duplicate file names within a single
+    // imported environment — otherwise applyEnv would overwrite the same disk
+    // file twice (last-write wins), silently diverging from user intent.
+    if (seenNames.has(mf.name)) return null;
+    seenNames.add(mf.name);
     files.push({ name: mf.name, content: mf.content, addedAt: mf.addedAt });
   }
   return {
@@ -883,22 +889,35 @@ export function useProject() {
       // BEFORE overwriting, so a mid-apply failure can restore the exact
       // previous bytes instead of truncating files. Writing an empty string
       // on rollback destroyed user data on the very path rollback protects.
+      //
+      // WR-01 (iter-2): `read_file_content` now distinguishes NotFound
+      // (returns null) from other read errors (throws). Only NotFound may be
+      // treated as "absent → delete on rollback". Any other read error
+      // (permission denied, sharing violation, ...) must hard-abort the whole
+      // apply BEFORE writing anything — otherwise rollback would call
+      // delete_file_content on a file that actually existed, destroying the
+      // user's original content.
       type Snapshot = { name: string; existed: boolean; prior: string };
       const snapshots: Snapshot[] = [];
       for (const file of env.files) {
         let existed = false;
         let prior = "";
         try {
-          prior = await invoke<string>("read_file_content", {
+          const result = await invoke<string | null>("read_file_content", {
             projectPath,
             fileName: file.name,
           });
-          existed = true;
-        } catch {
-          // Treat any read error (including "not found") as "file did not
-          // exist before apply" — rollback will delete it.
-          existed = false;
-          prior = "";
+          if (result !== null) {
+            existed = true;
+            prior = result;
+          } else {
+            existed = false;
+            prior = "";
+          }
+        } catch (error) {
+          // NOT a NotFound — could be permission/lock. Abort before mutating.
+          toast.error(`无法读取文件 ${file.name}，已取消启用: ${error}`);
+          return false;
         }
         snapshots.push({ name: file.name, existed, prior });
       }
