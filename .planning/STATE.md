@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: 项目环境管理
-status: planning
+status: milestone_complete
 stopped_at: Phase 25 context gathered
 last_updated: "2026-06-18T07:42:18.314Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
   completed_plans: 10
   percent: 100
@@ -16,7 +16,7 @@ progress:
 
 # Project State
 
-**Status:** Ready to plan
+**Status:** Milestone complete
 **Last Activity:** 2026-06-18
 **Current Focus:** Phase 24 — 文件管理与编辑器
 

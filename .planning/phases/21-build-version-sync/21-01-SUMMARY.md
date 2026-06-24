@@ -88,7 +88,7 @@ Each task was committed atomically:
 | D-08: 相同跳过 | `content.replace()` 无变化时跳过 |
 | D-09: package.json 错误 | `process.exit(1)` + stderr 输出 |
 | D-10: 目标文件不可读写 | `fs.accessSync` 预检 + `process.exit(1)` |
-| D-11: Cargo.toml 无 version | `regex.test()` 未匹配 → `process.exit(1)` |
+| D-11: Cargo.toml 无 version | `regex.test()` 未匹配 → `process.exit(1)`（注：该检查在循环内，对 tauri.conf.json 同样生效——任一目标文件缺失 version 字段均终止构建） |
 | D-12: 输出格式 | 有变更 → stdout `Version synced:`；错误 → stderr；无变更 → 静默 |
 
 ## Deviations from Plan

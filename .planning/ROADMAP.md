@@ -61,7 +61,7 @@
 - [x] Phase 22: 全局指令移除与重构 — CMD-09, CMD-10 (planning complete) (completed 2026-06-17)
 - [x] Phase 23: 环境标签页与管理 — ENV-01, ENV-02, ENV-08 (completed 2026-06-18)
 - [x] Phase 24: 文件管理与编辑器 — ENV-03, ENV-04, ENV-06, ENV-07 (completed 2026-06-18)
-- [ ] Phase 25: 同步差异对比 — ENV-05
+- [x] Phase 25: 同步差异对比 — ENV-05 (completed 2026-06-18)
 
 </details>
 
@@ -93,7 +93,7 @@
 | 22. 全局指令移除与重构 | v2.1 | 3/3 | Complete    | 2026-06-17 |
 | 23. 环境标签页与管理 | v2.1 | 3/3 | Complete    | 2026-06-18 |
 | 24. 文件管理与编辑器 | v2.1 | 3/3 | Complete    | 2026-06-18 |
-| 25. 同步差异对比 | v2.1 | 0/0 | Pending | — |
+| 25. 同步差异对比 | v2.1 | 3/3 | Complete    | 2026-06-18 |
 
 ---
 

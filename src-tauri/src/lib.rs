@@ -7,6 +7,7 @@ pub fn run() {
             use tauri::Manager;
             use tauri::Emitter;
             if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_skip_taskbar(false);
                 let _ = window.show();
                 let _ = window.set_focus();
                 let _ = app.emit("main:shown-from-rust", ());
@@ -107,6 +108,7 @@ pub fn run() {
                                     let _ = window.hide();
                                     let _ = app_handle.emit("main:hidden-from-rust", ());
                                 } else {
+                                    let _ = window.set_skip_taskbar(false);
                                     let _ = window.show();
                                     let _ = window.set_focus();
                                     let _ = app_handle.emit("main:shown-from-rust", ());
@@ -180,6 +182,7 @@ pub fn run() {
                                 let _ = window.hide();
                                 let _ = app_handle.emit("main:hidden-from-rust", ());
                             } else {
+                                let _ = window.set_skip_taskbar(false);
                                 let _ = window.show();
                                 let _ = window.set_focus();
                                 let _ = app_handle.emit("main:shown-from-rust", ());
