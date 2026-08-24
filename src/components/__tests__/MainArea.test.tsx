@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { MainArea } from "@/components/MainArea";
+import { createRef } from "react";
+import { MainArea, type MainAreaHandle } from "@/components/MainArea";
 import type { ProjectItem } from "@/hooks/useProject";
-import type { CommandItem } from "@/lib/types";
+import type { CommandItem, Environment } from "@/lib/types";
 
 const mockProject: ProjectItem = {
   id: "e/gitlib/test-project",
@@ -16,6 +17,11 @@ const mockProject: ProjectItem = {
 const defaultCommands: CommandItem[] = [
   { id: "preset-git-pull", name: "拉取代码", command: "git pull", icon: "GitBranch", type: "preset", scope: "project", addedAt: 0 },
   { id: "preset-claude", name: "启动 Claude", command: "claude", icon: "Sparkles", type: "preset", scope: "project", addedAt: 1 },
+];
+
+const defaultEnvs: Environment[] = [
+  { id: "env-work", name: "工作", createdAt: 1, updatedAt: 1, files: [] },
+  { id: "env-personal", name: "个人", createdAt: 2, updatedAt: 2, files: [] },
 ];
 
 function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
@@ -168,19 +174,158 @@ describe("MainArea - Phase 22 edit mode UI", () => {
     expect(onExecute).toHaveBeenCalledWith("cmd.exe");
   });
 
-  // CR-03 (Phase 22 review): the section-label tests ("项目环境" present,
-  // "项目指令" absent) were removed. Neither string is rendered by MainArea
-  // or any child component — the Phase 22 plan's section-label rename was
-  // superseded by Phase 23/24/25's EnvSwitchBar/EnvTabBar/FileList UI,
-  // which replaced the old "项目指令" section header wholesale. Adding a
-  // new "项目环境" heading would introduce UI surface not requested by
-  // this review, so the detached assertions are dropped rather than
-  // forcing a label into production code.
-  //
-  // WR-06 (Phase 22 review): the Toggle Group absence test was also removed.
-  // It guarded a removed UI element (scope selector with radio roles named
-  // "全局指令"/"项目指令") that no code path can re-introduce — the scope
-  // concept itself was narrowed to the single literal "project" in
-  // src/lib/types.ts:15, so no <ToggleGroup> with per-scope radios can be
-  // rendered. Keeping the test would let it silently rot.
+  it("renders the two top-level tabs with project commands selected by default", () => {
+    render(<MainArea {...getDefaultProps()} />);
+    expect(screen.getByRole("tab", { name: "项目指令" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "inactive");
+    expect(screen.getByText("拉取代码")).toBeVisible();
+  });
+
+  it("places the tab button group and command editor in one row", () => {
+    render(<MainArea {...getDefaultProps()} />);
+
+    const tabList = screen.getByRole("tablist");
+    const tabRow = tabList.parentElement;
+    const editorButton = screen.getByRole("button", { name: "编辑指令" });
+
+    expect(tabRow).toHaveClass("flex", "items-center");
+    expect(tabList).toHaveClass("bg-muted");
+    expect(tabList).not.toHaveClass("bg-transparent");
+    expect(tabList).not.toHaveClass("rounded-none");
+    expect(tabList).not.toHaveClass("border-b");
+    expect(editorButton).toHaveClass("ml-auto");
+    expect(tabRow).toContainElement(editorButton);
+    expect(tabRow?.firstElementChild).toBe(tabList);
+  });
+
+  it("switches to the environment tab and hides command cards", async () => {
+    render(<MainArea {...getDefaultProps()} />);
+    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
+    });
+    expect(screen.queryByText("拉取代码")).not.toBeInTheDocument();
+    expect(screen.getByText("暂无环境")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "编辑指令" })).not.toBeInTheDocument();
+  });
+
+  it("asks before leaving a dirty command draft and stays after cancel", async () => {
+    render(<MainArea {...getDefaultProps({ editMode: true })} />);
+    fireEvent.click(screen.getByText("添加指令"));
+    fireEvent.change(screen.getByLabelText("名称"), { target: { value: "临时指令" } });
+    fireEvent.click(screen.getByRole("tab", { name: "项目环境", hidden: true }));
+
+    const prompt = await screen.findByRole("alertdialog");
+    expect(within(prompt).getByText("指令未保存")).toBeInTheDocument();
+    fireEvent.click(within(prompt).getByRole("button", { name: "取消" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目指令", hidden: true })).toHaveAttribute("data-state", "active");
+    });
+  });
+
+  it("notifies the caller before showing a dirty command leave prompt", async () => {
+    const mainAreaRef = createRef<MainAreaHandle>();
+    const onInteractionNeeded = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MainArea
+        ref={mainAreaRef}
+        {...getDefaultProps({ editMode: true })}
+      />
+    );
+    fireEvent.click(screen.getByText("添加指令"));
+    fireEvent.change(screen.getByLabelText("名称"), { target: { value: "临时指令" } });
+
+    const leavePromise = mainAreaRef.current!.requestProjectLeave({ onInteractionNeeded });
+    expect(onInteractionNeeded).toHaveBeenCalledOnce();
+    const prompt = await screen.findByRole("alertdialog");
+    fireEvent.click(within(prompt).getByRole("button", { name: "取消" }));
+    await expect(leavePromise).resolves.toBe(false);
+  });
+
+  it("does not request interaction for a clean project leave", async () => {
+    const mainAreaRef = createRef<MainAreaHandle>();
+    const onInteractionNeeded = vi.fn();
+    render(
+      <MainArea
+        ref={mainAreaRef}
+        {...getDefaultProps()}
+      />
+    );
+
+    await expect(mainAreaRef.current!.requestProjectLeave({ onInteractionNeeded })).resolves.toBe(true);
+    expect(onInteractionNeeded).not.toHaveBeenCalled();
+  });
+
+  it("clears command card focus after leaving the command tab", async () => {
+    render(<MainArea {...getDefaultProps()} />);
+    const firstCard = screen.getByRole("button", { name: "拉取代码" });
+    fireEvent.keyDown(firstCard, { key: "ArrowRight" });
+    expect(screen.getByRole("button", { name: "启动 Claude" })).toHaveAttribute("tabindex", "0");
+
+    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "项目指令" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目指令" })).toHaveAttribute("data-state", "active");
+      expect(screen.getByRole("button", { name: "拉取代码" })).toHaveAttribute("tabindex", "0");
+    });
+    expect(screen.getByRole("button", { name: "启动 Claude" })).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("resets the selected environment when returning to the environment tab", async () => {
+    render(<MainArea {...getDefaultProps({ envs: defaultEnvs })} />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "个人" }));
+    expect(screen.getByRole("button", { name: "个人" })).toHaveClass("bg-accent");
+
+    fireEvent.click(screen.getByRole("tab", { name: "项目指令" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目指令" })).toHaveAttribute("data-state", "active");
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
+      expect(screen.getByRole("button", { name: "工作" })).toHaveClass("bg-accent");
+    });
+    expect(screen.getByRole("button", { name: "个人" })).not.toHaveClass("bg-accent");
+  });
+
+  it("rejects leaving while environment creation is still writing", async () => {
+    const mainAreaRef = createRef<MainAreaHandle>();
+    let resolveCreate: (value: string | null) => void = () => undefined;
+    const createPromise = new Promise<string | null>((resolve) => {
+      resolveCreate = resolve;
+    });
+    const onCreateEnv = vi.fn().mockReturnValue(createPromise);
+
+    render(
+      <MainArea
+        ref={mainAreaRef}
+        {...getDefaultProps({ envs: defaultEnvs, onCreateEnv })}
+      />
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "管理环境" }));
+    fireEvent.change(await screen.findByPlaceholderText("环境名称"), {
+      target: { value: "临时环境" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "新增" }));
+    await waitFor(() => expect(onCreateEnv).toHaveBeenCalledWith("临时环境"));
+
+    fireEvent.click(screen.getByRole("tab", { name: "项目指令", hidden: true }));
+    expect(screen.getByRole("tab", { name: "项目环境", hidden: true })).toHaveAttribute("data-state", "active");
+    await expect(mainAreaRef.current!.requestProjectLeave()).resolves.toBe(false);
+    expect(screen.getByRole("tab", { name: "项目环境", hidden: true })).toHaveAttribute("data-state", "active");
+    resolveCreate(null);
+    await waitFor(() => expect(onCreateEnv).toHaveBeenCalledTimes(1));
+  });
 });

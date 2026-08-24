@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import type { CommandItem } from "@/lib/types";
 import { ICON_OPTIONS, DEFAULT_ICON, getIconByName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -26,6 +36,12 @@ import { useBatchDetect } from "@/hooks/useBatchDetect";
 
 type ExecutionMode = "strict" | "lenient" | "batch";
 
+export interface CommandDialogHandle {
+  requestLeave: (options?: {
+    onInteractionNeeded?: () => void | Promise<void>;
+  }) => Promise<boolean>;
+}
+
 interface CommandDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,16 +51,16 @@ interface CommandDialogProps {
     icon: string;
     scriptLines?: string;
     executionMode?: ExecutionMode;
-  }) => void;
+  }) => void | Promise<void>;
   initialData?: CommandItem | null;
 }
 
-export function CommandDialog({
+export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>(function CommandDialog({
   open,
   onOpenChange,
   onSubmit,
   initialData = null,
-}: CommandDialogProps) {
+}: CommandDialogProps, ref) {
   // IN-05 (Phase 22 review): the useState initializers below seed from
   // initialData once, on mount. They are NOT re-run when the parent passes a
   // different initialData on a subsequent open. The parent MUST remount this
@@ -83,6 +99,8 @@ export function CommandDialog({
   const [commandDirty, setCommandDirty] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [leavePromptOpen, setLeavePromptOpen] = useState(false);
+  const leaveResolverRef = useRef<((allowed: boolean) => void) | null>(null);
 
   // IN-03 (Phase 22 review): track the html.dark class in React state so the
   // ScriptEditor darkMode prop is reactive to runtime theme changes instead
@@ -174,18 +192,63 @@ export function CommandDialog({
     setSelectedPresetId(presetId);
   }, []);
 
-  const handleSubmit = useCallback(() => {
-    if (!isValid) return;
-    if (activeTab === "multi") {
+  const isDirty = useMemo(() => {
+    const initialTab = initialData?.scriptLines ? "multi" : "single";
+    const effectiveScript = scriptTouched ? (scriptContent.trim() || undefined) : initialData?.scriptLines;
+    const initialMode = initialData?.executionMode ?? "strict";
+    const effectiveMode = activeTab === "multi"
+      ? (isBatch ? "batch" : executionMode)
+      : scriptTouched ? executionMode : initialMode;
+    return activeTab !== initialTab
+      || name !== (initialData?.name ?? "")
+      || command !== (initialData?.command ?? "")
+      || selectedIcon !== (initialData?.icon ?? DEFAULT_ICON)
+      || effectiveScript !== initialData?.scriptLines
+      || effectiveMode !== initialMode
+      || selectedCategory !== ""
+      || selectedPresetId !== "";
+  }, [activeTab, name, command, selectedIcon, scriptContent, scriptTouched, executionMode, isBatch, initialData, selectedCategory, selectedPresetId]);
+
+  const resetFormState = useCallback(() => {
+    setName(initialData?.name ?? "");
+    setCommand(initialData?.command ?? "");
+    setSelectedIcon(initialData?.icon ?? DEFAULT_ICON);
+    setNameDirty(false);
+    setCommandDirty(false);
+    setSelectedCategory("");
+    setSelectedPresetId("");
+    setActiveTab(initialData?.scriptLines ? "multi" : "single");
+    setScriptContent(initialData?.scriptLines ?? "");
+    setExecutionMode(initialData?.executionMode ?? "strict");
+    setScriptTouched(false);
+  }, [initialData]);
+
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen) {
+        // Keep the editor mounted while the leave confirmation is pending.
+        // Closing it here would discard the draft before "取消" can keep it.
+        if (leavePromptOpen) return;
+        resetFormState();
+      }
+      onOpenChange(newOpen);
+    },
+    [leavePromptOpen, onOpenChange, resetFormState]
+  );
+
+  const handleSubmit = useCallback(async (): Promise<boolean> => {
+    if (!isValid) return false;
+    try {
+      if (activeTab === "multi") {
       const effectiveMode = isBatch ? "batch" : executionMode;
-      onSubmit({
-        name: name.trim(),
-        command: scriptContent.trim().split("\n")[0] || "",
-        icon: selectedIcon,
-        scriptLines: scriptContent.trim(),
-        executionMode: effectiveMode,
-      });
-    } else {
+        await onSubmit({
+          name: name.trim(),
+          command: scriptContent.trim().split("\n")[0] || "",
+          icon: selectedIcon,
+          scriptLines: scriptContent.trim(),
+          executionMode: effectiveMode,
+        });
+      } else {
       // WR-07/WR-01 (Phase 22 review): when submitting from the single-line
       // tab, preserve the LIVE multi-line state, not the frozen initialData
       // prop. scriptTouched distinguishes "user edited the multi-line tab"
@@ -200,37 +263,66 @@ export function CommandDialog({
       const effectiveMode = scriptTouched
         ? executionMode
         : initialData?.executionMode;
-      onSubmit({
-        name: name.trim(),
-        command: command.trim(),
-        icon: selectedIcon,
-        scriptLines,
-        executionMode: effectiveMode,
-      });
-    }
-  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit, initialData, scriptTouched]);
-
-  const handleOpenChange = useCallback(
-    (newOpen: boolean) => {
-      if (!newOpen) {
-        // Reset form state on close
-        setName(initialData?.name ?? "");
-        setCommand(initialData?.command ?? "");
-        setSelectedIcon(initialData?.icon ?? DEFAULT_ICON);
-        setNameDirty(false);
-        setCommandDirty(false);
-        setSelectedCategory("");
-        setSelectedPresetId("");
-        // Phase 17: reset tab and script state
-        setActiveTab(initialData?.scriptLines ? "multi" : "single");
-        setScriptContent(initialData?.scriptLines ?? "");
-        setExecutionMode(initialData?.executionMode ?? "strict");
-        setScriptTouched(false);
+        await onSubmit({
+          name: name.trim(),
+          command: command.trim(),
+          icon: selectedIcon,
+          scriptLines,
+          executionMode: effectiveMode,
+        });
       }
-      onOpenChange(newOpen);
+      resetFormState();
+      onOpenChange(false);
+      return true;
+    } catch (error) {
+      if (import.meta.env.DEV) console.error("保存指令失败:", error);
+      return false;
+    }
+  }, [isValid, activeTab, name, command, scriptContent, executionMode, isBatch, selectedIcon, onSubmit, initialData, scriptTouched, resetFormState, onOpenChange]);
+
+  const resolveLeave = useCallback((allowed: boolean) => {
+    const resolver = leaveResolverRef.current;
+    leaveResolverRef.current = null;
+    setLeavePromptOpen(false);
+    resolver?.(allowed);
+  }, []);
+
+  const handleLeaveSave = useCallback(async () => {
+    const saved = await handleSubmit();
+    if (saved) resolveLeave(true);
+  }, [handleSubmit, resolveLeave]);
+
+  const handleLeaveDiscard = useCallback(() => {
+    resetFormState();
+    onOpenChange(false);
+    resolveLeave(true);
+  }, [onOpenChange, resetFormState, resolveLeave]);
+
+  useImperativeHandle(ref, () => ({
+    requestLeave: async (options) => {
+      if (!open || !isDirty) return Promise.resolve(true);
+      if (leaveResolverRef.current) {
+        return new Promise<boolean>((resolve) => {
+          const previous = leaveResolverRef.current!;
+          leaveResolverRef.current = (allowed) => {
+            previous(allowed);
+            resolve(allowed);
+          };
+        });
+      }
+      await options?.onInteractionNeeded?.();
+      return new Promise<boolean>((resolve) => {
+        leaveResolverRef.current = resolve;
+        setLeavePromptOpen(true);
+      });
     },
-    [initialData, onOpenChange]
-  );
+  }), [open, isDirty, ref]);
+
+  useEffect(() => () => {
+    const resolver = leaveResolverRef.current;
+    leaveResolverRef.current = null;
+    resolver?.(false);
+  }, []);
 
   const previewIcon = useMemo(() => getIconByName(selectedIcon), [selectedIcon]);
 
@@ -240,7 +332,8 @@ export function CommandDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className={cn(
         activeTab === "multi" ? "sm:max-w-[560px]" : "sm:max-w-[480px]"
       )}>
@@ -507,6 +600,24 @@ export function CommandDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      <AlertDialog
+      open={leavePromptOpen}
+      onOpenChange={(open) => { if (!open) resolveLeave(false); }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>指令未保存</AlertDialogTitle>
+          <AlertDialogDescription>当前指令有未保存的修改，是否先保存？</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => resolveLeave(false)}>取消</AlertDialogCancel>
+          <AlertDialogAction onClick={(event) => { event.preventDefault(); handleLeaveDiscard(); }}>放弃</AlertDialogAction>
+          <AlertDialogAction onClick={(event) => { event.preventDefault(); void handleLeaveSave(); }}>保存</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
-}
+});

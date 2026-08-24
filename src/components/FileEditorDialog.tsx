@@ -9,7 +9,7 @@
  * - Ctrl+S save shortcut per D-18
  * - Bottom status bar with file info and save button per D-13
  */
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -45,19 +45,27 @@ export interface FileEditorDialogProps {
 }
 
 /** Prompt type for unsaved changes dialog */
-type UnsavedPromptType = "close" | "switch" | null;
+type UnsavedPromptType = "close" | "switch" | "leave" | null;
 
-export function FileEditorDialog({
+export interface FileEditorDialogHandle {
+  requestLeave: (options?: {
+    onInteractionNeeded?: () => void | Promise<void>;
+  }) => Promise<boolean>;
+}
+
+export const FileEditorDialog = forwardRef<FileEditorDialogHandle, FileEditorDialogProps>(function FileEditorDialog({
   open,
   onOpenChange,
   file,
   onSave,
-}: FileEditorDialogProps) {
+}: FileEditorDialogProps, ref) {
   const [editingContent, setEditingContent] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [pendingSwitchFile, setPendingSwitchFile] = useState<ManagedFile | null>(null);
   const [unsavedPromptType, setUnsavedPromptType] = useState<UnsavedPromptType>(null);
   const [saving, setSaving] = useState(false);
+  const leaveResolverRef = useRef<((allowed: boolean) => void) | null>(null);
+  const leavePromiseRef = useRef<Promise<boolean> | null>(null);
 
   const parentRef = useRef<HTMLDivElement | null>(null);
   const latestFileRef = useRef<ManagedFile | null>(null);
@@ -119,22 +127,28 @@ export function FileEditorDialog({
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open && isDirty) {
+        // A project/tab leave prompt owns the dialog until it resolves.
+        // Otherwise an outside click could replace it with a close prompt and
+        // discard the draft before the user chooses "取消".
+        if (unsavedPromptType === "leave") return;
         // D-18: Escape with dirty → show save prompt
         setUnsavedPromptType("close");
         return; // Don't close - prompt first
       }
       onOpenChange(open);
     },
-    [isDirty, onOpenChange]
+    [isDirty, onOpenChange, unsavedPromptType]
   );
 
   // Handle save prompt: save then proceed
   const handlePromptSave = useCallback(async () => {
     if (!file) return;
     setSaving(true);
+    let saved = false;
     try {
       await onSave(file.name, editingContent);
       setIsDirty(false);
+      saved = true;
 
       if (unsavedPromptType === "close") {
         onOpenChange(false);
@@ -145,13 +159,18 @@ export function FileEditorDialog({
         setExtensions(getExtensions(pendingSwitchFile.name));
         latestFileRef.current = pendingSwitchFile;
         setPendingSwitchFile(null);
+      } else if (unsavedPromptType === "leave") {
+        onOpenChange(false);
+        leaveResolverRef.current?.(true);
+        leaveResolverRef.current = null;
+        leavePromiseRef.current = null;
       }
     } catch (error) {
       toast.error("保存失败");
       if (import.meta.env.DEV) console.error("保存失败:", error);
     } finally {
       setSaving(false);
-      setUnsavedPromptType(null);
+      if (saved) setUnsavedPromptType(null);
     }
   }, [file, editingContent, onSave, unsavedPromptType, pendingSwitchFile, onOpenChange, getExtensions]);
 
@@ -167,6 +186,12 @@ export function FileEditorDialog({
       setExtensions(getExtensions(pendingSwitchFile.name));
       latestFileRef.current = pendingSwitchFile;
       setPendingSwitchFile(null);
+    } else if (unsavedPromptType === "leave") {
+      setIsDirty(false);
+      onOpenChange(false);
+      leaveResolverRef.current?.(true);
+      leaveResolverRef.current = null;
+      leavePromiseRef.current = null;
     }
     setUnsavedPromptType(null);
   }, [unsavedPromptType, pendingSwitchFile, onOpenChange, getExtensions]);
@@ -174,7 +199,33 @@ export function FileEditorDialog({
   // Handle save prompt: cancel (stay on current file)
   const handlePromptCancel = useCallback(() => {
     setPendingSwitchFile(null);
+    if (unsavedPromptType === "leave") {
+      leaveResolverRef.current?.(false);
+      leaveResolverRef.current = null;
+      leavePromiseRef.current = null;
+    }
     setUnsavedPromptType(null);
+  }, [unsavedPromptType]);
+
+  useImperativeHandle(ref, () => ({
+    requestLeave: async (options) => {
+      if (!open || !file || !isDirty) return Promise.resolve(true);
+      if (leavePromiseRef.current) return leavePromiseRef.current;
+      await options?.onInteractionNeeded?.();
+      const promise = new Promise<boolean>((resolve) => {
+        leaveResolverRef.current = resolve;
+        setUnsavedPromptType("leave");
+      });
+      leavePromiseRef.current = promise;
+      return promise;
+    },
+  }), [open, file, isDirty, ref]);
+
+  useEffect(() => () => {
+    const resolver = leaveResolverRef.current;
+    leaveResolverRef.current = null;
+    leavePromiseRef.current = null;
+    resolver?.(false);
   }, []);
 
   // Ctrl+S / Cmd+S keyboard shortcut per D-18
@@ -275,12 +326,11 @@ export function FileEditorDialog({
                 取消
               </AlertDialogCancel>
               <AlertDialogAction
-                variant="destructive"
-                onClick={handlePromptDiscard}
+                onClick={(event) => { event.preventDefault(); handlePromptDiscard(); }}
               >
                 放弃
               </AlertDialogAction>
-              <AlertDialogAction onClick={handlePromptSave}>
+              <AlertDialogAction onClick={(event) => { event.preventDefault(); void handlePromptSave(); }}>
                 保存
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -289,4 +339,4 @@ export function FileEditorDialog({
       )}
     </>
   );
-}
+});

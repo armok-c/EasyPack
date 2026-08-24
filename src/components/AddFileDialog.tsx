@@ -10,7 +10,7 @@
  */
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,7 @@ export interface AddFileDialogProps {
   projectPath: string;
   existingFileNames: string[];
   onConfirm: (files: ManagedFile[]) => Promise<void>;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 /** File type filter option definition */
@@ -113,6 +114,7 @@ export function AddFileDialog({
   projectPath,
   existingFileNames,
   onConfirm,
+  onBusyChange,
 }: AddFileDialogProps) {
   const [loading, setLoading] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState(ALL_FORMATS_LABEL);
@@ -122,7 +124,6 @@ export function AddFileDialog({
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
-        setLoading(false);
         setManualInput("");
       }
       onOpenChange(open);
@@ -130,48 +131,11 @@ export function AddFileDialog({
     [onOpenChange]
   );
 
-  // Handle system file dialog selection
-  const handleSelectFiles = useCallback(async () => {
-    const option = FILE_TYPE_OPTIONS.find((o) => o.label === selectedFilter);
-    const filters = option?.filters ?? FILE_TYPE_OPTIONS[0].filters;
-
-    try {
-      const selected = await open({
-        multiple: true,
-        filters,
-        title: "选择配置文件",
-      });
-
-      if (!selected) return; // User cancelled
-
-      // selected is string[] | null from open()
-      const paths = Array.isArray(selected) ? selected : [];
-
-      // Convert absolute paths to relative and build ManagedFile objects
-      await processFilesAndConfirm(paths);
-    } catch (error) {
-      // Error from dialog is non-fatal; user can retry
-      if (import.meta.env.DEV) console.error("文件选择失败:", error);
-    }
-  }, [selectedFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle manual input submission
-  const handleManualAdd = useCallback(async () => {
-    const trimmed = manualInput.trim();
-    if (!trimmed) return;
-
-    // Treat the manual input as a relative path within the project
-    const fullPath = `${projectPath.replace(/\\/g, "/")}/${trimmed}`;
-    await processFilesAndConfirm([fullPath]);
-    setManualInput("");
-  }, [manualInput, projectPath]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Process selected paths: read content, build ManagedFile objects
   const processFilesAndConfirm = useCallback(
     async (paths: string[]) => {
       if (paths.length === 0) return;
 
-      setLoading(true);
       const managedFiles: ManagedFile[] = [];
       let failCount = 0;
 
@@ -204,8 +168,6 @@ export function AddFileDialog({
         }
       }
 
-      setLoading(false);
-
       if (managedFiles.length > 0) {
         await onConfirm(managedFiles);
       }
@@ -222,6 +184,54 @@ export function AddFileDialog({
     },
     [projectPath, existingFileNames, onConfirm, onOpenChange]
   );
+
+  // Handle system file dialog selection
+  const handleSelectFiles = useCallback(async () => {
+    const option = FILE_TYPE_OPTIONS.find((o) => o.label === selectedFilter);
+    const filters = option?.filters ?? FILE_TYPE_OPTIONS[0].filters;
+
+    setLoading(true);
+    onBusyChange?.(true);
+    try {
+      const selected = await openFileDialog({
+        multiple: true,
+        filters,
+        title: "选择配置文件",
+      });
+
+      if (!selected) return; // User cancelled
+
+      // selected is string[] | null from open()
+      const paths = Array.isArray(selected) ? selected : [];
+
+      // Convert absolute paths to relative and build ManagedFile objects
+      await processFilesAndConfirm(paths);
+    } catch (error) {
+      // Error from dialog is non-fatal; user can retry
+      if (import.meta.env.DEV) console.error("文件选择失败:", error);
+    } finally {
+      setLoading(false);
+      onBusyChange?.(false);
+    }
+  }, [selectedFilter, onBusyChange, processFilesAndConfirm]);
+
+  // Handle manual input submission
+  const handleManualAdd = useCallback(async () => {
+    const trimmed = manualInput.trim();
+    if (!trimmed) return;
+
+    // Treat the manual input as a relative path within the project
+    const fullPath = `${projectPath.replace(/\\/g, "/")}/${trimmed}`;
+    setLoading(true);
+    onBusyChange?.(true);
+    try {
+      await processFilesAndConfirm([fullPath]);
+      setManualInput("");
+    } finally {
+      setLoading(false);
+      onBusyChange?.(false);
+    }
+  }, [manualInput, projectPath, onBusyChange, processFilesAndConfirm]);
 
   // Handle Enter key on manual input
   const handleManualKeyDown = useCallback(

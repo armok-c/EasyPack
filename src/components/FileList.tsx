@@ -11,7 +11,7 @@
  * - Delete confirmation AlertDialog per D-26
  * - Integrates AddFileDialog and FileEditorDialog
  */
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useImperativeHandle, useRef, forwardRef } from "react";
 import { toast } from "sonner";
 import {
   Table,
@@ -33,8 +33,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { AddFileDialog } from "@/components/AddFileDialog";
-import { FileEditorDialog } from "@/components/FileEditorDialog";
-import { formatRelativeTime, getLanguageExtension } from "@/lib/file-lang";
+import { FileEditorDialog, type FileEditorDialogHandle } from "@/components/FileEditorDialog";
+import { formatRelativeTime } from "@/lib/file-lang";
 import { SyncDiffButton } from "@/components/SyncDiffButton";
 import type { ManagedFile } from "@/lib/types";
 
@@ -46,6 +46,13 @@ export interface FileListProps {
   onDeleteFiles: (envId: string, fileNames: string[]) => Promise<void>;
   onUpdateFile: (envId: string, fileName: string, content: string) => Promise<void>;
   onSyncDiff?: (checkedFiles: string[]) => void;
+  onBusyChange?: (busy: boolean) => void;
+}
+
+export interface FileListHandle {
+  requestLeave: (options?: {
+    onInteractionNeeded?: () => void | Promise<void>;
+  }) => Promise<boolean>;
 }
 
 /** Extract file extension from name */
@@ -61,7 +68,7 @@ function getBasename(name: string): string {
   return segments[segments.length - 1] || name;
 }
 
-export function FileList({
+export const FileList = forwardRef<FileListHandle, FileListProps>(function FileList({
   envId,
   files,
   projectPath,
@@ -69,12 +76,18 @@ export function FileList({
   onDeleteFiles,
   onUpdateFile,
   onSyncDiff,
-}: FileListProps) {
+  onBusyChange,
+}: FileListProps, ref) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editorDialogOpen, setEditorDialogOpen] = useState(false);
   const [editingFile, setEditingFile] = useState<ManagedFile | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const editorRef = useRef<FileEditorDialogHandle | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    requestLeave: (options) => editorRef.current?.requestLeave(options) ?? Promise.resolve(true),
+  }), []);
 
   // Sort files alphabetically by name per D-29
   const sortedFiles = useMemo(
@@ -305,10 +318,12 @@ export function FileList({
         projectPath={projectPath}
         existingFileNames={existingFileNames}
         onConfirm={handleAddFileConfirm}
+        onBusyChange={onBusyChange}
       />
 
       {/* FileEditorDialog integration */}
       <FileEditorDialog
+        ref={editorRef}
         open={editorDialogOpen}
         onOpenChange={handleEditorOpenChange}
         file={editingFile}
@@ -344,4 +359,4 @@ export function FileList({
       </AlertDialog>
     </>
   );
-}
+});

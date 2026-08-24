@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/Sidebar";
-import { MainArea } from "@/components/MainArea";
+import { MainArea, type MainAreaHandle } from "@/components/MainArea";
 import { TitleBar } from "@/components/TitleBar";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ShortcutPanel } from "@/components/ShortcutPanel";
@@ -17,6 +17,8 @@ import { useEdgeDrawer } from "@/hooks/useEdgeDrawer";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { SnapIndicator } from "@/components/SnapIndicator";
 import { detectSnapEdge } from "@/lib/drawer-geometry";
+import { ensureMainWindowVisible } from "@/lib/window-visibility";
+import { requestProjectSwitch as startProjectSwitch } from "@/lib/project-switch";
 import type { CommandItem, ManagedFile } from "@/lib/types";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
 import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
@@ -101,6 +103,9 @@ function App() {
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
   const [activeZone, setActiveZone] = useState<"sidebar" | "main">("sidebar");
+  const mainAreaRef = useRef<MainAreaHandle | null>(null);
+  const pendingProjectSwitchRef = useRef<Promise<void> | null>(null);
+  const restoreFromDrawerRef = useRef<(() => Promise<void>) | null>(null);
   const handleZoneSwitch = useCallback(() => {
     setActiveZone((prev) => (prev === "sidebar" ? "main" : "sidebar"));
   }, []);
@@ -196,6 +201,29 @@ function App() {
   const visibilityRef = useRef(visibility);
   visibilityRef.current = visibility;
 
+  const ensureMainWindowForInteraction = useCallback(
+    () => ensureMainWindowVisible({
+      window: appWindow,
+      visibility: visibilityRef.current,
+      showFromTray,
+      showFromDrawer,
+      restoreFromDrawer: () => restoreFromDrawerRef.current?.() ?? Promise.resolve(),
+    }),
+    [showFromTray, showFromDrawer]
+  );
+
+  const requestProjectSwitch = useCallback((projectId: string, fromFloat = false) => {
+    startProjectSwitch({
+      projectId,
+      selectedId,
+      pending: pendingProjectSwitchRef,
+      requestLeave: () => mainAreaRef.current?.requestProjectLeave(
+        fromFloat ? { onInteractionNeeded: ensureMainWindowForInteraction } : undefined
+      ) ?? Promise.resolve(true),
+      selectProject,
+    });
+  }, [selectedId, selectProject, ensureMainWindowForInteraction]);
+
   // Phase 12: recent commands tracking
   const { recentCommands, addRecentCommand } = useRecentCommands({ store, activeProfileId });
   const { updateAvailable, latestVersion, currentVersion, openReleasePage, checkNow } = useUpdateCheck(!!store);
@@ -221,7 +249,7 @@ function App() {
     projects,
     commands,
     onExecute: handleExecuteWithRecent,
-    onSwitchProject: selectProject,
+    onSwitchProject: (projectId) => requestProjectSwitch(projectId, true),
   });
 
   // Phase 18: Build ShortcutAction registry and pass to useGlobalShortcuts
@@ -243,13 +271,13 @@ function App() {
       if (!selectedId || projects.length === 0) return;
       const idx = projects.findIndex((p) => p.id === selectedId);
       const prevIdx = (idx - 1 + projects.length) % projects.length;
-      selectProject(projects[prevIdx].id);
+      requestProjectSwitch(projects[prevIdx].id);
     },
     onNextProject: () => {
       if (!selectedId || projects.length === 0) return;
       const idx = projects.findIndex((p) => p.id === selectedId);
       const nextIdx = (idx + 1) % projects.length;
-      selectProject(projects[nextIdx].id);
+      requestProjectSwitch(projects[nextIdx].id);
     },
     onOpenFolder: handleOpenFolder,
   });
@@ -268,6 +296,7 @@ function App() {
     showFromDrawer,
     drawerEnabled,
   });
+  restoreFromDrawerRef.current = restoreFromDrawer;
 
   // Phase 14: ref 模式避免 onMoved useEffect 因 snapEdge/isDrawerAnimating 变化而频繁重建
   const snapEdgeRef = useRef(snapEdge);
@@ -559,7 +588,7 @@ function App() {
           projects={projects}
           selectedId={selectedId}
           onAddProject={selectFolder}
-          onSelectProject={selectProject}
+          onSelectProject={requestProjectSwitch}
           onRemoveProject={removeProject}
           onUpdateStyle={updateProjectStyle}
           onReorderProjects={reorderProjects}
@@ -567,6 +596,7 @@ function App() {
           onZoneSwitch={handleZoneSwitch}
         />
         <MainArea
+          ref={mainAreaRef}
           currentProject={currentProject}
           onExecute={handleExecuteWithRecent}
           commands={commands}

@@ -71,12 +71,6 @@ export function EnvTabBar({
         </div>
       </div>
 
-      {/* File placeholder area per D-19 */}
-      <div className="mt-2 flex items-center justify-center p-6 rounded-xl border-2 border-dashed border-white/20">
-        <p className="text-xs text-muted-foreground">
-          文件管理功能将在后续版本中提供
-        </p>
-      </div>
     </div>
   );
 }

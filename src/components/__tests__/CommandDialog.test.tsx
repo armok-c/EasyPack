@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { CommandDialog } from "@/components/CommandDialog";
+import { createRef } from "react";
+import { CommandDialog, type CommandDialogHandle } from "@/components/CommandDialog";
 
 // Mock @tauri-apps/plugin-store to prevent import errors
 vi.mock("@tauri-apps/plugin-store", () => ({}));
@@ -196,6 +197,41 @@ describe("CommandDialog", () => {
         command: "npm run deploy",
         icon: "Code",
       });
+    });
+  });
+
+  describe("leaving with unsaved changes", () => {
+    it("keeps the prompt and draft when saving during leave fails", async () => {
+      const onSubmit = vi.fn().mockRejectedValue(new Error("write failed"));
+      const onOpenChange = vi.fn();
+      const ref = createRef<CommandDialogHandle>();
+      render(
+        <CommandDialog
+          ref={ref}
+          open={true}
+          onOpenChange={onOpenChange}
+          onSubmit={onSubmit}
+        />
+      );
+
+      fireEvent.change(screen.getByPlaceholderText("例如: 运行测试"), {
+        target: { value: "临时指令" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("例如: npm test"), {
+        target: { value: "npm test" },
+      });
+
+      const leavePromise = ref.current!.requestLeave();
+      const prompt = await screen.findByRole("alertdialog");
+      fireEvent.click(within(prompt).getByRole("button", { name: "保存" }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+      expect((screen.getByPlaceholderText("例如: 运行测试") as HTMLInputElement).value).toBe("临时指令");
+
+      fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "取消" }));
+      await expect(leavePromise).resolves.toBe(false);
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
     });
   });
 });
