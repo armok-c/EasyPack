@@ -575,6 +575,7 @@ function App() {
           onAddProject={handleSelectFolder}
           onSelectProject={requestProjectSwitch}
           onRemoveProject={handleRemoveProject}
+          onOpenFolder={openFolder}
           onUpdateStyle={updateProjectStyle}
           onRebindProject={handleRebindProject}
           projectPathUnavailable={!!currentProject && projectInfoError}

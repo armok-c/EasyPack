@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Plus, FolderOpen, X, GripVertical } from "lucide-react";
+import { Plus, FolderOpen, X, GripVertical, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -7,6 +7,7 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -32,6 +33,7 @@ interface SidebarProps {
   onAddProject: () => void;
   onSelectProject: (id: string) => void;
   onRemoveProject: (id: string) => Promise<boolean>;
+  onOpenFolder: (path: string) => void;
   onUpdateStyle: (projectId: string, style: { icon: string; color: string }) => void;
   onRebindProject: (projectId: string) => Promise<boolean>;
   projectPathUnavailable?: boolean;
@@ -62,7 +64,8 @@ function SortableProjectItem({
   isSelected,
   onSelect,
   onRemove,
-  onContextMenu,
+  onOpenFolder,
+  onOpenSettings,
   isFocused,
   onKeyDown,
   itemRef,
@@ -72,7 +75,8 @@ function SortableProjectItem({
   isSelected: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
-  onContextMenu: (id: string) => void;
+  onOpenFolder: (path: string) => void;
+  onOpenSettings: (id: string) => void;
   isFocused: boolean;
   onKeyDown: (e: React.KeyboardEvent) => void;
   itemRef: (el: HTMLDivElement | null) => void;
@@ -141,16 +145,39 @@ function SortableProjectItem({
                 onRemove(project.id);
               }}
               tabIndex={-1}
-              className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 rounded hover:bg-white/10 transition-opacity duration-150"
+              className="ml-1 inline-flex size-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all duration-150 hover:bg-destructive/15 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50 group-hover:opacity-100"
               aria-label={`删除项目 ${project.name}`}
             >
-              <X className="size-3 text-muted-foreground" />
+              <X className="size-3.5" />
             </button>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onClick={() => onContextMenu(project.id)}>
-            设置图标和颜色
+        <ContextMenuContent
+          collisionPadding={8}
+          className="w-[11.5rem] min-w-0 rounded-lg p-1.5 shadow-xl"
+        >
+          <ContextMenuItem
+            onSelect={() => onOpenFolder(project.path)}
+            className="h-8 gap-2 px-2"
+          >
+            <FolderOpen className="size-4" />
+            打开项目文件夹
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => onOpenSettings(project.id)}
+            className="h-8 gap-2 px-2"
+          >
+            <Settings2 className="size-4" />
+            项目设置
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => onRemove(project.id)}
+            className="h-8 gap-2 px-2 !text-red-300 hover:!bg-red-500/10 hover:!text-red-200 focus:!bg-red-500/10 focus:!text-red-200 data-[variant=destructive]:*:[svg]:text-red-300!"
+          >
+            <Trash2 className="size-4 text-red-300!" />
+            删除项目
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -164,6 +191,7 @@ export function Sidebar({
   onAddProject,
   onSelectProject,
   onRemoveProject,
+  onOpenFolder,
   onUpdateStyle,
   onRebindProject,
   projectPathUnavailable = false,
@@ -308,7 +336,8 @@ export function Sidebar({
                     isSelected={selectedId === project.id}
                     onSelect={onSelectProject}
                     onRemove={(id) => setDeleteProjectId(id)}
-                    onContextMenu={setSettingsProjectId}
+                    onOpenFolder={onOpenFolder}
+                    onOpenSettings={setSettingsProjectId}
                     isFocused={activeZone === "sidebar" && index === focusedIndex}
                     onKeyDown={(e) => handleItemKeyDown(e, index)}
                     itemRef={setItemRef(index)}

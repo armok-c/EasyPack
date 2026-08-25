@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { describe, expect, it, vi } from "vitest";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { buildMigrationEnvironments, EnvironmentWorkspace, type EnvironmentWorkspaceProps } from "@/components/EnvironmentWorkspace";
 import type { EnvironmentProjectState, LegacyMigrationDraft } from "@/lib/environment-types";
 
@@ -99,6 +100,19 @@ describe("EnvironmentWorkspace", () => {
     fireEvent.click(screen.getByRole("radio", { name: "复制已有环境" }));
     fireEvent.click(screen.getByRole("button", { name: "创建" }));
     await waitFor(() => expect(onCopy).toHaveBeenCalledWith("dev", "测试"));
+  });
+
+  it("opens the managed file picker at the project root without a manual path input", async () => {
+    const openFileDialogMock = vi.mocked(openFileDialog);
+    openFileDialogMock.mockReset().mockResolvedValue(null);
+    render(<EnvironmentWorkspace {...props()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "受管文件清单" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByPlaceholderText("输入项目内相对路径")).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "选择文件" }));
+    await waitFor(() => expect(openFileDialogMock).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: state.projectPath })));
   });
 
   it("blocks the main workflow behind the legacy migration wizard", () => {

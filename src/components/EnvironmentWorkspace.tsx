@@ -98,26 +98,16 @@ interface PathDialogProps {
 
 function ManagedPathsDialog({ open, projectPath, paths, busy, onOpenChange, onSave }: PathDialogProps) {
   const [draft, setDraft] = useState<string[]>(paths);
-  const [manual, setManual] = useState("");
 
   const handleOpenChange = useCallback((next: boolean) => {
     if (next) setDraft(paths);
     onOpenChange(next);
   }, [onOpenChange, paths]);
 
-  const addManual = useCallback(() => {
-    const value = manual.trim().replace(/\\/g, "/");
-    if (!value || !isTextPath(value)) {
-      toast.error("只能选择普通文本文件");
-      return;
-    }
-    if (!draft.includes(value)) setDraft((current) => [...current, value].sort());
-    setManual("");
-  }, [draft, manual]);
-
   const selectFiles = useCallback(async () => {
     const selected = await openFileDialog({
       multiple: true,
+      defaultPath: projectPath,
       title: "选择受管文本文件",
       filters: [{ name: "文本文件", extensions: [...TEXT_EXTENSIONS] }],
     });
@@ -143,10 +133,6 @@ function ManagedPathsDialog({ open, projectPath, paths, busy, onOpenChange, onSa
             <Button type="button" variant="outline" onClick={() => void selectFiles()} disabled={busy}>
               <FilePlus2 className="size-4" />选择文件
             </Button>
-            <div className="flex flex-1 gap-2">
-              <Input value={manual} onChange={(event) => setManual(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addManual(); } }} placeholder="输入项目内相对路径" />
-              <Button type="button" variant="outline" onClick={addManual} disabled={!manual.trim()}>添加</Button>
-            </div>
           </div>
           <div className="max-h-56 overflow-auto rounded-md border border-border">
             {draft.length === 0 ? <p className="p-4 text-sm text-muted-foreground">还没有受管文件</p> : draft.map((path) => (

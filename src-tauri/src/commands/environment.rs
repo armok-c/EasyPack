@@ -618,6 +618,19 @@ impl EnvironmentStore {
 
     fn load_manifest(&self, project: &ProjectRef) -> Result<Manifest, String> {
         let bytes = fs::read(self.manifest_path(project)).map_err(io_error)?;
+        self.parse_manifest(project, &bytes)
+    }
+
+    fn load_manifest_if_exists(&self, project: &ProjectRef) -> Result<Option<Manifest>, String> {
+        let bytes = match fs::read(self.manifest_path(project)) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(io_error(error)),
+        };
+        Ok(Some(self.parse_manifest(project, &bytes)?))
+    }
+
+    fn parse_manifest(&self, project: &ProjectRef, bytes: &[u8]) -> Result<Manifest, String> {
         let manifest: Manifest =
             serde_json::from_slice(&bytes).map_err(|e| format!("环境数据损坏: {}", e))?;
         if manifest.profile_id != project.profile_id || manifest.project_id != project.project_id {
@@ -922,7 +935,22 @@ impl EnvironmentStore {
                 // Keep the lock marker durable, but never expose its contents.
                 let _ = store.mark_blocked(project);
             }
-            let manifest = store.load_manifest(project)?;
+            let Some(manifest) = store.load_manifest_if_exists(project)? else {
+                if recovery_failed {
+                    return Err(RECOVERY_ERROR_CODE.to_string());
+                }
+                store.ensure_root(&project.project_path)?;
+                return Ok(ProjectState {
+                    profile_id: project.profile_id.clone(),
+                    project_id: project.project_id.clone(),
+                    project_path: project.project_path.clone(),
+                    managed_paths: Vec::new(),
+                    environments: Vec::new(),
+                    undo_available: false,
+                    blocked: false,
+                    recovery_error: None,
+                });
+            };
             let _ = store.project_root(project, &manifest)?;
             let mut state = store.to_project_state(project, &manifest);
             state.blocked = recovery_failed || store.blocked_path(project).exists();
@@ -4120,7 +4148,11 @@ mod tests {
                 operation_id: None,
             })
             .unwrap();
-        assert!(store.open_project(&project_a).is_err());
+        assert!(store
+            .open_project(&project_a)
+            .unwrap()
+            .environments
+            .is_empty());
         assert!(store.open_project(&project_b).is_ok());
         assert!(store.open_project(&project_c).is_ok());
 
@@ -4130,7 +4162,11 @@ mod tests {
                 operation_id: None,
             })
             .unwrap();
-        assert!(store.open_project(&project_b).is_err());
+        assert!(store
+            .open_project(&project_b)
+            .unwrap()
+            .environments
+            .is_empty());
         assert!(store.open_project(&project_c).is_ok());
     }
 
@@ -4415,6 +4451,41 @@ mod tests {
         let serialized = serde_json::to_string(&state).unwrap();
         assert!(serialized.contains("recoveryError"));
         assert!(!serialized.contains("secret transaction body"));
+    }
+
+    #[test]
+    fn open_project_returns_empty_state_without_creating_environment_data() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let store = EnvironmentStore::new(dir.path().join("data"));
+        let project = project(dir.path());
+
+        let state = store.open_project(&project).unwrap();
+
+        assert_eq!(state.profile_id, project.profile_id);
+        assert_eq!(state.project_id, project.project_id);
+        assert_eq!(state.project_path, project.project_path);
+        assert!(state.managed_paths.is_empty());
+        assert!(state.environments.is_empty());
+        assert!(!state.undo_available);
+        assert!(!state.blocked);
+        assert_eq!(state.recovery_error, None);
+        assert!(!store.root.exists());
+        assert!(!store.manifest_path(&project).exists());
+    }
+
+    #[test]
+    fn open_project_rejects_missing_project_path_without_manifest() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let store = EnvironmentStore::new(dir.path().join("data"));
+        let project_root = dir.path().join("missing-project");
+        let project = project(&project_root);
+
+        let result = store.open_project(&project);
+
+        assert!(result.is_err());
+        assert!(!store.root.exists());
     }
 
     #[test]

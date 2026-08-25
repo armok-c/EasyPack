@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ICON_OPTIONS, DEFAULT_ICON, getIconByName, isFileIcon, getFilePath } from "@/lib/icons";
-import { COLOR_OPTIONS, DEFAULT_COLOR } from "@/lib/colors";
+import { DEFAULT_COLOR } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -24,6 +24,13 @@ interface IconCandidate {
   source: string;
 }
 
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+function normalizeHexColor(value: string | undefined): string {
+  if (!value || !HEX_COLOR_PATTERN.test(value)) return DEFAULT_COLOR;
+  return value.toLowerCase();
+}
+
 interface ProjectSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,12 +48,12 @@ export function ProjectSettingsDialog({
   onRebind,
   pathUnavailable = false,
 }: ProjectSettingsDialogProps) {
+  const initialColor = normalizeHexColor(project?.color);
   const [selectedIcon, setSelectedIcon] = useState(
     () => project?.icon ?? DEFAULT_ICON
   );
-  const [selectedColor, setSelectedColor] = useState(
-    () => project?.color ?? DEFAULT_COLOR
-  );
+  const [selectedColor, setSelectedColor] = useState(() => initialColor);
+  const [colorInputValue, setColorInputValue] = useState(() => initialColor);
   const [candidates, setCandidates] = useState<IconCandidate[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -56,15 +63,24 @@ export function ProjectSettingsDialog({
   useEffect(() => {
     if (open && project) {
       setSelectedIcon(project.icon ?? DEFAULT_ICON);
-      setSelectedColor(project.color ?? DEFAULT_COLOR);
+      const color = normalizeHexColor(project.color);
+      setSelectedColor(color);
+      setColorInputValue(color);
       setCandidates([]);
       setScanError(null);
     }
   }, [open, project]);
 
+  const projectColor = normalizeHexColor(project?.color);
+  const colorInputIsValid =
+    colorInputValue === DEFAULT_COLOR
+      ? selectedColor === DEFAULT_COLOR
+      : HEX_COLOR_PATTERN.test(colorInputValue) &&
+        normalizeHexColor(colorInputValue) === selectedColor;
   const hasChanges =
-    selectedIcon !== (project?.icon ?? DEFAULT_ICON) ||
-    selectedColor !== (project?.color ?? DEFAULT_COLOR);
+    colorInputIsValid &&
+    (selectedIcon !== (project?.icon ?? DEFAULT_ICON) ||
+      selectedColor !== projectColor);
 
   const handleSubmit = useCallback(() => {
     if (!project || !hasChanges) return;
@@ -76,7 +92,9 @@ export function ProjectSettingsDialog({
     (newOpen: boolean) => {
       if (!newOpen && project) {
         setSelectedIcon(project.icon ?? DEFAULT_ICON);
-        setSelectedColor(project.color ?? DEFAULT_COLOR);
+        const color = normalizeHexColor(project.color);
+        setSelectedColor(color);
+        setColorInputValue(color);
       }
       onOpenChange(newOpen);
     },
@@ -137,7 +155,7 @@ export function ProjectSettingsDialog({
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
-            设置图标和颜色
+            项目设置
           </DialogTitle>
           <DialogDescription className="sr-only">
             为项目选择图标和颜色标记
@@ -246,7 +264,7 @@ export function ProjectSettingsDialog({
             )}
             {!scanning && candidates.length > 0 && (
               <div
-                className="flex flex-wrap gap-2"
+                className="grid h-[224px] auto-rows-[64px] grid-cols-3 gap-2 overflow-y-auto rounded-md border border-white/10 p-2"
                 role="radiogroup"
                 aria-label="扫描到的图标"
               >
@@ -262,8 +280,8 @@ export function ProjectSettingsDialog({
                       aria-label={candidate.name}
                       onClick={() => setSelectedIcon(iconValue)}
                       className={cn(
-                        "flex flex-col items-center gap-1 p-1.5 rounded-md",
-                        "bg-white/5 border border-white/10",
+                        "flex min-w-0 flex-col items-center gap-1 rounded-md border p-1.5",
+                        "bg-white/5 border-white/10",
                         "transition-all duration-150 ease-out",
                         "cursor-pointer outline-none",
                         "hover:bg-white/10 hover:border-white/20",
@@ -277,7 +295,10 @@ export function ProjectSettingsDialog({
                         className="size-8 rounded-md object-cover"
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
-                      <span className="text-xs text-muted-foreground truncate max-w-[32px]">
+                      <span
+                        className="max-w-full truncate text-xs text-muted-foreground"
+                        title={candidate.name}
+                      >
                         {candidate.name}
                       </span>
                     </button>
@@ -298,51 +319,55 @@ export function ProjectSettingsDialog({
           {/* Color picker */}
           <div className="space-y-2">
             <Label>颜色</Label>
-            <div
-              className="grid grid-cols-4 gap-2"
-              role="radiogroup"
-              aria-label="选择颜色"
-            >
-              {/* No color option */}
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={selectedColor || "#000000"}
+                onChange={(event) => {
+                  const color = normalizeHexColor(event.target.value);
+                  if (!color) return;
+                  setSelectedColor(color);
+                  setColorInputValue(color);
+                }}
+                aria-label="颜色取色器"
+                className="size-10 cursor-pointer rounded-md border border-white/10 bg-transparent p-0.5"
+              />
+              <input
+                type="text"
+                value={colorInputValue}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setColorInputValue(value);
+                  if (HEX_COLOR_PATTERN.test(value)) {
+                    setSelectedColor(normalizeHexColor(value));
+                    setColorInputValue(normalizeHexColor(value));
+                  }
+                }}
+                placeholder="#RRGGBB"
+                aria-label="颜色编号"
+                inputMode="text"
+                className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm uppercase outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
               <button
                 type="button"
-                role="radio"
-                aria-checked={selectedColor === DEFAULT_COLOR}
                 aria-label="无颜色"
-                onClick={() => setSelectedColor(DEFAULT_COLOR)}
+                aria-pressed={selectedColor === DEFAULT_COLOR}
+                onClick={() => {
+                  setSelectedColor(DEFAULT_COLOR);
+                  setColorInputValue(DEFAULT_COLOR);
+                }}
                 className={cn(
-                  "flex items-center justify-center size-6 rounded-full",
+                  "flex size-9 shrink-0 items-center justify-center rounded-md",
                   "border-2 border-dashed border-white/20",
                   "transition-all duration-150 cursor-pointer outline-none",
                   "hover:border-white/40",
                   "focus-visible:ring-2 focus-visible:ring-ring",
                   selectedColor === DEFAULT_COLOR &&
-                    "ring-2 ring-white/60 scale-110"
+                    "ring-2 ring-white/60"
                 )}
               >
                 <X className="size-3 text-muted-foreground" />
               </button>
-
-              {/* Color swatches */}
-              {COLOR_OPTIONS.map((color) => (
-                <button
-                  key={color.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedColor === color.value}
-                  aria-label={color.name}
-                  onClick={() => setSelectedColor(color.value)}
-                  className={cn(
-                    "size-6 rounded-full",
-                    "opacity-70 hover:opacity-100 hover:scale-110",
-                    "transition-all duration-150 cursor-pointer outline-none",
-                    "focus-visible:ring-2 focus-visible:ring-ring",
-                    selectedColor === color.value &&
-                      "opacity-100 ring-2 ring-white/60 scale-110"
-                  )}
-                  style={{ backgroundColor: color.value }}
-                />
-              ))}
             </div>
           </div>
         </div>
@@ -362,6 +387,7 @@ export function ProjectSettingsDialog({
               <div
                 className="absolute left-0 top-1 bottom-1 w-[3px] rounded-l-lg"
                 style={{ backgroundColor: selectedColor }}
+                data-testid="project-color-preview"
               />
             )}
             <div className="flex items-center gap-1.5 pl-2">

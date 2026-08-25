@@ -24,16 +24,32 @@ const project: ProjectItem = {
   addedAt: 1,
 };
 
-function renderSidebar(onRemoveProject: (id: string) => Promise<boolean>) {
+const secondProject: ProjectItem = {
+  id: "project-b",
+  name: "项目B",
+  path: "D:\\Workspace\\ProjectB",
+  addedAt: 2,
+};
+
+function renderSidebar(
+  onRemoveProject: (id: string) => Promise<boolean>,
+  options: {
+    projects?: ProjectItem[];
+    onOpenFolder?: (path: string) => void;
+    onSelectProject?: (id: string) => void;
+  } = {},
+) {
+  const projects = options.projects ?? [project];
   return render(
     <Sidebar
-      projects={[project]}
-      selectedId={project.id}
+      projects={projects}
+      selectedId={projects[0]?.id ?? null}
       onAddProject={vi.fn()}
-      onSelectProject={vi.fn()}
+      onSelectProject={options.onSelectProject ?? vi.fn()}
       onRemoveProject={onRemoveProject}
       onUpdateStyle={vi.fn()}
       onRebindProject={vi.fn().mockResolvedValue(true)}
+      onOpenFolder={options.onOpenFolder ?? vi.fn()}
       onReorderProjects={vi.fn()}
       activeZone="sidebar"
       onZoneSwitch={vi.fn()}
@@ -45,6 +61,84 @@ async function openDeleteConfirmation() {
   fireEvent.click(screen.getByRole("button", { name: "删除项目 项目A" }));
   expect(screen.getByText("永久删除项目？")).toBeInTheDocument();
 }
+
+async function openContextMenu(projectName: string) {
+  const projectItem = screen
+    .getByText(projectName)
+    .closest('[data-slot="context-menu-trigger"]');
+  expect(projectItem).not.toBeNull();
+  fireEvent.contextMenu(projectItem!);
+  await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
+}
+
+describe("Sidebar project context menu", () => {
+  it("shows project actions in a desktop-friendly order", async () => {
+    renderSidebar(vi.fn().mockResolvedValue(true));
+    await openContextMenu(project.name);
+
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "打开项目文件夹",
+      "项目设置",
+      "删除项目",
+    ]);
+  });
+
+  it("uses a clear local danger style for the delete action", async () => {
+    renderSidebar(vi.fn().mockResolvedValue(true));
+    await openContextMenu(project.name);
+
+    const deleteItem = screen.getByRole("menuitem", { name: "删除项目" });
+    expect(deleteItem).toHaveAttribute("data-variant", "destructive");
+    expect(deleteItem).toHaveClass(
+      "!text-red-300",
+      "hover:!bg-red-500/10",
+      "hover:!text-red-200",
+      "focus:!bg-red-500/10",
+      "focus:!text-red-200",
+      "data-[variant=destructive]:*:[svg]:text-red-300!",
+    );
+    expect(deleteItem.querySelector("svg")).toHaveClass("text-red-300!");
+  });
+
+  it("opens settings for the project that was right-clicked", async () => {
+    renderSidebar(vi.fn().mockResolvedValue(true), {
+      projects: [project, secondProject],
+    });
+    await openContextMenu(secondProject.name);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "项目设置" }));
+
+    expect(screen.getByRole("dialog")).toHaveTextContent("项目设置");
+    expect(screen.getByText(secondProject.path)).toBeInTheDocument();
+  });
+
+  it("opens the folder for the right-clicked project without selecting it", async () => {
+    const onOpenFolder = vi.fn();
+    const onSelectProject = vi.fn();
+    renderSidebar(vi.fn().mockResolvedValue(true), {
+      projects: [project, secondProject],
+      onOpenFolder,
+      onSelectProject,
+    });
+    await openContextMenu(secondProject.name);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "打开项目文件夹" }));
+
+    expect(onOpenFolder).toHaveBeenCalledWith(secondProject.path);
+    expect(onSelectProject).not.toHaveBeenCalled();
+  });
+
+  it("opens the existing delete confirmation from the context menu", async () => {
+    const onRemoveProject = vi.fn().mockResolvedValue(true);
+    renderSidebar(onRemoveProject);
+    await openContextMenu(project.name);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "删除项目" }));
+
+    expect(screen.getByText("永久删除项目？")).toBeInTheDocument();
+    expect(onRemoveProject).not.toHaveBeenCalled();
+  });
+});
 
 describe("Sidebar deletion confirmation", () => {
   it("keeps the confirmation open when deletion is busy or not executed", async () => {

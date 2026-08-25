@@ -1,0 +1,138 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
+import "@testing-library/jest-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import type { ProjectItem } from "@/hooks/useProject";
+
+const { invokeMock, convertFileSrcMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  convertFileSrcMock: vi.fn((path: string) => path),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: invokeMock,
+  convertFileSrc: convertFileSrcMock,
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(),
+}));
+
+const project: ProjectItem = {
+  id: "project-a",
+  name: "项目A",
+  path: "C:\\Workspace\\ProjectA",
+  addedAt: 1,
+  color: "#112233",
+};
+
+function renderSettings(
+  onSave = vi.fn(),
+  projectOverride: ProjectItem = project,
+) {
+  return render(
+    <ProjectSettingsDialog
+      open
+      onOpenChange={vi.fn()}
+      project={projectOverride}
+      onSave={onSave}
+      onRebind={vi.fn().mockResolvedValue(true)}
+    />,
+  );
+}
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe("ProjectSettingsDialog custom icon picker", () => {
+  it("shows scanned icons in a bordered three-column, three-row scroll container", async () => {
+    const candidates = Array.from({ length: 10 }, (_, index) => ({
+      path: `C:/icons/icon-${index}.png`,
+      name: index === 0 ? "a-very-long-icon-file-name.png" : `icon-${index}.png`,
+      source: "project",
+    }));
+    invokeMock.mockResolvedValueOnce(candidates);
+    renderSettings();
+
+    fireEvent.click(screen.getByRole("button", { name: "从项目目录导入图标" }));
+
+    const grid = await screen.findByRole("radiogroup", { name: "扫描到的图标" });
+    expect(grid).toHaveClass(
+      "grid",
+      "grid-cols-3",
+      "auto-rows-[64px]",
+      "h-[224px]",
+      "overflow-y-auto",
+      "border",
+      "rounded-md",
+    );
+    expect(within(grid).getAllByRole("radio")).toHaveLength(10);
+
+    const card = within(grid).getByRole("radio", {
+      name: "a-very-long-icon-file-name.png",
+    });
+    expect(card).toHaveClass("min-w-0");
+    expect(card.querySelector("span")).toHaveClass("truncate");
+    expect(card.querySelector("span")).toHaveAttribute(
+      "title",
+      "a-very-long-icon-file-name.png",
+    );
+  });
+});
+
+describe("ProjectSettingsDialog color picker", () => {
+  it("keeps the native picker, text input, preview, and saved value synchronized", () => {
+    const onSave = vi.fn();
+    renderSettings(onSave);
+
+    const picker = screen.getByLabelText("颜色取色器");
+    const textInput = screen.getByLabelText("颜色编号");
+    expect(picker).toHaveValue("#112233");
+    expect(textInput).toHaveValue("#112233");
+
+    fireEvent.change(textInput, { target: { value: "#AABBCC" } });
+    expect(textInput).toHaveValue("#aabbcc");
+    expect(picker).toHaveValue("#aabbcc");
+    expect(screen.getByTestId("project-color-preview")).toHaveStyle({
+      backgroundColor: "#aabbcc",
+    });
+
+    fireEvent.change(picker, { target: { value: "#445566" } });
+    expect(textInput).toHaveValue("#445566");
+    expect(screen.getByTestId("project-color-preview")).toHaveStyle({
+      backgroundColor: "#445566",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+    expect(onSave).toHaveBeenCalledWith("project-a", {
+      icon: "Terminal",
+      color: "#445566",
+    });
+  });
+
+  it("does not enable saving or preview an invalid intermediate color", () => {
+    const onSave = vi.fn();
+    renderSettings(onSave);
+
+    const textInput = screen.getByLabelText("颜色编号");
+    fireEvent.change(textInput, { target: { value: "#1122" } });
+
+    expect(textInput).toHaveValue("#1122");
+    expect(screen.getByLabelText("颜色取色器")).toHaveValue("#112233");
+    expect(screen.getByTestId("project-color-preview")).toHaveStyle({
+      backgroundColor: "#112233",
+    });
+    expect(screen.getByRole("button", { name: "保存设置" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});
