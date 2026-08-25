@@ -56,8 +56,7 @@ pub async fn execute_command(project_path: String, shell_command: String) -> Res
         return Err("Invalid shell command: contains double quote".to_string());
     }
     let args = build_cmd_start_args(&project_path, &shell_command);
-    spawn_detached(&args)
-        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    spawn_detached(&args).map_err(|e| format!("Failed to execute command: {}", e))?;
 
     Ok(())
 }
@@ -91,10 +90,7 @@ fn build_bat_content(
     is_batch_script: bool,
     strict: bool,
 ) -> String {
-    let header = format!(
-        "@echo off\r\nchcp 65001 >nul\r\ncd /d \"{}\"",
-        project_path
-    );
+    let header = format!("@echo off\r\nchcp 65001 >nul\r\ncd /d \"{}\"", project_path);
 
     if is_batch_script {
         // Batch script: write content verbatim (per D-05)
@@ -167,8 +163,7 @@ pub async fn execute_script(
         project_path, bat_path_str
     );
 
-    spawn_detached(&args)
-        .map_err(|e| format!("Failed to execute script: {}", e))?;
+    spawn_detached(&args).map_err(|e| format!("Failed to execute script: {}", e))?;
 
     Ok(bat_path_str)
 }
@@ -187,10 +182,7 @@ pub async fn execute_script(
 ///   - any `..` (ParentDir) component
 /// and canonicalizes the project root, confirming the resolved target stays
 /// within it. Only `Normal` components are permitted.
-fn resolve_safe_path(
-    project_path: &str,
-    file_name: &str,
-) -> Result<std::path::PathBuf, String> {
+fn resolve_safe_path(project_path: &str, file_name: &str) -> Result<std::path::PathBuf, String> {
     if file_name.is_empty() {
         return Err("File name cannot be empty".to_string());
     }
@@ -215,8 +207,8 @@ fn resolve_safe_path(
 
     // Canonicalize the project root so that symlink/junction traversal cannot
     // escape the project either. The project dir must already exist.
-    let root = std::fs::canonicalize(project_path)
-        .map_err(|_| "Invalid project path".to_string())?;
+    let root =
+        std::fs::canonicalize(project_path).map_err(|_| "Invalid project path".to_string())?;
     let full = root.join(rel);
 
     // Defense-in-depth: walk the relative components and ensure the resolved
@@ -455,7 +447,11 @@ mod tests {
             true,
         ));
 
-        assert!(result.is_ok(), "execute_script should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "execute_script should succeed: {:?}",
+            result.err()
+        );
         let bat_path = result.unwrap();
         assert!(
             bat_path.contains("easypack-"),
@@ -488,11 +484,12 @@ mod tests {
         let file_path = dir.join("test.txt");
         std::fs::write(&file_path, "hello world").expect("Should write test file");
 
-        let result = read_file_content(
-            dir.to_string_lossy().to_string(),
-            "test.txt".to_string(),
+        let result = read_file_content(dir.to_string_lossy().to_string(), "test.txt".to_string());
+        assert!(
+            result.is_ok(),
+            "read_file_content should succeed: {:?}",
+            result.err()
         );
-        assert!(result.is_ok(), "read_file_content should succeed: {:?}", result.err());
         // Phase 23 iter-2 WR-01: existing file returns Some(content).
         assert_eq!(result.unwrap(), Some("hello world".to_string()));
 
@@ -501,7 +498,8 @@ mod tests {
 
     #[test]
     fn test_read_file_content_not_found_returns_none() {
-        let dir = std::env::temp_dir().join(format!("easypack-test-read-missing-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("easypack-test-read-missing-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
 
         let result = read_file_content(
@@ -511,7 +509,11 @@ mod tests {
         // Phase 23 iter-2 WR-01: NotFound must surface as Ok(None), NOT Err,
         // so the frontend snapshot loop can safely treat it as "absent" while
         // other read errors hard-abort.
-        assert!(result.is_ok(), "NotFound should be Ok(None), got: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "NotFound should be Ok(None), got: {:?}",
+            result.err()
+        );
         assert_eq!(result.unwrap(), None);
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -529,9 +531,14 @@ mod tests {
             "output.txt".to_string(),
             "test content".to_string(),
         );
-        assert!(result.is_ok(), "write_file_content should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "write_file_content should succeed: {:?}",
+            result.err()
+        );
 
-        let written = std::fs::read_to_string(dir.join("output.txt")).expect("Should read written file");
+        let written =
+            std::fs::read_to_string(dir.join("output.txt")).expect("Should read written file");
         assert_eq!(written, "test content");
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -539,7 +546,8 @@ mod tests {
 
     #[test]
     fn test_write_file_content_nested_path() {
-        let dir = std::env::temp_dir().join(format!("easypack-test-write-nested-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("easypack-test-write-nested-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
 
         let result = write_file_content(
@@ -547,7 +555,11 @@ mod tests {
             "config/settings.json".to_string(),
             r#"{"key": "value"}"#.to_string(),
         );
-        assert!(result.is_ok(), "write_file_content nested should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "write_file_content nested should succeed: {:?}",
+            result.err()
+        );
 
         let written = std::fs::read_to_string(dir.join("config").join("settings.json"))
             .expect("Should read nested file");
@@ -630,7 +642,11 @@ mod tests {
         let dir_canon = std::fs::canonicalize(&dir_raw).expect("canonicalize temp_dir");
         let result = resolve_safe_path(&dir_raw.to_string_lossy(), "config/settings.json");
         // Sanity: accepted and resolves inside the temp dir.
-        assert!(result.is_ok(), "should accept nested relative, got: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "should accept nested relative, got: {:?}",
+            result.err()
+        );
         let resolved = result.unwrap();
         assert!(
             resolved.starts_with(&dir_canon),
@@ -680,18 +696,18 @@ mod tests {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(dir.join("goner.txt"), "bye").expect("Should write test file");
 
-        let result = delete_file_content(
-            dir.to_string_lossy().to_string(),
-            "goner.txt".to_string(),
+        let result =
+            delete_file_content(dir.to_string_lossy().to_string(), "goner.txt".to_string());
+        assert!(
+            result.is_ok(),
+            "delete_file_content should succeed: {:?}",
+            result.err()
         );
-        assert!(result.is_ok(), "delete_file_content should succeed: {:?}", result.err());
         assert!(!dir.join("goner.txt").exists(), "file should be gone");
 
         // Deleting again (idempotent) should still be Ok.
-        let result2 = delete_file_content(
-            dir.to_string_lossy().to_string(),
-            "goner.txt".to_string(),
-        );
+        let result2 =
+            delete_file_content(dir.to_string_lossy().to_string(), "goner.txt".to_string());
         assert!(result2.is_ok(), "delete of missing file should be Ok");
 
         let _ = std::fs::remove_dir_all(&dir);

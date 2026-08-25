@@ -15,8 +15,13 @@ pub struct UpdateCheckResult {
 }
 
 #[tauri::command]
-pub async fn check_for_updates(app: tauri::AppHandle, force: Option<bool>) -> Result<UpdateCheckResult, String> {
-    let store = app.store("easypack-store.json").map_err(|e| e.to_string())?;
+pub async fn check_for_updates(
+    app: tauri::AppHandle,
+    force: Option<bool>,
+) -> Result<UpdateCheckResult, String> {
+    let store = app
+        .store("easypack-store.json")
+        .map_err(|e| e.to_string())?;
 
     let config = app.config();
     let current_version_str = config.version.as_deref().unwrap_or("0.0.0");
@@ -79,10 +84,7 @@ pub async fn check_for_updates(app: tauri::AppHandle, force: Option<bool>) -> Re
                     let has_update = latest > current;
                     let latest_str = version_str.to_string();
 
-                    store.set(
-                        "updateCheck.lastCheckTime",
-                        serde_json::Value::from(now),
-                    );
+                    store.set("updateCheck.lastCheckTime", serde_json::Value::from(now));
                     store.set(
                         "updateCheck.latestVersion",
                         serde_json::Value::String(latest_str.clone()),
@@ -99,18 +101,14 @@ pub async fn check_for_updates(app: tauri::AppHandle, force: Option<bool>) -> Re
                 Err(e) => Err(format!("Invalid remote version: {}", e)),
             }
         }
-        Ok(resp) if resp.status() == reqwest::StatusCode::NOT_FOUND => {
-            Ok(UpdateCheckResult {
-                has_update: false,
-                latest_version: None,
-            })
-        }
-        Ok(_) | Err(_) => {
-            Ok(UpdateCheckResult {
-                has_update: false,
-                latest_version: None,
-            })
-        }
+        Ok(resp) if resp.status() == reqwest::StatusCode::NOT_FOUND => Ok(UpdateCheckResult {
+            has_update: false,
+            latest_version: None,
+        }),
+        Ok(_) | Err(_) => Ok(UpdateCheckResult {
+            has_update: false,
+            latest_version: None,
+        }),
     }
 }
 
@@ -120,6 +118,5 @@ pub fn open_release_page() -> Result<(), String> {
     if !RELEASE_PAGE_URL.starts_with("https://") {
         return Err("Invalid URL scheme".to_string());
     }
-    open::that(RELEASE_PAGE_URL)
-        .map_err(|e| format!("Failed to open browser: {}", e))
+    open::that(RELEASE_PAGE_URL).map_err(|e| format!("Failed to open browser: {}", e))
 }

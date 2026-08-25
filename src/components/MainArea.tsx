@@ -2,19 +2,14 @@ import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardR
 import { FolderOpen, Settings, Plus } from "lucide-react";
 import { CommandCard } from "@/components/CommandCard";
 import { CommandDialog } from "@/components/CommandDialog";
-import { EnvTabBar } from "@/components/EnvTabBar";
-import { EnvSwitchBar } from "@/components/EnvSwitchBar";
-import { ManageEnvDialog } from "@/components/ManageEnvDialog";
-import { FileList } from "@/components/FileList";
-import { EnvSelectDialog } from "@/components/EnvSelectDialog";
-import { DiffViewDialog } from "@/components/DiffViewDialog";
+import { EnvironmentWorkspace, type EnvironmentWorkspaceProps } from "@/components/EnvironmentWorkspace";
 import { getIconByName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 import type { CommandDialogHandle } from "@/components/CommandDialog";
-import type { FileListHandle } from "@/components/FileList";
 import type { ProjectItem } from "@/hooks/useProject";
-import type { CommandItem, Environment, ManagedFile } from "@/lib/types";
+import type { CommandItem } from "@/lib/types";
 
 interface MainAreaProps {
   currentProject: ProjectItem | null;
@@ -35,17 +30,8 @@ interface MainAreaProps {
   projectInfoError: boolean;
   // Phase 9: open folder
   onOpenFolder: () => void;
-  // Phase 23: Environment management
-  envs: Environment[];
-  activeEnvId: string | null;
-  onCreateEnv: (name: string) => Promise<string | null>;
-  onRenameEnv: (envId: string, newName: string) => Promise<void>;
-  onDeleteEnv: (envId: string) => Promise<void>;
-  onApplyEnv: (envId: string) => Promise<boolean>;
-  // Phase 24: File management
-  onAddFiles: (projectId: string, envId: string, files: ManagedFile[]) => Promise<void>;
-  onDeleteFiles: (projectId: string, envId: string, fileNames: string[]) => Promise<void>;
-  onUpdateFile: (projectId: string, envId: string, fileName: string, content: string) => Promise<void>;
+  /** New environment workflow, scoped to the active profile and project. */
+  environment: EnvironmentWorkspaceProps;
 }
 
 export interface ProjectLeaveOptions {
@@ -75,17 +61,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
   projectInfoLoading,
   projectInfoError,
   onOpenFolder,
-  // Phase 23: Environment management
-  envs,
-  activeEnvId,
-  onCreateEnv,
-  onRenameEnv,
-  onDeleteEnv,
-  onApplyEnv,
-  // Phase 24: File management
-  onAddFiles,
-  onDeleteFiles,
-  onUpdateFile,
+  environment,
 }: MainAreaProps, ref) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<CommandItem | null>(null);
@@ -93,22 +69,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
-  // Phase 23: Env UI state (D-14: selectedEnvId independent from activeEnvId)
-  const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
-  const [manageEnvOpen, setManageEnvOpen] = useState(false);
-  const [applyingEnv, setApplyingEnv] = useState(false);
-
-  // Phase 25: Sync diff state
-  const [syncDiffCheckedFiles, setSyncDiffCheckedFiles] = useState<string[]>([]);
-  const [envSelectOpen, setEnvSelectOpen] = useState(false);
-  const [diffViewOpen, setDiffViewOpen] = useState(false);
-  const [selectedTargetEnvs, setSelectedTargetEnvs] = useState<Environment[]>([]);
-  const [syncDiffSourceEnv, setSyncDiffSourceEnv] = useState<{ id: string; name: string; files: ManagedFile[] } | null>(null);
   const [activePanel, setActivePanel] = useState<"commands" | "environment">("commands");
   const [busyCount, setBusyCount] = useState(0);
   const busyCountRef = useRef(0);
   const commandDialogRef = useRef<CommandDialogHandle | null>(null);
-  const fileListRef = useRef<FileListHandle | null>(null);
   const leaveRequestRef = useRef<Promise<boolean> | null>(null);
 
   const beginBusy = useCallback(() => {
@@ -128,16 +92,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     }
   }, [beginBusy, endBusy]);
 
-  const resetEnvironmentUi = useCallback(() => {
-    setSelectedEnvId(null);
-    setManageEnvOpen(false);
-    setSyncDiffCheckedFiles([]);
-    setEnvSelectOpen(false);
-    setDiffViewOpen(false);
-    setSelectedTargetEnvs([]);
-    setSyncDiffSourceEnv(null);
-  }, []);
-
   const resetCommandUi = useCallback(() => {
     setDialogOpen(false);
     setEditingCommand(null);
@@ -149,8 +103,12 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     if (leaveRequestRef.current) return leaveRequestRef.current;
     const request = (async () => {
       if (busyCountRef.current > 0) return false;
+      if (environment.busy) {
+        toast.info("环境操作还没完成，暂时不能切换项目");
+        return false;
+      }
       if (activePanel === "environment") {
-        return fileListRef.current?.requestLeave(options) ?? true;
+        return true;
       }
       return commandDialogRef.current?.requestLeave(options) ?? true;
     })();
@@ -160,7 +118,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     } finally {
       leaveRequestRef.current = null;
     }
-  }, [activePanel, busyCount]);
+  }, [activePanel, busyCount, environment.busy]);
 
   useImperativeHandle(ref, () => ({ requestProjectLeave }), [requestProjectLeave]);
 
@@ -170,11 +128,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     if (!allowed) return;
     if (nextPanel === "environment") {
       resetCommandUi();
-    } else {
-      resetEnvironmentUi();
     }
     setActivePanel(nextPanel);
-  }, [activePanel, busyCount, requestProjectLeave, resetCommandUi, resetEnvironmentUi]);
+  }, [activePanel, busyCount, requestProjectLeave, resetCommandUi]);
 
   const handlePanelTriggerKeyDown = useCallback((panel: "commands" | "environment", event: React.KeyboardEvent) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -190,8 +146,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     setEditMode(false);
     setActivePanel("commands");
     setFocusedCardIndex(-1);
-    resetEnvironmentUi();
-  }, [currentProject?.id]);
+  }, [currentProject?.id, setEditMode]);
 
   const handleEdit = useCallback((cmd: CommandItem) => {
     setEditingCommand(cmd);
@@ -222,97 +177,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     }
     setDialogOpen(open);
   }, []);
-
-  // Phase 23: Delete env handler with auto-switch per D-18
-  const handleDeleteEnv = useCallback(
-    async (envId: string) => {
-      await runBusy(() => onDeleteEnv(envId));
-      // D-18: auto-switch to nearest neighbor tab
-      setSelectedEnvId((prev) => {
-        if (prev !== envId) return prev; // wasn't selected, no change
-        const remaining = envs.filter((e) => e.id !== envId);
-        if (remaining.length === 0) return null;
-        const deletedIdx = envs.findIndex((e) => e.id === envId);
-        // right neighbor first, then left neighbor
-        const nextIdx = Math.min(deletedIdx, remaining.length - 1);
-        return remaining[nextIdx].id;
-      });
-    },
-    [envs, onDeleteEnv, runBusy]
-  );
-
-  // Phase 23: Apply env handler with loading state
-  const handleApplyEnv = useCallback(
-    async (envId: string) => {
-      setApplyingEnv(true);
-      try {
-        await runBusy(() => onApplyEnv(envId));
-      } finally {
-        setApplyingEnv(false);
-      }
-    },
-    [onApplyEnv, runBusy]
-  );
-
-  const handleCreateEnv = useCallback(
-    (name: string) => runBusy(() => onCreateEnv(name)),
-    [onCreateEnv, runBusy]
-  );
-  const handleRenameEnv = useCallback(
-    (envId: string, name: string) => runBusy(() => onRenameEnv(envId, name)),
-    [onRenameEnv, runBusy]
-  );
-
-  const handleAddFilesBusy = useCallback(
-    (projectId: string, envId: string, files: ManagedFile[]) => runBusy(() => onAddFiles(projectId, envId, files)),
-    [onAddFiles, runBusy]
-  );
-  const handleDeleteFilesBusy = useCallback(
-    (projectId: string, envId: string, names: string[]) => runBusy(() => onDeleteFiles(projectId, envId, names)),
-    [onDeleteFiles, runBusy]
-  );
-  const handleUpdateFileBusy = useCallback(
-    (projectId: string, envId: string, name: string, content: string) => runBusy(() => onUpdateFile(projectId, envId, name, content)),
-    [onUpdateFile, runBusy]
-  );
-
-  // Phase 25: Handle sync diff button click from FileList
-  const handleSyncDiff = useCallback((checkedFiles: string[]) => {
-    setSyncDiffCheckedFiles(checkedFiles);
-    setEnvSelectOpen(true);
-  }, []);
-
-  // Phase 25: Handle env selection confirm
-  const handleEnvSelectConfirm = useCallback(
-    async (selectedEnvIds: string[]) => {
-      const targetEnvs = envs.filter((e) => selectedEnvIds.includes(e.id));
-      setSelectedTargetEnvs(targetEnvs);
-      // Set source env for DiffViewDialog
-      if (selectedEnvId) {
-        const sourceEnv = envs.find((e) => e.id === selectedEnvId);
-        if (sourceEnv) {
-          setSyncDiffSourceEnv({
-            id: sourceEnv.id,
-            name: sourceEnv.name,
-            files: sourceEnv.files,
-          });
-        }
-      }
-      setEnvSelectOpen(false);
-      setDiffViewOpen(true);
-    },
-    [envs, selectedEnvId],
-  );
-
-  // Phase 23: Auto-select first env when envs change (per D-14)
-  useEffect(() => {
-    if (envs.length > 0 && selectedEnvId === null) {
-      setSelectedEnvId(envs[0].id);
-    }
-    if (envs.length === 0) {
-      setSelectedEnvId(null);
-    }
-  }, [envs, selectedEnvId]);
 
   // Auto-focus first card when main zone becomes active
   useEffect(() => {
@@ -541,71 +405,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
         </TabsContent>
 
         <TabsContent value="environment" className="mt-4">
-          <EnvSwitchBar
-            envs={envs}
-            activeEnvId={activeEnvId}
-            onApply={handleApplyEnv}
-            applying={applyingEnv}
-          />
-          <EnvTabBar
-            envs={envs}
-            selectedEnvId={selectedEnvId}
-            activeEnvId={activeEnvId}
-            onSelectEnv={setSelectedEnvId}
-            onManageEnv={() => setManageEnvOpen(true)}
-          />
-          {selectedEnvId && (() => {
-            const currentEnv = envs.find((e) => e.id === selectedEnvId);
-            if (!currentEnv) return null;
-            return (
-              <FileList
-                ref={fileListRef}
-                envId={currentEnv.id}
-                files={currentEnv.files}
-                projectPath={currentProject.path}
-                onAddFiles={(envId, files) => handleAddFilesBusy(currentProject.id, envId, files)}
-                onDeleteFiles={(envId, names) => handleDeleteFilesBusy(currentProject.id, envId, names)}
-                onUpdateFile={(envId, name, content) => handleUpdateFileBusy(currentProject.id, envId, name, content)}
-                onSyncDiff={handleSyncDiff}
-                onBusyChange={(busy) => { if (busy) beginBusy(); else endBusy(); }}
-              />
-            );
-          })()}
-
-          <ManageEnvDialog
-            open={manageEnvOpen}
-            onOpenChange={setManageEnvOpen}
-            envs={envs}
-            activeEnvId={activeEnvId}
-            onCreateEnv={handleCreateEnv}
-            onRenameEnv={handleRenameEnv}
-            onDeleteEnv={handleDeleteEnv}
-          />
-
-          {selectedEnvId && (
-            <EnvSelectDialog
-              open={envSelectOpen}
-              onOpenChange={setEnvSelectOpen}
-              sourceEnvId={selectedEnvId}
-              envs={envs}
-              checkedFiles={syncDiffCheckedFiles}
-              onConfirm={handleEnvSelectConfirm}
-            />
-          )}
-
-          {syncDiffSourceEnv && selectedTargetEnvs.length > 0 && (
-            <DiffViewDialog
-              open={diffViewOpen}
-              onOpenChange={setDiffViewOpen}
-              sourceEnv={syncDiffSourceEnv}
-              targetEnvs={selectedTargetEnvs}
-              fileNames={syncDiffCheckedFiles}
-              projectId={currentProject.id}
-              onUpdateFile={handleUpdateFileBusy}
-              onAddFiles={handleAddFilesBusy}
-              onDeleteFiles={handleDeleteFilesBusy}
-            />
-          )}
+          <EnvironmentWorkspace key={environment.scopeKey} {...environment} />
         </TabsContent>
       </Tabs>
     </main>

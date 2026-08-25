@@ -29,6 +29,8 @@ interface ProjectSettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   project: ProjectItem | null;
   onSave: (projectId: string, style: { icon: string; color: string }) => void;
+  onRebind: (projectId: string) => Promise<boolean>;
+  pathUnavailable?: boolean;
 }
 
 export function ProjectSettingsDialog({
@@ -36,6 +38,8 @@ export function ProjectSettingsDialog({
   onOpenChange,
   project,
   onSave,
+  onRebind,
+  pathUnavailable = false,
 }: ProjectSettingsDialogProps) {
   const [selectedIcon, setSelectedIcon] = useState(
     () => project?.icon ?? DEFAULT_ICON
@@ -46,6 +50,7 @@ export function ProjectSettingsDialog({
   const [candidates, setCandidates] = useState<IconCandidate[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [rebinding, setRebinding] = useState(false);
 
   // Reset state when project changes or dialog opens
   useEffect(() => {
@@ -94,6 +99,16 @@ export function ProjectSettingsDialog({
     }
   }, [project]);
 
+  const handleRebind = useCallback(async () => {
+    if (!project || rebinding) return;
+    setRebinding(true);
+    try {
+      if (await onRebind(project.id)) onOpenChange(false);
+    } finally {
+      setRebinding(false);
+    }
+  }, [project, rebinding, onRebind, onOpenChange]);
+
   const handleSelectFile = useCallback(async () => {
     try {
       const selected = await openDialog({
@@ -130,6 +145,36 @@ export function ProjectSettingsDialog({
         </DialogHeader>
 
         <div className="py-4 space-y-4">
+          {/* Project directory binding */}
+          <div className="space-y-2">
+            <Label>项目目录</Label>
+            <div className="flex items-start gap-2">
+              <p
+                className={cn(
+                  "min-w-0 flex-1 break-all rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs",
+                  pathUnavailable ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {pathUnavailable ? "目录不可用：" : ""}{project?.path ?? "未绑定目录"}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRebind}
+                disabled={!project || rebinding}
+                aria-label="重新绑定项目目录"
+              >
+                <FolderOpen className="size-3.5 mr-1" />
+                {rebinding ? "选择中" : "重新绑定"}
+              </Button>
+            </div>
+            {pathUnavailable && (
+              <p className="text-xs text-destructive">
+                原目录不可用，请选择新的项目目录。
+              </p>
+            )}
+          </div>
+
           {/* Icon picker */}
           <div className="space-y-2">
             <Label>图标</Label>

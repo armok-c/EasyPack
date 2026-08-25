@@ -173,9 +173,7 @@ pub fn scan_icons(project_path: &Path) -> Result<Vec<IconCandidate>, String> {
                     let file_name = entry.file_name();
                     let name = file_name.to_string_lossy();
                     let lower = name.to_lowercase();
-                    if lower.ends_with(".ico")
-                        || lower.ends_with(".png")
-                        || lower.ends_with(".svg")
+                    if lower.ends_with(".ico") || lower.ends_with(".png") || lower.ends_with(".svg")
                     {
                         let path_str = entry.path().to_string_lossy().to_string();
                         if !candidates.iter().any(|c| c.path == path_str) {
@@ -253,7 +251,10 @@ mod tests {
         test_fs::write(dir.join("logo.svg"), "<svg></svg>").unwrap();
 
         let candidates = scan_icons(&dir).expect("Should return Ok");
-        assert!(!candidates.is_empty(), "Should find at least one icon candidate");
+        assert!(
+            !candidates.is_empty(),
+            "Should find at least one icon candidate"
+        );
         assert!(candidates.iter().any(|c| c.name == "icon.png"));
         assert!(candidates.iter().any(|c| c.name == "logo.svg"));
 
@@ -273,7 +274,10 @@ mod tests {
     #[test]
     fn test_scan_icons_nonexistent_dir() {
         let result = scan_icons(Path::new("/nonexistent/path/that/does/not/exist"));
-        assert!(result.is_err(), "Should return Err for non-existent directory");
+        assert!(
+            result.is_err(),
+            "Should return Err for non-existent directory"
+        );
         assert!(result.unwrap_err().contains("项目目录不存在"));
     }
 
@@ -286,7 +290,11 @@ mod tests {
 
         let info = get_info(&dir).expect("Should return Ok");
         assert!(!info.size.is_empty(), "Size should not be empty");
-        assert!(info.size.contains("KB"), "Size should contain KB: {}", info.size);
+        assert!(
+            info.size.contains("KB"),
+            "Size should contain KB: {}",
+            info.size
+        );
 
         cleanup_test_dir(&dir);
     }
@@ -298,7 +306,10 @@ mod tests {
         test_fs::write(dir.join("dummy.txt"), "hello").unwrap();
 
         let info = get_info(&dir).expect("Should return Ok");
-        assert_eq!(info.branch, None, "Non-git project should have branch: None");
+        assert_eq!(
+            info.branch, None,
+            "Non-git project should have branch: None"
+        );
 
         cleanup_test_dir(&dir);
     }
@@ -308,10 +319,17 @@ mod tests {
     fn test_get_info_detached_head() {
         let dir = create_test_dir("info_detached");
         test_fs::create_dir_all(dir.join(".git")).unwrap();
-        test_fs::write(dir.join(".git").join("HEAD"), "abc123def456789012345678901234567890abcd\n").unwrap();
+        test_fs::write(
+            dir.join(".git").join("HEAD"),
+            "abc123def456789012345678901234567890abcd\n",
+        )
+        .unwrap();
 
         let info = get_info(&dir).expect("Should return Ok");
-        assert_eq!(info.branch, None, "Detached HEAD should return branch: None");
+        assert_eq!(
+            info.branch, None,
+            "Detached HEAD should return branch: None"
+        );
 
         cleanup_test_dir(&dir);
     }
@@ -322,7 +340,11 @@ mod tests {
         let dir = create_test_dir("size_include");
         test_fs::write(dir.join("root.txt"), "hello").unwrap();
         test_fs::create_dir_all(dir.join("node_modules")).unwrap();
-        test_fs::write(dir.join("node_modules").join("big_dep.bin"), vec![0u8; 1024 * 1024]).unwrap();
+        test_fs::write(
+            dir.join("node_modules").join("big_dep.bin"),
+            vec![0u8; 1024 * 1024],
+        )
+        .unwrap();
         test_fs::create_dir_all(dir.join(".git")).unwrap();
         test_fs::write(dir.join(".git").join("objects"), vec![0u8; 512 * 1024]).unwrap();
         test_fs::create_dir_all(dir.join("src")).unwrap();
@@ -331,10 +353,20 @@ mod tests {
         let total = calculate_dir_size(&dir);
 
         let root_size = test_fs::metadata(dir.join("root.txt")).unwrap().len();
-        let node_modules_size = test_fs::metadata(dir.join("node_modules").join("big_dep.bin")).unwrap().len();
-        let git_size = test_fs::metadata(dir.join(".git").join("objects")).unwrap().len();
-        let src_size = test_fs::metadata(dir.join("src").join("main.rs")).unwrap().len();
-        assert_eq!(total, root_size + node_modules_size + git_size + src_size, "Should include all directories");
+        let node_modules_size = test_fs::metadata(dir.join("node_modules").join("big_dep.bin"))
+            .unwrap()
+            .len();
+        let git_size = test_fs::metadata(dir.join(".git").join("objects"))
+            .unwrap()
+            .len();
+        let src_size = test_fs::metadata(dir.join("src").join("main.rs"))
+            .unwrap()
+            .len();
+        assert_eq!(
+            total,
+            root_size + node_modules_size + git_size + src_size,
+            "Should include all directories"
+        );
 
         cleanup_test_dir(&dir);
     }
@@ -369,7 +401,11 @@ mod tests {
     fn test_read_git_branch_feature() {
         let dir = create_test_dir("git_branch_feature");
         test_fs::create_dir_all(dir.join(".git")).unwrap();
-        test_fs::write(dir.join(".git").join("HEAD"), "ref: refs/heads/feature/my-branch\n").unwrap();
+        test_fs::write(
+            dir.join(".git").join("HEAD"),
+            "ref: refs/heads/feature/my-branch\n",
+        )
+        .unwrap();
 
         let branch = read_git_branch(&dir);
         assert_eq!(branch, Some("feature/my-branch".to_string()));
@@ -381,7 +417,11 @@ mod tests {
     fn test_read_git_branch_commit_hash() {
         let dir = create_test_dir("git_detached");
         test_fs::create_dir_all(dir.join(".git")).unwrap();
-        test_fs::write(dir.join(".git").join("HEAD"), "abc123def456789012345678901234567890abcd\n").unwrap();
+        test_fs::write(
+            dir.join(".git").join("HEAD"),
+            "abc123def456789012345678901234567890abcd\n",
+        )
+        .unwrap();
 
         let branch = read_git_branch(&dir);
         assert_eq!(branch, None);
@@ -429,8 +469,14 @@ mod tests {
         ).unwrap();
 
         let candidates = scan_icons(&dir).expect("Should return Ok");
-        assert!(candidates.iter().any(|c| c.name == "icon-16.png"), "Should find icon-16.png from icons array");
-        assert!(candidates.iter().any(|c| c.name == "icon-32.png"), "Should find icon-32.png from icons array");
+        assert!(
+            candidates.iter().any(|c| c.name == "icon-16.png"),
+            "Should find icon-16.png from icons array"
+        );
+        assert!(
+            candidates.iter().any(|c| c.name == "icon-32.png"),
+            "Should find icon-32.png from icons array"
+        );
 
         cleanup_test_dir(&dir);
     }

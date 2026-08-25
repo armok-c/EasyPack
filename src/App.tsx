@@ -6,6 +6,7 @@ import { TitleBar } from "@/components/TitleBar";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ShortcutPanel } from "@/components/ShortcutPanel";
 import { useProject } from "@/hooks/useProject";
+import { useEnvironment } from "@/hooks/useEnvironment";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { useShortcutActions } from "@/hooks/useShortcutActions";
@@ -19,7 +20,7 @@ import { SnapIndicator } from "@/components/SnapIndicator";
 import { detectSnapEdge } from "@/lib/drawer-geometry";
 import { ensureMainWindowVisible } from "@/lib/window-visibility";
 import { requestProjectSwitch as startProjectSwitch } from "@/lib/project-switch";
-import type { CommandItem, ManagedFile } from "@/lib/types";
+import type { CommandItem } from "@/lib/types";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
 import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
@@ -27,6 +28,7 @@ import {
   enable as autostartEnable,
   disable as autostartDisable,
 } from "@tauri-apps/plugin-autostart";
+import { toast } from "sonner";
 import "./index.css";
 
 const appWindow = getCurrentWindow();
@@ -37,6 +39,7 @@ function App() {
     selectedId,
     currentProject,
     selectFolder,
+    rebindProject,
     selectProject,
     removeProject,
     executeCommand,
@@ -76,30 +79,7 @@ function App() {
     importProfile,
     exportProfile,
     mainStore,
-    // Phase 23: Environment management
-    projectEnvsMap,
-    projectActiveEnvMap,
-    createEnv,
-    renameEnv,
-    deleteEnv,
-    applyEnv,
-    getProjectEnvs,
-    getProjectActiveEnv,
-    // Phase 24: File management
-    addFiles,
-    deleteFiles,
-    updateFileContent,
   } = useProject();
-
-  // Phase 23: Derived env state for current project
-  const envList = useMemo(
-    () => selectedId ? getProjectEnvs(selectedId) : [],
-    [selectedId, getProjectEnvs, projectEnvsMap]
-  );
-  const activeEnvIdDerived = useMemo(
-    () => selectedId ? getProjectActiveEnv(selectedId) : null,
-    [selectedId, getProjectActiveEnv, projectActiveEnvMap]
-  );
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
   const [activeZone, setActiveZone] = useState<"sidebar" | "main">("sidebar");
@@ -116,52 +96,6 @@ function App() {
       openFolder(currentProject.path);
     }
   }, [currentProject, openFolder]);
-
-  // Phase 23: Environment wrapper handlers
-  const handleCreateEnv = useCallback(
-    async (name: string) => selectedId ? createEnv(selectedId, name) : null,
-    [selectedId, createEnv]
-  );
-  const handleRenameEnv = useCallback(
-    async (envId: string, newName: string) => {
-      if (selectedId) await renameEnv(selectedId, envId, newName);
-    },
-    [selectedId, renameEnv]
-  );
-  const handleDeleteEnvFn = useCallback(
-    async (envId: string) => {
-      if (selectedId) await deleteEnv(selectedId, envId);
-    },
-    [selectedId, deleteEnv]
-  );
-  const handleApplyEnv = useCallback(
-    async (envId: string) => selectedId ? applyEnv(selectedId, envId) : false,
-    [selectedId, applyEnv]
-  );
-
-  // Phase 24: File management wrapper handlers.
-  // IN-03 (Phase 22 review): use the passed projectId (MainArea forwards
-  // currentProject.id) instead of shadowing it with the closure-captured
-  // selectedId. Resolves TS6133 and stabilizes callback identity across
-  // project switches (no selectedId dependency).
-  const handleAddFiles = useCallback(
-    async (projectId: string, envId: string, files: ManagedFile[]) => {
-      await addFiles(projectId, envId, files);
-    },
-    [addFiles]
-  );
-  const handleDeleteFiles = useCallback(
-    async (projectId: string, envId: string, fileNames: string[]) => {
-      await deleteFiles(projectId, envId, fileNames);
-    },
-    [deleteFiles]
-  );
-  const handleUpdateFile = useCallback(
-    async (projectId: string, envId: string, fileName: string, content: string) => {
-      await updateFileContent(projectId, envId, fileName, content);
-    },
-    [updateFileContent]
-  );
 
   // Phase 5 Plan 03: global number key shortcuts (per D-13)
   useKeyboard({
@@ -211,6 +145,57 @@ function App() {
     }),
     [showFromTray, showFromDrawer]
   );
+
+  const environmentLegacyStore = useMemo(() => {
+    if (!store) return null;
+    return {
+      get: <T,>(key: string) => store.get<T>(key),
+      delete: async (key: string) => { await store.delete(key); },
+      save: () => store.save(),
+    };
+  }, [store]);
+
+  // The new environment store is scoped by both the active profile and the
+  // selected project. Legacy profile-store data is migrated by the hook.
+  const environment = useEnvironment({
+    profileId: activeProfileId,
+    project: currentProject ? { id: currentProject.id, path: currentProject.path } : null,
+    legacyStore: environmentLegacyStore,
+  });
+
+  const canChangeProfile = useCallback(() => {
+    if (!environment.busy) return true;
+    toast.info("环境操作还没完成，暂时不能切换配置");
+    return false;
+  }, [environment.busy]);
+  const canChangeProject = useCallback(() => {
+    if (!environment.busy) return true;
+    toast.info("环境操作还没完成，暂时不能切换项目");
+    return false;
+  }, [environment.busy]);
+  const handleSelectFolder = useCallback(async () => {
+    if (canChangeProject()) await selectFolder();
+  }, [canChangeProject, selectFolder]);
+  const handleRemoveProject = useCallback(async (id: string): Promise<boolean> => {
+    if (!canChangeProject()) return false;
+    return removeProject(id);
+  }, [canChangeProject, removeProject]);
+  const handleRebindProject = useCallback(async (id: string): Promise<boolean> => {
+    return canChangeProject() ? rebindProject(id) : false;
+  }, [canChangeProject, rebindProject]);
+  const handleSwitchProfile = useCallback(async (id: string) => {
+    if (canChangeProfile()) await switchProfile(id);
+  }, [canChangeProfile, switchProfile]);
+  const handleCreateProfile = useCallback(async (name: string) => {
+    if (canChangeProfile()) await createProfile(name);
+  }, [canChangeProfile, createProfile]);
+  const handleDeleteProfile = useCallback(async (id: string): Promise<boolean> => {
+    if (!canChangeProfile()) return false;
+    return deleteProfile(id);
+  }, [canChangeProfile, deleteProfile]);
+  const handleImportProfile = useCallback(async (filePath: string) => {
+    if (canChangeProfile()) await importProfile(filePath);
+  }, [canChangeProfile, importProfile]);
 
   const requestProjectSwitch = useCallback((projectId: string, fromFloat = false) => {
     startProjectSwitch({
@@ -587,10 +572,12 @@ function App() {
         <Sidebar
           projects={projects}
           selectedId={selectedId}
-          onAddProject={selectFolder}
+          onAddProject={handleSelectFolder}
           onSelectProject={requestProjectSwitch}
-          onRemoveProject={removeProject}
+          onRemoveProject={handleRemoveProject}
           onUpdateStyle={updateProjectStyle}
+          onRebindProject={handleRebindProject}
+          projectPathUnavailable={!!currentProject && projectInfoError}
           onReorderProjects={reorderProjects}
           activeZone={activeZone}
           onZoneSwitch={handleZoneSwitch}
@@ -611,15 +598,26 @@ function App() {
           projectInfoLoading={projectInfoLoading}
           projectInfoError={projectInfoError}
           onOpenFolder={handleOpenFolder}
-          envs={envList}
-          activeEnvId={activeEnvIdDerived}
-          onCreateEnv={handleCreateEnv}
-          onRenameEnv={handleRenameEnv}
-          onDeleteEnv={handleDeleteEnvFn}
-          onApplyEnv={handleApplyEnv}
-          onAddFiles={handleAddFiles}
-          onDeleteFiles={handleDeleteFiles}
-          onUpdateFile={handleUpdateFile}
+          environment={{
+            scopeKey: environment.scopeKey,
+            projectPath: currentProject?.path ?? "",
+            state: environment.state,
+            busy: environment.busy,
+            error: environment.error,
+            recoveryBlocked: environment.recoveryBlocked,
+            recoveryError: environment.recoveryError,
+            migrationRequired: environment.migrationRequired,
+            migrationDraft: environment.migrationDraft,
+            onRefresh: environment.refresh,
+            onCreate: environment.create,
+            onCapture: environment.capture,
+            onCopy: environment.copy,
+            onMigrate: environment.migrateManifest,
+            onPlan: environment.plan,
+            onApply: environment.apply,
+            onPlanUndo: environment.planUndo,
+            onUndo: environment.undo,
+          }}
         />
       </div>
       <SettingsDialog
@@ -641,11 +639,11 @@ function App() {
         onOpenShortcutPanel={handleOpenShortcutPanel}
         profileMetas={profileMetas}
         activeProfileId={activeProfileId}
-        onSwitchProfile={switchProfile}
-        onCreateProfile={createProfile}
-        onDeleteProfile={deleteProfile}
+        onSwitchProfile={handleSwitchProfile}
+        onCreateProfile={handleCreateProfile}
+        onDeleteProfile={handleDeleteProfile}
         onRenameProfile={renameProfile}
-        onImportProfile={importProfile}
+        onImportProfile={handleImportProfile}
         onExportProfile={exportProfile}
       />
       <ShortcutPanel

@@ -14,6 +14,16 @@ import { cn } from "@/lib/utils";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getIconByName, isFileIcon, getFilePath } from "@/lib/icons";
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { ProjectItem } from "@/hooks/useProject";
 
 interface SidebarProps {
@@ -21,8 +31,10 @@ interface SidebarProps {
   selectedId: string | null;
   onAddProject: () => void;
   onSelectProject: (id: string) => void;
-  onRemoveProject: (id: string) => void;
+  onRemoveProject: (id: string) => Promise<boolean>;
   onUpdateStyle: (projectId: string, style: { icon: string; color: string }) => void;
+  onRebindProject: (projectId: string) => Promise<boolean>;
+  projectPathUnavailable?: boolean;
   onReorderProjects: (reordered: ProjectItem[]) => void;
   // Phase 5 Plan 03: keyboard navigation zone management
   activeZone: "sidebar" | "main";
@@ -153,11 +165,15 @@ export function Sidebar({
   onSelectProject,
   onRemoveProject,
   onUpdateStyle,
+  onRebindProject,
+  projectPathUnavailable = false,
   onReorderProjects,
   activeZone,
   onZoneSwitch,
 }: SidebarProps) {
   const [settingsProjectId, setSettingsProjectId] = useState<string | null>(null);
+  const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
+  const [deletingProject, setDeletingProject] = useState(false);
 
   // Phase 5 Plan 03: roving tabindex keyboard navigation
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -222,6 +238,24 @@ export function Sidebar({
     []
   );
 
+  const deleteTarget = projects.find((project) => project.id === deleteProjectId) ?? null;
+
+  const handleConfirmDelete = useCallback(async (event: React.MouseEvent) => {
+    event.preventDefault();
+    if (!deleteTarget || deletingProject) return;
+
+    setDeletingProject(true);
+    try {
+      const deleted = await onRemoveProject(deleteTarget.id);
+      if (deleted) setDeleteProjectId(null);
+    } catch {
+      // The hook has already shown the error toast. Keep the confirmation open
+      // so the user can retry after the failed rollback.
+    } finally {
+      setDeletingProject(false);
+    }
+  }, [deleteTarget, deletingProject, onRemoveProject]);
+
   // Handle drag end: splice array to new order (per D-10, D-11)
   const handleDragEnd = useCallback(
     (event: { canceled?: boolean; operation: { source: unknown } }) => {
@@ -273,7 +307,7 @@ export function Sidebar({
                     index={index}
                     isSelected={selectedId === project.id}
                     onSelect={onSelectProject}
-                    onRemove={onRemoveProject}
+                    onRemove={(id) => setDeleteProjectId(id)}
                     onContextMenu={setSettingsProjectId}
                     isFocused={activeZone === "sidebar" && index === focusedIndex}
                     onKeyDown={(e) => handleItemKeyDown(e, index)}
@@ -300,7 +334,35 @@ export function Sidebar({
         onOpenChange={(open) => { if (!open) setSettingsProjectId(null); }}
         project={projects.find(p => p.id === settingsProjectId) ?? null}
         onSave={onUpdateStyle}
+        onRebind={onRebindProject}
+        pathUnavailable={settingsProjectId === selectedId && projectPathUnavailable}
       />
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingProject) setDeleteProjectId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>永久删除项目？</AlertDialogTitle>
+            <AlertDialogDescription>
+              项目「{deleteTarget?.name}」的项目记录、环境快照和受管文件清单都会永久删除，不能恢复。项目文件夹本身不会被删除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingProject}
+              onClick={handleConfirmDelete}
+            >
+              {deletingProject ? "删除中..." : "永久删除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

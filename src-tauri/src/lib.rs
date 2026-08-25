@@ -4,8 +4,8 @@ mod commands;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
             use tauri::Emitter;
+            use tauri::Manager;
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_skip_taskbar(false);
                 let _ = window.show();
@@ -29,17 +29,46 @@ pub fn run() {
             commands::project_info::get_project_info,
             commands::shell::open_folder,
             commands::shell::read_file_content,
-            commands::shell::write_file_content,
-            commands::shell::delete_file_content,
             commands::update::check_for_updates,
             commands::update::open_release_page,
+            commands::environment::environment_open_project,
+            commands::environment::environment_get_project_path,
+            commands::environment::environment_create,
+            commands::environment::environment_capture,
+            commands::environment::environment_copy,
+            commands::environment::environment_migrate_manifest,
+            commands::environment::environment_bootstrap_import,
+            commands::environment::environment_import,
+            commands::environment::environment_rebind_project,
+            commands::environment::environment_plan,
+            commands::environment::environment_apply,
+            commands::environment::environment_plan_undo,
+            commands::environment::environment_undo,
+            commands::environment::environment_delete_project,
+            commands::environment::environment_delete_profile,
+            commands::environment::environment_prepare_delete_project,
+            commands::environment::environment_prepare_delete_profile,
+            commands::environment::environment_finalize_delete,
+            commands::environment::environment_restore_delete,
+            commands::environment::environment_delete_status,
         ])
         .setup(|app| {
+            // 环境引擎启动恢复：单个项目失败时保留证据并锁定，不阻止应用启动。
+            use tauri::Manager;
+            if let Ok(data_dir) = app.path().app_local_data_dir() {
+                if let Err(error) =
+                    commands::environment::EnvironmentStore::new(data_dir.join("environment-data"))
+                        .recover_startup()
+                {
+                    eprintln!("Warning: environment startup recovery failed: {}", error);
+                }
+            }
+
             // --autostart 检测：开机自启时在 WebView 加载前隐藏窗口
             let is_autostart = std::env::args().any(|arg| arg == "--autostart");
             if is_autostart {
-                use tauri::Manager;
                 use tauri::Emitter;
+                use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.hide();
                     let _ = window.set_skip_taskbar(true);
@@ -56,8 +85,8 @@ pub fn run() {
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
                         if !needs_tray {
-                            let _ = store.set("trayEnabled", serde_json::Value::Bool(true));
-                            let _ = store.set("closeToTray", serde_json::Value::Bool(true));
+                            store.set("trayEnabled", serde_json::Value::Bool(true));
+                            store.set("closeToTray", serde_json::Value::Bool(true));
                             let _ = store.save();
                         } else {
                             let needs_ctt = store
@@ -65,7 +94,7 @@ pub fn run() {
                                 .and_then(|v| v.as_bool())
                                 .unwrap_or(true);
                             if !needs_ctt {
-                                let _ = store.set("closeToTray", serde_json::Value::Bool(true));
+                                store.set("closeToTray", serde_json::Value::Bool(true));
                                 let _ = store.save();
                             }
                         }
@@ -76,8 +105,8 @@ pub fn run() {
             // 自愈：如果 store 中 autostartEnabled=true 但注册表条目丢失，静默重新注册。
             // manager.enable() 为 best-effort，失败时静默忽略（下次启动重试）。
             {
-                use tauri_plugin_store::StoreExt;
                 use tauri_plugin_autostart::ManagerExt;
+                use tauri_plugin_store::StoreExt;
                 if let Ok(store) = app.store("easypack-store.json") {
                     let autostart_on = store
                         .get("autostartEnabled")
@@ -96,8 +125,8 @@ pub fn run() {
             // 不依赖 WebView JS 运行时。解决主窗口隐藏后 WebView
             // 可能被节流导致 JS 回调不执行的问题。
             app.on_menu_event(|app_handle, event| {
-                use tauri::Manager;
                 use tauri::Emitter;
+                use tauri::Manager;
 
                 let menu_id = event.id().as_ref();
                 match menu_id {
@@ -132,11 +161,8 @@ pub fn run() {
 
             // 窗口图标（影响任务栏）：保持原始 1024x1024，让 Windows 自行缩放。
             let rgba = img.to_rgba8();
-            let window_icon = tauri::image::Image::new_owned(
-                rgba.to_vec(),
-                rgba.width(),
-                rgba.height(),
-            );
+            let window_icon =
+                tauri::image::Image::new_owned(rgba.to_vec(), rgba.width(), rgba.height());
 
             {
                 use tauri::Manager;
@@ -164,11 +190,11 @@ pub fn run() {
             // 在 Rust 端直接处理，不依赖 WebView JS 运行时。
             // 解决主窗口隐藏后 WebView 可能被节流导致 JS 回调不执行的问题。
             app.on_tray_icon_event(|app_handle, event| {
-                use tauri::tray::TrayIconEvent;
                 use tauri::tray::MouseButton;
                 use tauri::tray::MouseButtonState;
-                use tauri::Manager;
+                use tauri::tray::TrayIconEvent;
                 use tauri::Emitter;
+                use tauri::Manager;
 
                 if let TrayIconEvent::Click {
                     button: MouseButton::Left,
@@ -199,13 +225,13 @@ pub fn run() {
             use std::sync::{Arc, Mutex};
             use std::thread;
             use std::time::Duration;
-            use tauri::Listener;
             use tauri::Emitter;
+            use tauri::Listener;
+            type SliverRectState = Arc<Mutex<Option<(f64, f64, f64, f64)>>>;
 
             // 使用 running flag 控制轮询线程退出，比 JoinHandle::abort() 更可控
             let polling_running: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
-            let sliver_rect: Arc<Mutex<Option<(f64, f64, f64, f64)>>> =
-                Arc::new(Mutex::new(None)); // (x, y, w, h) 物理坐标
+            let sliver_rect: SliverRectState = Arc::new(Mutex::new(None)); // (x, y, w, h) 物理坐标
 
             let app_handle = app.handle().clone();
             let pr = polling_running.clone();
@@ -243,7 +269,7 @@ pub fn run() {
 
                 // 获取 scaleFactor 将逻辑坐标转为物理坐标
                 let scale = match app_handle.primary_monitor() {
-                    Ok(Some(monitor)) => monitor.scale_factor() as f64,
+                    Ok(Some(monitor)) => monitor.scale_factor(),
                     _ => 1.0,
                 };
 

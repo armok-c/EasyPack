@@ -12,6 +12,16 @@ import { Settings } from "lucide-react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type { ProfileMeta } from "@/lib/types";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -45,7 +55,7 @@ interface SettingsDialogProps {
   activeProfileId: string | null;
   onSwitchProfile: (id: string) => Promise<void>;
   onCreateProfile: (name: string) => Promise<void>;
-  onDeleteProfile: (id: string) => Promise<void>;
+  onDeleteProfile: (id: string) => Promise<boolean>;
   onRenameProfile: (id: string, newName: string) => Promise<void>;
   onImportProfile: (filePath: string) => Promise<void>;
   onExportProfile: (filePath: string) => Promise<void>;
@@ -82,6 +92,8 @@ export function SettingsDialog({
   const [manageExpanded, setManageExpanded] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
   const [renameValue, setRenameValue] = useState("");
+  const [deleteProfileId, setDeleteProfileId] = useState<string | null>(null);
+  const [deletingProfile, setDeletingProfile] = useState(false);
 
   async function handleCheckNow() {
     if (checking) return;
@@ -130,6 +142,21 @@ export function SettingsDialog({
       await onExportProfile(selected);
     } catch (error) {
       console.error("导出失败:", error);
+    }
+  }
+
+  async function handleDeleteProfile() {
+    if (!deleteProfileId || deletingProfile) return;
+
+    setDeletingProfile(true);
+    try {
+      const deleted = await onDeleteProfile(deleteProfileId);
+      if (deleted) setDeleteProfileId(null);
+    } catch {
+      // The hook has already shown the error toast. Keep the confirmation open
+      // so the user can retry after the failed rollback.
+    } finally {
+      setDeletingProfile(false);
     }
   }
 
@@ -239,9 +266,7 @@ export function SettingsDialog({
                 <button
                   onClick={() => {
                     if (activeProfileId && profileMetas.length > 1) {
-                      const confirmed = window.confirm("确定要删除当前配置吗？此操作不可撤销");
-                      if (!confirmed) return;
-                      onDeleteProfile(activeProfileId);
+                      setDeleteProfileId(activeProfileId);
                     }
                   }}
                   disabled={!activeProfileId || profileMetas.length <= 1}
@@ -390,6 +415,35 @@ export function SettingsDialog({
           </p>
         </div>
       </DialogContent>
+
+      <AlertDialog
+        open={deleteProfileId !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !deletingProfile) setDeleteProfileId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>永久删除当前配置？</AlertDialogTitle>
+            <AlertDialogDescription>
+              项目记录、环境快照和受管文件清单都会永久删除，不能恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingProfile}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingProfile}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteProfile();
+              }}
+            >
+              {deletingProfile ? "删除中..." : "永久删除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

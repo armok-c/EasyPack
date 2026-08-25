@@ -4,7 +4,13 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import type { CommandItem, Environment, ManagedFile, ProfileMeta, ProfileExportData } from "@/lib/types";
+import type { CommandItem, ProfileMeta, ProfileExportData } from "@/lib/types";
+import {
+  environmentApi,
+  isDeleteResponse,
+  isDeleteStatusResponse,
+  type DeleteStatusResponse,
+} from "@/lib/environment-types";
 import { DEFAULT_ICON } from "@/lib/icons";
 import { findConflict } from "@/lib/shortcutUtils";
 
@@ -37,101 +43,282 @@ const PROFILE_STORE_PREFIX = "profile-";
 const PROFILES_KEY = "profiles";
 const ACTIVE_PROFILE_KEY = "activeProfileId";
 const MIGRATION_DONE_KEY = "profileMigrationDone";
+const PENDING_DELETION_PREFIX = "pendingEnvironmentDeletion:";
+type PendingDeletionKind = "project" | "profile";
+type PendingDeletionPhase = "intent" | "prepared" | "frontendDeleted" | "finalizing";
+
+interface PendingEnvironmentDeletion {
+  version: 1;
+  token: string;
+  kind: PendingDeletionKind;
+  profileId: string;
+  projectId?: string;
+  phase: PendingDeletionPhase;
+}
 
 function projectCommandsKey(projectId: string): string {
   return `projectCommands:${projectId}`;
-}
-
-// Phase 23: environment storage keys (per D-02)
-function projectEnvsKey(projectId: string): string {
-  return `projectEnvs:${projectId}`;
-}
-function projectActiveEnvKey(projectId: string): string {
-  return `projectActiveEnv:${projectId}`;
 }
 
 function profileStorePath(id: string): string {
   return `${PROFILE_STORE_PREFIX}${id}.json`;
 }
 
-function generateProjectId(path: string): string {
-  return path
-    .split(/[\\/]/)
-    .filter(Boolean)
-    .join("/")
-    .toLowerCase();
+function pendingDeletionKey(token: string): string {
+  return `${PENDING_DELETION_PREFIX}${token}`;
 }
 
-/**
- * Phase 23 review WR-04 / CR-01: validate an imported `ManagedFile.name`.
- *
- * Managed file names store project-relative paths (e.g. `.env`,
- * `config/settings.json`). They must NOT be absolute and must not traverse
- * out of the project directory. Rejecting malformed names at import time
- * closes the upstream feeder for the path-traversal / arbitrary-write bug
- * fixed in `resolve_safe_path` (CR-01).
- *
- * Returns `true` if the name is a safe relative path, `false` otherwise.
- */
-function isSafeRelativeFileName(name: unknown): name is string {
-  if (typeof name !== "string" || name.length === 0) return false;
-  if (name.includes('"')) return false;
-  // Absolute path (Windows drive letter, UNC, POSIX leading slash, POSIX ~).
-  if (/^[A-Za-z]:[\\/]/.test(name)) return false;
-  if (name.startsWith("\\\\")) return false;
-  if (name.startsWith("/")) return false;
-  if (name.startsWith("~")) return false;
-  // Any `..` segment — split on both separators and reject the ParentDir token.
-  const segments = name.split(/[\\/]/);
-  if (segments.some((seg) => seg === "..")) return false;
+function isPendingEnvironmentDeletion(value: unknown, key?: string): value is PendingEnvironmentDeletion {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<PendingEnvironmentDeletion>;
+  return item.version === 1
+    && typeof item.token === "string"
+    && item.token.length > 0
+    && (key === undefined || key === pendingDeletionKey(item.token))
+    && (item.kind === "project" || item.kind === "profile")
+    && typeof item.profileId === "string"
+    && item.profileId.length > 0
+    && (item.kind === "project"
+      ? typeof item.projectId === "string" && item.projectId.length > 0
+      : item.projectId === undefined)
+    && (item.phase === "intent"
+      || item.phase === "prepared"
+      || item.phase === "frontendDeleted"
+      || item.phase === "finalizing");
+}
+
+/** Normalize a local path for Windows case-insensitive duplicate checks. */
+function normalizeWindowsPath(path: string): string {
+  const replaced = path.trim().replace(/\//g, "\\");
+  const isUnc = replaced.startsWith("\\\\");
+  const drive = /^[A-Za-z]:/.exec(replaced)?.[0] ?? "";
+  const prefix = isUnc ? "\\\\" : drive || (replaced.startsWith("\\") ? "\\" : "");
+  const body = replaced.slice(prefix.length);
+  const segments = body.split("\\");
+  const normalized: string[] = [];
+
+  for (const segment of segments) {
+    if (!segment || segment === ".") continue;
+    if (segment === ".." && normalized.length > 0) {
+      normalized.pop();
+      continue;
+    }
+    if (segment !== "..") normalized.push(segment);
+  }
+
+  const suffix = normalized.join("\\");
+  if (isUnc) return `\\\\${suffix}`.toLowerCase();
+  if (drive) return `${drive}${suffix ? `\\${suffix}` : "\\"}`.toLowerCase();
+  if (prefix === "\\") return `\\${suffix}`.toLowerCase();
+  return suffix.toLowerCase();
+}
+
+function hasProjectPath(projects: ProjectItem[], path: string, exceptId?: string): boolean {
+  const normalizedPath = normalizeWindowsPath(path);
+  return projects.some(
+    (project) => project.id !== exceptId && normalizeWindowsPath(project.path) === normalizedPath,
+  );
+}
+
+function isMissingEnvironmentManifest(error: unknown): boolean {
+  const message = String(error).toLowerCase();
+  return message.includes("no such file")
+    || message.includes("cannot find")
+    || message.includes("找不到指定")
+    || message.includes("环境清单不存在")
+    || message.includes("manifest missing")
+    || message.includes("manifest not found");
+}
+
+function errorDetail(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return "未知错误";
+}
+
+function errorWithRollback(cause: unknown, rollbackErrors: unknown[]): Error {
+  const causeMessage = errorDetail(cause);
+  if (rollbackErrors.length === 0) {
+    return new Error(causeMessage);
+  }
+  const details = rollbackErrors.map(errorDetail).join("; ");
+  return new Error(`${causeMessage}；回滚失败：${details}`);
+}
+
+async function clearStore(store: Store): Promise<void> {
+  if (typeof store.clear === "function") await store.clear();
+  else for (const key of await store.keys()) await store.delete(key);
+  await store.save();
+}
+
+type StoreSnapshot = Array<[string, unknown]>;
+
+async function snapshotStore(store: Store): Promise<StoreSnapshot> {
+  const keys = await store.keys();
+  return Promise.all(keys.map(async (key) => [key, await store.get(key)] as [string, unknown]));
+}
+
+async function restoreStore(store: Store, snapshot: StoreSnapshot): Promise<void> {
+  const currentKeys = await store.keys();
+  for (const key of currentKeys) await store.delete(key);
+  for (const [key, value] of snapshot) await store.set(key, value);
+  await store.save();
+}
+
+async function writePendingDeletion(store: Store, deletion: PendingEnvironmentDeletion): Promise<void> {
+  await store.set(pendingDeletionKey(deletion.token), deletion);
+  await store.save();
+}
+
+async function updatePendingDeletion(
+  store: Store,
+  deletion: PendingEnvironmentDeletion,
+  phase: PendingDeletionPhase,
+): Promise<PendingEnvironmentDeletion> {
+  const updated = { ...deletion, phase };
+  await writePendingDeletion(store, updated);
+  return updated;
+}
+
+async function clearPendingDeletion(store: Store, token: string): Promise<void> {
+  await store.delete(pendingDeletionKey(token));
+  await store.save();
+}
+
+function nextSelectedProjectId(projects: ProjectItem[], removedId: string, selectedId: string | null): string | null {
+  if (selectedId !== removedId) return selectedId;
+  return projects[0]?.id ?? null;
+}
+
+async function removeProjectFromStore(store: Store, projectId: string): Promise<void> {
+  const projects = await store.get<ProjectItem[]>(PROJECTS_KEY) ?? [];
+  const selectedId = await store.get<string>(SELECTED_KEY) ?? null;
+  const updated = projects.filter((project) => project.id !== projectId);
+  await store.set(PROJECTS_KEY, updated);
+  await store.set(SELECTED_KEY, nextSelectedProjectId(updated, projectId, selectedId));
+  await store.delete(projectCommandsKey(projectId));
+  await store.delete(`projectEnvs:${projectId}`);
+  await store.delete(`projectActiveEnv:${projectId}`);
+  await store.save();
+}
+
+async function removeProfileFromMainStore(store: Store, profileId: string): Promise<void> {
+  const profiles = await store.get<ProfileMeta[]>(PROFILES_KEY) ?? [];
+  const activeId = await store.get<string>(ACTIVE_PROFILE_KEY) ?? null;
+  const updated = profiles.filter((profile) => profile.id !== profileId);
+  await store.set(PROFILES_KEY, updated);
+  if (activeId === profileId) {
+    await store.set(ACTIVE_PROFILE_KEY, updated[0]?.id ?? null);
+  }
+  await store.save();
+}
+
+function assertDeleteStatusMatches(
+  deletion: PendingEnvironmentDeletion,
+  status: unknown,
+): asserts status is DeleteStatusResponse {
+  if (!isDeleteStatusResponse(status)) {
+    throw new Error("删除事务状态无效，已停止恢复");
+  }
+  if (status.status !== "prepared" && status.status !== "finalizing") return;
+
+  const matches = status.kind === deletion.kind
+    && status.profileId === deletion.profileId
+    && (deletion.kind === "project"
+      ? status.projectId === deletion.projectId
+      : status.projectId === undefined);
+  if (!matches) throw new Error("删除事务目标不匹配，已停止恢复");
+}
+
+/** Prepare using the journal token, then verify that Rust owns the same target. */
+async function preparePendingDeletion(deletion: PendingEnvironmentDeletion): Promise<boolean> {
+  const response = deletion.kind === "project"
+    ? await environmentApi.prepareDeleteProject({
+      profileId: deletion.profileId,
+      projectId: deletion.projectId!,
+      operationId: deletion.token,
+    })
+    : await environmentApi.prepareDeleteProfile({
+      profileId: deletion.profileId,
+      operationId: deletion.token,
+    });
+
+  if (!isDeleteResponse(response)) throw new Error("删除准备响应无效，已停止恢复");
+  // An empty profile has no Rust deletion transaction. Its frontend record is
+  // still removed, but there is no token to finalize.
+  if (response.projectCount === 0) {
+    if (deletion.kind === "profile" && response.token === "") return false;
+    throw new Error("删除准备目标无效，已停止恢复");
+  }
+  if (response.token !== deletion.token) throw new Error("删除准备事务标识不匹配，已停止恢复");
+
+  const status = await environmentApi.deleteStatus({ token: deletion.token });
+  assertDeleteStatusMatches(deletion, status);
+  if (status.status !== "prepared" && status.status !== "finalizing") {
+    throw new Error("删除准备后事务不存在，已停止恢复");
+  }
   return true;
 }
 
-/**
- * Phase 23 review WR-04: validate an imported `Environment` value.
- *
- * Returns the normalized `Environment` if the shape is correct and every
- * managed file name is a safe relative path, otherwise `null` (caller
- * rejects the whole import).
- */
-function validateImportedEnvironment(value: unknown): Environment | null {
-  if (!value || typeof value !== "object") return null;
-  const env = value as Record<string, unknown>;
-  if (
-    typeof env.id !== "string" ||
-    typeof env.name !== "string" ||
-    typeof env.createdAt !== "number" ||
-    typeof env.updatedAt !== "number" ||
-    !Array.isArray(env.files)
-  ) {
-    return null;
+async function deleteFrontendTarget(
+  mainStore: Store,
+  deletion: PendingEnvironmentDeletion,
+): Promise<void> {
+  const profileStore = await load(profileStorePath(deletion.profileId), { autoSave: 100, defaults: {} });
+  if (deletion.kind === "project") {
+    await removeProjectFromStore(profileStore, deletion.projectId!);
+  } else {
+    await clearStore(profileStore);
+    await removeProfileFromMainStore(mainStore, deletion.profileId);
   }
-  const files: ManagedFile[] = [];
-  const seenNames = new Set<string>();
-  for (const f of env.files) {
-    if (!f || typeof f !== "object") return null;
-    const mf = f as Record<string, unknown>;
-    if (
-      !isSafeRelativeFileName(mf.name) ||
-      typeof mf.content !== "string" ||
-      typeof mf.addedAt !== "number"
-    ) {
-      return null;
+}
+
+async function recoverPendingDeletions(mainStore: Store): Promise<void> {
+  const keys = await mainStore.keys();
+  const pendingKeys = keys.filter((key) => key.startsWith(PENDING_DELETION_PREFIX));
+  for (const key of pendingKeys) {
+    const raw = await mainStore.get<unknown>(key);
+    if (!isPendingEnvironmentDeletion(raw, key)) {
+      toast.error("删除恢复失败", { description: "删除日志损坏，已保留并停止恢复。" });
+      continue;
     }
-    // Phase 23 iter-2 IN-02: reject duplicate file names within a single
-    // imported environment — otherwise applyEnv would overwrite the same disk
-    // file twice (last-write wins), silently diverging from user intent.
-    if (seenNames.has(mf.name)) return null;
-    seenNames.add(mf.name);
-    files.push({ name: mf.name, content: mf.content, addedAt: mf.addedAt });
+    const deletion = raw;
+    try {
+      const status = await environmentApi.deleteStatus({ token: deletion.token });
+      assertDeleteStatusMatches(deletion, status);
+
+      // Once the frontend deletion was persisted, notFound means Rust may
+      // already have finalized. Do not prepare a new transaction for it.
+      if ((deletion.phase === "frontendDeleted" || deletion.phase === "finalizing")
+        && status.status === "notFound") {
+        await deleteFrontendTarget(mainStore, deletion);
+        await clearPendingDeletion(mainStore, deletion.token);
+        continue;
+      }
+
+      let hasRustTransaction = status.status !== "notFound";
+      if (status.status === "notFound") {
+        hasRustTransaction = await preparePendingDeletion(deletion);
+      }
+
+      await deleteFrontendTarget(mainStore, deletion);
+      await updatePendingDeletion(mainStore, deletion, "prepared");
+      await updatePendingDeletion(mainStore, deletion, "frontendDeleted");
+      if (!hasRustTransaction) {
+        await clearPendingDeletion(mainStore, deletion.token);
+        continue;
+      }
+      await updatePendingDeletion(mainStore, deletion, "finalizing");
+      await environmentApi.finalizeDelete({ token: deletion.token });
+      await clearPendingDeletion(mainStore, deletion.token);
+    } catch (error) {
+      toast.error("删除恢复失败", { description: errorDetail(error) });
+    }
   }
-  return {
-    id: env.id,
-    name: env.name,
-    createdAt: env.createdAt,
-    updatedAt: env.updatedAt,
-    files,
-  };
 }
 
 export function useProject() {
@@ -150,9 +337,6 @@ export function useProject() {
 
   // Phase 4 Plan 03: project-level command override
   const [projectCommandsMap, setProjectCommandsMap] = useState<Record<string, CommandItem[]>>({});
-  // Phase 23: environment state per project (per D-01, D-02)
-  const [projectEnvsMap, setProjectEnvsMap] = useState<Record<string, Environment[]>>({});
-  const [projectActiveEnvMap, setProjectActiveEnvMap] = useState<Record<string, string>>({});
   const [editMode, setEditMode] = useState(false);
 
   // Phase 11/WR-04 (Phase 22 review): preset shortcut overrides persist at
@@ -215,9 +399,31 @@ export function useProject() {
   }, []);
 
   // Phase 20: 从 profile store 加载数据到 React state
-  const loadProfileDataIntoState = useCallback(async (s: Store) => {
-    const savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
+  const loadProfileDataIntoState = useCallback(async (s: Store, profileId: string) => {
+    let savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
     const savedSelectedId = await s.get<string>(SELECTED_KEY);
+
+    if (savedProjects && profileId) {
+      const reconciledProjects = await Promise.all(savedProjects.map(async (project) => {
+        try {
+          const manifestPath = await environmentApi.getProjectPath({
+            profileId,
+            projectId: project.id,
+          });
+          return manifestPath && manifestPath !== project.path
+            ? { ...project, path: manifestPath }
+            : project;
+        } catch {
+          return project;
+        }
+      }));
+      if (reconciledProjects.some((project, index) => project.path !== savedProjects![index].path)) {
+        savedProjects = reconciledProjects;
+        await s.set(PROJECTS_KEY, savedProjects);
+        await s.save();
+      }
+    }
+
     if (savedProjects) setProjects(savedProjects);
     else setProjects([]);
     if (savedSelectedId) setSelectedId(savedSelectedId);
@@ -236,41 +442,6 @@ export function useProject() {
     );
     const map = Object.fromEntries(projectCmdEntries);
     setProjectCommandsMap(map);
-
-    // Phase 23: Restore environment data (per D-05)
-    const envKeys = allKeys.filter((k) => k.startsWith("projectEnvs:"));
-    const envEntries = await Promise.all(
-      envKeys.map(async (k) => {
-        const projectId = k.replace("projectEnvs:", "");
-        const envs = await s.get<Environment[]>(k);
-        return [projectId, envs ?? []] as const;
-      })
-    );
-    const envMap = Object.fromEntries(envEntries);
-    setProjectEnvsMap(envMap);
-
-    // Restore active env per project
-    const activeEnvKeys = allKeys.filter((k) => k.startsWith("projectActiveEnv:"));
-    const activeEnvEntries = await Promise.all(
-      activeEnvKeys.map(async (k) => {
-        const projectId = k.replace("projectActiveEnv:", "");
-        const activeId = await s.get<string>(k);
-        return [projectId, activeId ?? null] as const;
-      })
-    );
-    // IN-06/WR-02 (Phase 22 review): use a type guard instead of a runtime
-    // filter plus `as [string, string][]` so narrowing flows through the
-    // type system honestly. The annotation includes `undefined` (WR-02)
-    // because the upstream store read resolves missing keys to undefined;
-    // `!= null` rejects both null and undefined as defense-in-depth, even
-    // though the local `?? null` coercion above already normalizes to null.
-    const isStringEntry = (
-      entry: readonly [string, string | null | undefined]
-    ): entry is [string, string] =>
-      entry[1] != null;
-    const validActiveEntries = activeEnvEntries.filter(isStringEntry);
-    const activeEnvMap = Object.fromEntries(validActiveEntries);
-    setProjectActiveEnvMap(activeEnvMap);
 
     // Restore shortcut bindings
     const savedBindings = await s.get<Record<string, string>>(SHORTCUT_BINDINGS_KEY);
@@ -427,7 +598,7 @@ export function useProject() {
 
       // 3. 批量重置所有 React state per D-04/D-05
       setEditMode(false);
-      await loadProfileDataIntoState(ps);
+      await loadProfileDataIntoState(ps, id);
 
       // 4. 更新 profileStore 引用
       setProfileStore(ps);
@@ -452,6 +623,9 @@ export function useProject() {
         const ms = await load(STORE_PATH, { autoSave: 100, defaults: {} });
         if (!mounted) return;
 
+        await recoverPendingDeletions(ms);
+        if (!mounted) return;
+
         const { metas, activeId } = await migrateToProfiles(ms);
         if (!mounted) return;
 
@@ -466,7 +640,7 @@ export function useProject() {
         // Phase 22 (WR-05): legacy CUSTOM_COMMANDS_KEY cleanup now runs inside
         // loadProfileDataIntoState so it covers init, switchProfile, and
         // importProfile uniformly. No duplicate cleanup needed here.
-        await loadProfileDataIntoState(ps);
+        await loadProfileDataIntoState(ps, activeId);
 
         setProfileStore(ps);
         // 保持 store 引用指向 profileStore（供 useRecentCommands 等使用）
@@ -487,28 +661,109 @@ export function useProject() {
   // Add project (per D-02 append to bottom, D-04 duplicate check, D-05 auto-select)
   const addProject = useCallback(
     async (path: string, name: string) => {
-      const id = generateProjectId(path);
-      if (projects.some((p) => p.id === id)) {
+      if (hasProjectPath(projects, path)) {
         toast.error("项目已存在");
         return;
       }
+      const id = crypto.randomUUID();
       const newItem: ProjectItem = { id, name, path, addedAt: Date.now() };
       const updated = [...projects, newItem];
       setProjects(updated);
       setSelectedId(id);
       await profileStore?.set(PROJECTS_KEY, updated);
       await profileStore?.set(SELECTED_KEY, id);
+      await profileStore?.save();
     },
     [projects, profileStore]
   );
 
+  // Rebind a project after its directory moved. The stable project ID is
+  // intentionally retained so commands, environments, and selection remain
+  // attached to the same project record.
+  const rebindProject = useCallback(
+    async (projectId: string): Promise<boolean> => {
+      const target = projects.find((project) => project.id === projectId);
+      if (!target) return false;
+      try {
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: "重新绑定项目文件夹",
+        });
+        if (typeof selected !== "string") return false;
+        if (hasProjectPath(projects, selected, projectId)) {
+          toast.error("项目已存在");
+          return false;
+        }
+
+        const updated = projects.map((project) =>
+          project.id === projectId ? { ...project, path: selected } : project,
+        );
+        const projectRef = {
+          profileId: activeProfileId ?? "",
+          projectId,
+          projectPath: target.path,
+        };
+        let rustRebound = false;
+        if (activeProfileId) {
+          try {
+            await environmentApi.rebindProject({ project: projectRef, newProjectPath: selected });
+            rustRebound = true;
+          } catch (error) {
+            // Rust requires an existing manifest. A project that has never
+            // entered the environment workflow still needs normal rebinding.
+            if (!isMissingEnvironmentManifest(error)) throw error;
+          }
+        }
+
+        try {
+          await profileStore?.set(PROJECTS_KEY, updated);
+          await profileStore?.save();
+        } catch (error) {
+          const rollbackErrors: unknown[] = [];
+          try {
+            await profileStore?.set(PROJECTS_KEY, projects);
+            await profileStore?.save();
+          } catch (rollbackError) {
+            rollbackErrors.push(rollbackError);
+          }
+          if (rustRebound) {
+            try {
+              await environmentApi.rebindProject({ project: projectRef, newProjectPath: target.path });
+            } catch (rollbackError) {
+              rollbackErrors.push(rollbackError);
+            }
+          }
+          setProjects(projects);
+          throw errorWithRollback(error, rollbackErrors);
+        }
+
+        setProjects(updated);
+        if (selectedId === projectId) fetchProjectInfo(selected);
+        toast.success(`已重新绑定项目目录: ${target.name}`);
+        return true;
+      } catch (error) {
+        if (import.meta.env.DEV) console.error("重新绑定项目目录失败:", error);
+        toast.error("重新绑定失败", {
+          description: "无法保存新的项目目录，请重试。",
+        });
+        return false;
+      }
+    },
+    [activeProfileId, projects, profileStore, selectedId, fetchProjectInfo],
+  );
+
   // Remove project (per D-10 auto-select nearest, D-11 empty state for last item)
   const removeProject = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean> => {
       const idx = projects.findIndex((p) => p.id === id);
-      if (idx === -1) return;
+      if (idx === -1) return false;
+      if (!activeProfileId || !mainStore || !profileStore) {
+        toast.error("没有活动配置，无法删除项目环境数据");
+        return false;
+      }
+      const commandKey = projectCommandsKey(id);
       const updated = projects.filter((p) => p.id !== id);
-      setProjects(updated);
 
       // D-10: auto-select nearest neighbor
       let newSelectedId: string | null = null;
@@ -517,32 +772,106 @@ export function useProject() {
       } else if (id !== selectedId) {
         newSelectedId = selectedId;
       }
-      setSelectedId(newSelectedId);
-      await profileStore?.set(PROJECTS_KEY, updated);
-      await profileStore?.set(SELECTED_KEY, newSelectedId);
-      // Clean up project-level command data (both store and in-memory)
-      await profileStore?.delete(projectCommandsKey(id));
-      setProjectCommandsMap((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      // Phase 23: Clean up environment data (per D-04)
-      await profileStore?.delete(projectEnvsKey(id));
-      await profileStore?.delete(projectActiveEnvKey(id));
-      setProjectEnvsMap((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setProjectActiveEnvMap((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      await profileStore?.save();
+
+      const token = crypto.randomUUID();
+      const deletion: PendingEnvironmentDeletion = {
+        version: 1,
+        token,
+        kind: "project",
+        profileId: activeProfileId,
+        projectId: id,
+        phase: "intent",
+      };
+      let prepared = false;
+      let frontendCommitted = false;
+      let profileStoreSnapshot: StoreSnapshot | null = null;
+      try {
+        await writePendingDeletion(mainStore, deletion);
+        await environmentApi.prepareDeleteProject({
+          profileId: activeProfileId,
+          projectId: id,
+          operationId: token,
+        });
+        prepared = true;
+        profileStoreSnapshot = await snapshotStore(profileStore);
+        await updatePendingDeletion(mainStore, deletion, "prepared");
+
+        await profileStore.set(PROJECTS_KEY, updated);
+        await profileStore.set(SELECTED_KEY, newSelectedId);
+        await profileStore.delete(commandKey);
+        await profileStore.delete(`projectEnvs:${id}`);
+        await profileStore.delete(`projectActiveEnv:${id}`);
+        await profileStore.save();
+        frontendCommitted = true;
+        await updatePendingDeletion(mainStore, deletion, "frontendDeleted");
+
+        setProjects(updated);
+        setSelectedId(newSelectedId);
+        setProjectCommandsMap((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+
+        await updatePendingDeletion(mainStore, deletion, "finalizing");
+        await environmentApi.finalizeDelete({ token });
+        await clearPendingDeletion(mainStore, token);
+        return true;
+      } catch (error) {
+        const rollbackErrors: unknown[] = [];
+        let frontendStoreRestored = true;
+        let restoreDeleteSucceeded = true;
+
+        if (prepared && !frontendCommitted) {
+          if (profileStoreSnapshot) {
+            try {
+              await restoreStore(profileStore, profileStoreSnapshot);
+            } catch (rollbackError) {
+              frontendStoreRestored = false;
+              rollbackErrors.push(rollbackError);
+            }
+          }
+          try {
+            await environmentApi.restoreDelete({ token });
+          } catch (rollbackError) {
+            restoreDeleteSucceeded = false;
+            rollbackErrors.push(rollbackError);
+          }
+          if (frontendStoreRestored && restoreDeleteSucceeded) {
+            try {
+              await clearPendingDeletion(mainStore, token);
+            } catch (rollbackError) {
+              rollbackErrors.push(rollbackError);
+            }
+          }
+        } else if (!prepared && !frontendCommitted) {
+          // Prepare may have failed before Rust created a transaction. Querying
+          // status distinguishes that case from a lost prepare response.
+          try {
+            const status = await environmentApi.deleteStatus({ token });
+            assertDeleteStatusMatches(deletion, status);
+            if (status.status === "prepared") {
+              prepared = true;
+              await environmentApi.restoreDelete({ token });
+              await clearPendingDeletion(mainStore, token);
+            } else if (status.status === "notFound") {
+              await clearPendingDeletion(mainStore, token);
+            }
+          } catch (rollbackError) {
+            rollbackErrors.push(rollbackError);
+          }
+        }
+
+        const failure = new Error(`删除项目失败：${errorDetail(error)}`);
+        toast.error("删除项目失败", {
+          description: !frontendCommitted && frontendStoreRestored && restoreDeleteSucceeded && rollbackErrors.length === 0
+            ? "已恢复，请重试。"
+            : "删除失败且恢复不完整，请检查数据后重试。",
+        });
+        throw errorWithRollback(failure, rollbackErrors);
+      }
     },
-    [projects, selectedId, profileStore]
+    [activeProfileId, mainStore, projects, selectedId, profileStore]
   );
 
   // Select project (also exits edit mode on project switch)
@@ -726,371 +1055,6 @@ export function useProject() {
     [selectedId, projectCommandsMap, profileStore]
   );
 
-  // --- Phase 23: Environment CRUD management ---
-
-  // Create a new environment for a project (per D-20: unique name check)
-  const createEnv = useCallback(
-    async (projectId: string, name: string): Promise<string | null> => {
-      const pid = projectId || selectedId;
-      if (!pid) {
-        toast.error("请先选择一个项目");
-        return null;
-      }
-      const trimmed = name.trim();
-      if (!trimmed) {
-        toast.error("环境名称不能为空");
-        return null;
-      }
-      // WR-05: do the uniqueness check inside the setProjectEnvsMap updater
-      // (functional form) so two rapid successive calls cannot both pass the
-      // check against the same stale snapshot and create duplicate names.
-      let createdId: string | null = null;
-      let updated: Environment[] | null = null;
-      setProjectEnvsMap((prev) => {
-        const existing = prev[pid] ?? [];
-        if (existing.some((e) => e.name === trimmed)) {
-          // Duplicate observed inside the updater — abort.
-          return prev;
-        }
-        const newEnv: Environment = {
-          id: crypto.randomUUID(),
-          name: trimmed,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          files: [],
-        };
-        createdId = newEnv.id;
-        updated = [...existing, newEnv];
-        return { ...prev, [pid]: updated };
-      });
-      if (!createdId || !updated) {
-        toast.error("环境名称已存在");
-        return null;
-      }
-      await profileStore?.set(projectEnvsKey(pid), updated);
-      await profileStore?.save();
-      toast.success(`已创建环境: ${trimmed}`);
-      return createdId;
-    },
-    [selectedId, profileStore]
-  );
-
-  // Rename an environment (per D-20: unique name check excluding self)
-  const renameEnv = useCallback(
-    async (projectId: string, envId: string, newName: string) => {
-      const trimmed = newName.trim();
-      if (!trimmed) {
-        toast.error("环境名称不能为空");
-        return;
-      }
-      // WR-05: uniqueness check inside the updater to close the re-entrant race.
-      let renamed = false;
-      let updated: Environment[] | null = null;
-      setProjectEnvsMap((prev) => {
-        const existing = prev[projectId] ?? [];
-        if (existing.some((e) => e.id !== envId && e.name === trimmed)) {
-          return prev;
-        }
-        updated = existing.map((e) =>
-          e.id === envId ? { ...e, name: trimmed, updatedAt: Date.now() } : e
-        );
-        renamed = true;
-        return { ...prev, [projectId]: updated };
-      });
-      if (!renamed || !updated) {
-        toast.error("环境名称已存在");
-        return;
-      }
-      await profileStore?.set(projectEnvsKey(projectId), updated);
-      await profileStore?.save();
-      toast.success(`已重命名环境: ${trimmed}`);
-    },
-    [profileStore]
-  );
-
-  // Set or clear the active environment for a project (per D-14)
-  // WR-06: hoisted above deleteEnv so the deleteEnv dependency array reads an
-  // already-initialized binding, making the dependency honest and the control
-  // flow easier to follow.
-  const setActiveEnv = useCallback(
-    async (projectId: string, envId: string | null) => {
-      if (envId === null) {
-        setProjectActiveEnvMap((prev) => {
-          const next = { ...prev };
-          delete next[projectId];
-          return next;
-        });
-        await profileStore?.delete(projectActiveEnvKey(projectId));
-      } else {
-        setProjectActiveEnvMap((prev) => ({ ...prev, [projectId]: envId }));
-        await profileStore?.set(projectActiveEnvKey(projectId), envId);
-      }
-      await profileStore?.save();
-    },
-    [profileStore]
-  );
-
-  // Delete an environment (per D-21, D-18)
-  const deleteEnv = useCallback(
-    async (projectId: string, envId: string) => {
-      const existing = projectEnvsMap[projectId] ?? [];
-      const target = existing.find((e) => e.id === envId);
-      if (!target) return;
-      const updated = existing.filter((e) => e.id !== envId);
-
-      if (updated.length === 0) {
-        // Remove empty project entry from map
-        setProjectEnvsMap((prev) => {
-          const next = { ...prev };
-          delete next[projectId];
-          return next;
-        });
-        await profileStore?.delete(projectEnvsKey(projectId));
-      } else {
-        setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
-        await profileStore?.set(projectEnvsKey(projectId), updated);
-      }
-
-      // If deleted env was the active env, clear active env. setActiveEnv
-      // performs its own profileStore.save(), so we only save again when the
-      // active-env branch did NOT run (WR-06: single save per mutation).
-      if (projectActiveEnvMap[projectId] === envId) {
-        await setActiveEnv(projectId, null);
-      } else {
-        await profileStore?.save();
-      }
-      toast.success(`已删除环境: ${target.name}`);
-    },
-    [projectEnvsMap, projectActiveEnvMap, profileStore, setActiveEnv]
-  );
-
-  // Apply an environment: write all managed files to the project directory (per D-26, D-27, D-28, D-30)
-  const applyEnv = useCallback(
-    async (projectId: string, envId: string): Promise<boolean> => {
-      const envs = projectEnvsMap[projectId] ?? [];
-      const env = envs.find((e) => e.id === envId);
-      if (!env) {
-        toast.error("环境不存在");
-        return false;
-      }
-      // CR-02: resolve the target project path from the projectId parameter,
-      // NOT from the closure-captured currentProject. The old code wrote env
-      // files for project A into project B's directory whenever a caller
-      // invoked applyEnv for a non-selected project (silent cross-project
-      // data corruption).
-      const project = projects.find((p) => p.id === projectId);
-      if (!project) {
-        toast.error("项目不存在");
-        return false;
-      }
-      const projectPath = project.path;
-
-      // CR-03: snapshot prior content (or absence) of every managed file
-      // BEFORE overwriting, so a mid-apply failure can restore the exact
-      // previous bytes instead of truncating files. Writing an empty string
-      // on rollback destroyed user data on the very path rollback protects.
-      //
-      // WR-01 (iter-2): `read_file_content` now distinguishes NotFound
-      // (returns null) from other read errors (throws). Only NotFound may be
-      // treated as "absent → delete on rollback". Any other read error
-      // (permission denied, sharing violation, ...) must hard-abort the whole
-      // apply BEFORE writing anything — otherwise rollback would call
-      // delete_file_content on a file that actually existed, destroying the
-      // user's original content.
-      type Snapshot = { name: string; existed: boolean; prior: string };
-      const snapshots: Snapshot[] = [];
-      for (const file of env.files) {
-        let existed = false;
-        let prior = "";
-        try {
-          const result = await invoke<string | null>("read_file_content", {
-            projectPath,
-            fileName: file.name,
-          });
-          if (result !== null) {
-            existed = true;
-            prior = result;
-          } else {
-            existed = false;
-            prior = "";
-          }
-        } catch (error) {
-          // NOT a NotFound — could be permission/lock. Abort before mutating.
-          toast.error(`无法读取文件 ${file.name}，已取消启用: ${error}`);
-          return false;
-        }
-        snapshots.push({ name: file.name, existed, prior });
-      }
-
-      for (let i = 0; i < env.files.length; i++) {
-        const file = env.files[i];
-        try {
-          await invoke("write_file_content", {
-            projectPath,
-            fileName: file.name,
-            content: file.content,
-          });
-        } catch (error) {
-          // Rollback every file written so far by restoring its snapshot.
-          // Files that did not exist before apply are deleted via the new
-          // delete_file_content command; files that existed are restored to
-          // their exact prior content. Best-effort: if a rollback step
-          // itself fails we surface which managed files may be left dirty.
-          let rollbackFailed = false;
-          const dirtyFiles: string[] = [];
-          for (let j = 0; j <= i; j++) {
-            const snap = snapshots[j];
-            try {
-              if (snap.existed) {
-                await invoke("write_file_content", {
-                  projectPath,
-                  fileName: snap.name,
-                  content: snap.prior,
-                });
-              } else {
-                await invoke("delete_file_content", {
-                  projectPath,
-                  fileName: snap.name,
-                });
-              }
-            } catch {
-              rollbackFailed = true;
-              dirtyFiles.push(snap.name);
-            }
-          }
-          if (rollbackFailed) {
-            toast.error(
-              `启用失败且回滚不完整，以下文件可能需要手动检查：${dirtyFiles.join(", ")}`
-            );
-          } else {
-            toast.error(`启用失败: ${error}`);
-          }
-          return false;
-        }
-      }
-
-      // All files written successfully
-      await setActiveEnv(projectId, envId);
-      toast.success(`已启用环境: ${env.name}`);
-      return true;
-    },
-    [projectEnvsMap, projects, setActiveEnv]
-  );
-
-  // --- Phase 24: File management ---
-
-  // Add ManagedFile entries to an environment's file list (dedup by name, per D-07)
-  const addFiles = useCallback(
-    async (projectId: string, envId: string, files: ManagedFile[]): Promise<void> => {
-      const envs = projectEnvsMap[projectId] ?? [];
-      const envIdx = envs.findIndex((e) => e.id === envId);
-      if (envIdx === -1) {
-        toast.error("环境不存在");
-        return;
-      }
-      const env = envs[envIdx];
-      const existingNames = new Set(env.files.map((f) => f.name));
-      const newFiles = files.filter((f) => !existingNames.has(f.name));
-      const skippedCount = files.length - newFiles.length;
-
-      if (newFiles.length === 0) {
-        toast.info(`所有文件已存在，跳过添加`);
-        return;
-      }
-
-      const updatedEnv = {
-        ...env,
-        files: [...env.files, ...newFiles],
-        updatedAt: Date.now(),
-      };
-      const updated = envs.map((e) => (e.id === envId ? updatedEnv : e));
-      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
-      await profileStore?.set(projectEnvsKey(projectId), updated);
-      await profileStore?.save();
-
-      const summary = `已添加 ${newFiles.length} 个文件${skippedCount > 0 ? `，${skippedCount} 个已存在跳过` : ""}`;
-      toast.success(summary);
-    },
-    [projectEnvsMap, profileStore]
-  );
-
-  // Delete ManagedFile entries from an environment by file name list (per D-26)
-  const deleteFiles = useCallback(
-    async (projectId: string, envId: string, fileNames: string[]): Promise<void> => {
-      const envs = projectEnvsMap[projectId] ?? [];
-      const env = envs.find((e) => e.id === envId);
-      if (!env) {
-        toast.error("环境不存在");
-        return;
-      }
-      const nameSet = new Set(fileNames);
-      const remainingFiles = env.files.filter((f) => !nameSet.has(f.name));
-
-      if (remainingFiles.length === env.files.length) {
-        toast.info("未找到匹配的文件");
-        return;
-      }
-
-      const updatedEnv = {
-        ...env,
-        files: remainingFiles,
-        updatedAt: Date.now(),
-      };
-      const updated = envs.map((e) => (e.id === envId ? updatedEnv : e));
-      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
-      await profileStore?.set(projectEnvsKey(projectId), updated);
-      await profileStore?.save();
-      toast.success(`已删除 ${env.files.length - remainingFiles.length} 个文件`);
-    },
-    [projectEnvsMap, profileStore]
-  );
-
-  // Update a specific file's content within an environment (per D-16: no toast)
-  const updateFileContent = useCallback(
-    async (projectId: string, envId: string, fileName: string, content: string): Promise<void> => {
-      const envs = projectEnvsMap[projectId] ?? [];
-      const env = envs.find((e) => e.id === envId);
-      if (!env) {
-        toast.error("环境不存在");
-        return;
-      }
-      const fileExists = env.files.some((f) => f.name === fileName);
-      if (!fileExists) {
-        toast.error(`文件不存在: ${fileName}`);
-        return;
-      }
-
-      const updatedEnv = {
-        ...env,
-        files: env.files.map((f) =>
-          f.name === fileName ? { ...f, content } : f
-        ),
-        updatedAt: Date.now(),
-      };
-      const updated = envs.map((e) => (e.id === envId ? updatedEnv : e));
-      setProjectEnvsMap((prev) => ({ ...prev, [projectId]: updated }));
-      await profileStore?.set(projectEnvsKey(projectId), updated);
-      await profileStore?.save();
-    },
-    [projectEnvsMap, profileStore]
-  );
-
-  // Convenience getter: get all environments for a project
-  const getProjectEnvs = useCallback(
-    (projectId: string): Environment[] => {
-      return projectEnvsMap[projectId] ?? [];
-    },
-    [projectEnvsMap]
-  );
-
-  // Convenience getter: get active environment ID for a project
-  const getProjectActiveEnv = useCallback(
-    (projectId: string): string | null => {
-      return projectActiveEnvMap[projectId] ?? null;
-    },
-    [projectActiveEnvMap]
-  );
-
   // --- Phase 18: Unified shortcut binding management ---
 
   // Set a shortcut binding for an action, with full conflict detection
@@ -1194,21 +1158,123 @@ export function useProject() {
   }, [mainStore, profileMetas, switchProfile]);
 
   // 删除 profile（不允许删除最后一个）
-  const deleteProfile = useCallback(async (id: string) => {
-    if (!mainStore) return;
+  const deleteProfile = useCallback(async (id: string): Promise<boolean> => {
+    if (!mainStore || !profileStore) return false;
     if (profileMetas.length <= 1) {
       toast.error("至少需要保留一个配置文件");
-      return;
+      return false;
     }
-    const updated = profileMetas.filter((p) => p.id !== id);
-    await mainStore.set(PROFILES_KEY, updated);
-    await mainStore.save();
-    setProfileMetas(updated);
-    // 如果删除的是当前活跃 profile，自动切换到第一个
-    if (id === activeProfileId && updated.length > 0) {
-      await switchProfile(updated[0].id);
+    if (!profileMetas.some((profile) => profile.id === id)) return false;
+
+    const deletingActive = id === activeProfileId;
+    const updated = profileMetas.filter((profile) => profile.id !== id);
+    const nextActiveId = deletingActive ? updated[0]?.id ?? null : activeProfileId;
+    const token = crypto.randomUUID();
+    const deletion: PendingEnvironmentDeletion = {
+      version: 1,
+      token,
+      kind: "profile",
+      profileId: id,
+      phase: "intent",
+    };
+    let prepared = false;
+    let frontendCommitted = false;
+    let mainStoreSnapshot: StoreSnapshot | null = null;
+    let deletedProfileStore: Store | null = null;
+    let deletedProfileStoreSnapshot: StoreSnapshot | null = null;
+    try {
+      await writePendingDeletion(mainStore, deletion);
+      await environmentApi.prepareDeleteProfile({ profileId: id, operationId: token });
+      prepared = true;
+      mainStoreSnapshot = await snapshotStore(mainStore);
+      deletedProfileStore = await load(profileStorePath(id), { autoSave: 100, defaults: {} });
+      deletedProfileStoreSnapshot = await snapshotStore(deletedProfileStore);
+      await updatePendingDeletion(mainStore, deletion, "prepared");
+
+      await mainStore.set(PROFILES_KEY, updated);
+      if (deletingActive && nextActiveId) {
+        await mainStore.set(ACTIVE_PROFILE_KEY, nextActiveId);
+      }
+      await mainStore.save();
+
+      // The deleted profile must be cleared before Rust finalizes the delete.
+      await clearStore(deletedProfileStore);
+
+      await updatePendingDeletion(mainStore, deletion, "frontendDeleted");
+
+      if (deletingActive && nextActiveId) {
+        await switchProfile(nextActiveId);
+      }
+      frontendCommitted = true;
+      await updatePendingDeletion(mainStore, deletion, "finalizing");
+      await environmentApi.finalizeDelete({ token });
+      await clearPendingDeletion(mainStore, token);
+      setProfileMetas(updated);
+      return true;
+    } catch (error) {
+      const rollbackErrors: unknown[] = [];
+      let frontendStoreRestored = true;
+      let restoreDeleteSucceeded = true;
+
+      if (prepared && !frontendCommitted) {
+        if (mainStoreSnapshot) {
+          try {
+            await restoreStore(mainStore, mainStoreSnapshot);
+          } catch (rollbackError) {
+            frontendStoreRestored = false;
+            rollbackErrors.push(rollbackError);
+          }
+        }
+        if (deletedProfileStore && deletedProfileStoreSnapshot) {
+          try {
+            await restoreStore(deletedProfileStore, deletedProfileStoreSnapshot);
+          } catch (rollbackError) {
+            frontendStoreRestored = false;
+            rollbackErrors.push(rollbackError);
+          }
+        }
+        try {
+          await environmentApi.restoreDelete({ token });
+        } catch (rollbackError) {
+          restoreDeleteSucceeded = false;
+          rollbackErrors.push(rollbackError);
+        }
+        if (frontendStoreRestored && restoreDeleteSucceeded) {
+          try {
+            await clearPendingDeletion(mainStore, token);
+          } catch (rollbackError) {
+            rollbackErrors.push(rollbackError);
+          }
+        }
+      } else if (!prepared && !frontendCommitted) {
+        try {
+          const status = await environmentApi.deleteStatus({ token });
+          assertDeleteStatusMatches(deletion, status);
+          if (status.status === "prepared") {
+            await environmentApi.restoreDelete({ token });
+            await clearPendingDeletion(mainStore, token);
+          } else if (status.status === "notFound") {
+            await clearPendingDeletion(mainStore, token);
+          }
+        } catch (rollbackError) {
+          rollbackErrors.push(rollbackError);
+        }
+      }
+      const failure = new Error(`删除配置失败：${errorDetail(error)}`);
+      toast.error("删除配置失败", {
+        description: !frontendCommitted && frontendStoreRestored && restoreDeleteSucceeded && rollbackErrors.length === 0
+          ? "已恢复，请重试。"
+          : "删除失败且恢复不完整，请检查数据后重试。",
+      });
+      throw errorWithRollback(failure, rollbackErrors);
     }
-  }, [mainStore, profileMetas, activeProfileId, switchProfile]);
+  }, [
+    mainStore,
+    profileMetas,
+    activeProfileId,
+    profileStore,
+    switchProfile,
+  ]);
 
   // 重命名 profile（仅更新主 store 的 metas）
   const renameProfile = useCallback(async (id: string, newName: string) => {
@@ -1250,24 +1316,6 @@ export function useProject() {
         }
       }
 
-      // Phase 23: Collect environment data (per D-03)
-      const envKeys = allKeys.filter((k) => k.startsWith("projectEnvs:"));
-      const envEntries = await Promise.all(
-        envKeys.map(async (k) => {
-          const projectId = k.replace("projectEnvs:", "");
-          const val = await profileStore.get(k);
-          return [projectId, val] as const;
-        })
-      );
-      const activeEnvKeys = allKeys.filter((k) => k.startsWith("projectActiveEnv:"));
-      const activeEnvEntries = await Promise.all(
-        activeEnvKeys.map(async (k) => {
-          const projectId = k.replace("projectActiveEnv:", "");
-          const val = await profileStore.get(k);
-          return [projectId, val] as const;
-        })
-      );
-
       const exportData: ProfileExportData = {
         formatVersion: 1,
         profileName,
@@ -1279,9 +1327,6 @@ export function useProject() {
           shortcutBindings: await profileStore.get(SHORTCUT_BINDINGS_KEY),
           presetShortcuts: await profileStore.get(PRESHORTCUTS_KEY),
           recentCommands: await profileStore.get("recentCommands"),
-          // Phase 23: Export environment data
-          projectEnvs: Object.fromEntries(envEntries) as Record<string, Environment[]>,
-          projectActiveEnvs: Object.fromEntries(activeEnvEntries) as Record<string, string>,
         },
       };
 
@@ -1326,15 +1371,8 @@ export function useProject() {
         toast.error("配置文件损坏：projectCommands 格式错误");
         return;
       }
-      // Phase 23: Validate env data format
-      if (data.projectEnvs && typeof data.projectEnvs !== "object") {
-        toast.error("配置文件损坏：projectEnvs 格式错误");
-        return;
-      }
-      if (data.projectActiveEnvs && typeof data.projectActiveEnvs !== "object") {
-        toast.error("配置文件损坏：projectActiveEnvs 格式错误");
-        return;
-      }
+      const hasLegacyEnvironmentData =
+        data.projectEnvs !== undefined || data.projectActiveEnvs !== undefined;
 
       // 创建新 profile
       const id = crypto.randomUUID();
@@ -1356,46 +1394,6 @@ export function useProject() {
         }
       }
 
-      // Phase 23: Import environment data
-      // WR-04 / CR-01: schema-validate every Environment and every ManagedFile
-      // name (reject absolute / `..` traversal paths). Reject the whole import
-      // if any entry is malformed — these values feed the IPC file-I/O surface
-      // and a malicious or corrupt profile could otherwise arrange arbitrary
-      // file writes.
-      if (data.projectEnvs && typeof data.projectEnvs === "object") {
-        const validatedEnvs: Record<string, Environment[]> = {};
-        for (const [projectId, envs] of Object.entries(
-          data.projectEnvs as Record<string, unknown>
-        )) {
-          if (!Array.isArray(envs)) {
-            toast.error("配置文件损坏：projectEnvs 条目不是数组");
-            return;
-          }
-          const normalized: Environment[] = [];
-          for (const env of envs) {
-            const validated = validateImportedEnvironment(env);
-            if (!validated) {
-              toast.error("配置文件损坏：环境数据格式错误（可能包含不安全的文件路径）");
-              return;
-            }
-            normalized.push(validated);
-          }
-          validatedEnvs[projectId] = normalized;
-        }
-        for (const [projectId, envs] of Object.entries(validatedEnvs)) {
-          await ps.set(projectEnvsKey(projectId), envs);
-        }
-      }
-      if (data.projectActiveEnvs && typeof data.projectActiveEnvs === "object") {
-        for (const [projectId, activeId] of Object.entries(
-          data.projectActiveEnvs as Record<string, unknown>
-        )) {
-          if (typeof activeId === "string") {
-            await ps.set(projectActiveEnvKey(projectId), activeId);
-          }
-        }
-      }
-
       await ps.save();
 
       // 更新主 store 的 metas
@@ -1405,6 +1403,9 @@ export function useProject() {
 
       // 切换到新 profile
       await switchProfile(id);
+      if (hasLegacyEnvironmentData) {
+        toast.info("已忽略导入文件中的旧环境数据，请在新配置中重新创建环境");
+      }
       toast.success(`已导入配置: ${profileName}`);
     } catch (error) {
       toast.error("导入失败", {
@@ -1424,6 +1425,7 @@ export function useProject() {
     selectedId, // string | null
     loading, // boolean
     addProject, // (path: string, name: string) => Promise<void>
+    rebindProject, // (projectId: string) => Promise<boolean>
     removeProject, // (id: string) => Promise<void>
     selectProject, // (id: string) => Promise<void>
 
@@ -1461,22 +1463,6 @@ export function useProject() {
     // Phase 9: project-level command map + open folder
     projectCommandsMap,    // Record<string, CommandItem[]>
     openFolder,            // (path: string) => Promise<void>
-
-    // Phase 23: Environment management
-    projectEnvsMap,           // Record<string, Environment[]>
-    projectActiveEnvMap,      // Record<string, string>
-    createEnv,                // (projectId: string, name: string) => Promise<string | null>
-    renameEnv,                // (projectId: string, envId: string, newName: string) => Promise<void>
-    deleteEnv,                // (projectId: string, envId: string) => Promise<void>
-    setActiveEnv,             // (projectId: string, envId: string | null) => Promise<void>
-    applyEnv,                 // (projectId: string, envId: string) => Promise<boolean>
-    getProjectEnvs,           // (projectId: string) => Environment[]
-    getProjectActiveEnv,      // (projectId: string) => string | null
-
-    // Phase 24: File management
-    addFiles,                 // (projectId: string, envId: string, files: ManagedFile[]) => Promise<void>
-    deleteFiles,              // (projectId: string, envId: string, fileNames: string[]) => Promise<void>
-    updateFileContent,        // (projectId: string, envId: string, fileName: string, content: string) => Promise<void>
 
     // Phase 12: expose store for tray settings persistence
     store,                 // Store | null

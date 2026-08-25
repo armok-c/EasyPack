@@ -5,7 +5,7 @@ import { useProject } from "@/hooks/useProject";
 import type { CommandItem } from "@/lib/types";
 
 // Mock @tauri-apps/plugin-store — use vi.hoisted so factory can reference it
-const { mockStore } = vi.hoisted(() => ({
+const { mockStore, mockLoad, mockOpen, mockInvoke, mockReadTextFile, mockWriteTextFile, mockToastInfo, mockToastError } = vi.hoisted(() => ({
   mockStore: {
     get: vi.fn(),
     set: vi.fn(),
@@ -13,29 +13,44 @@ const { mockStore } = vi.hoisted(() => ({
     keys: vi.fn(),
     save: vi.fn(),
   },
+  mockLoad: vi.fn(),
+  mockOpen: vi.fn(),
+  mockInvoke: vi.fn(),
+  mockReadTextFile: vi.fn(),
+  mockWriteTextFile: vi.fn(),
+  mockToastInfo: vi.fn(),
+  mockToastError: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-store", () => ({
-  load: vi.fn().mockResolvedValue(mockStore),
+  load: mockLoad,
 }));
 
 // Mock @tauri-apps/plugin-dialog
 vi.mock("@tauri-apps/plugin-dialog", () => ({
-  open: vi.fn(),
+  open: mockOpen,
 }));
 
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  invoke: mockInvoke,
+}));
+
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  readTextFile: mockReadTextFile,
+  writeTextFile: mockWriteTextFile,
 }));
 
 // Mock sonner
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
-    error: vi.fn(),
+    error: mockToastError,
+    info: mockToastInfo,
   },
 }));
+
+mockLoad.mockResolvedValue(mockStore);
 
 describe("useProject - Phase 22 simplified contract", () => {
   const testProject = {
@@ -303,12 +318,145 @@ describe("useProject - command CRUD", () => {
     const result = await initHook();
 
     await act(async () => {
+      mockInvoke.mockImplementation((command: string) =>
+        command === "environment_prepare_delete_project"
+          ? Promise.resolve({ token: "delete-project", projectCount: 1 })
+          : Promise.resolve(undefined),
+      );
       await result.current.removeProject("test/project");
     });
 
     expect(mockStore.delete).toHaveBeenCalledWith(
       "projectCommands:test/project"
     );
+  });
+});
+
+describe("useProject - stable project identity and rebinding", () => {
+  const legacyProject = {
+    id: "legacy-project-id",
+    name: "demo",
+    path: "C:\\Workspace\\Demo",
+    addedAt: 1000,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockLoad.mockResolvedValue(mockStore);
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([]);
+      return Promise.resolve(undefined);
+    });
+    mockStore.set.mockResolvedValue(undefined);
+    mockStore.delete.mockResolvedValue(undefined);
+    mockStore.keys.mockResolvedValue([]);
+    mockStore.save.mockResolvedValue(undefined);
+    mockOpen.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  async function initHook() {
+    const { result } = renderHook(() => useProject());
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+    return result;
+  }
+
+  it("creates a new project with an opaque UUID instead of deriving the ID from its path", async () => {
+    const result = await initHook();
+
+    await act(async () => {
+      await result.current.addProject("C:\\Workspace\\Demo", "Demo");
+    });
+
+    const project = result.current.projects[0];
+    expect(project).toBeDefined();
+    expect(project.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(project.id).not.toBe("c:/workspace/demo");
+  });
+
+  it("rejects duplicate project paths after Windows normalization", async () => {
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") {
+        return Promise.resolve([
+          { ...legacyProject, id: "first" },
+          { ...legacyProject, id: "second", path: "D:\\Other\\Project" },
+        ]);
+      }
+      if (key === "selectedProjectId") return Promise.resolve("first");
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+
+    await act(async () => {
+      await result.current.addProject("c:/workspace/demo/", "another name");
+    });
+
+    expect(result.current.projects).toHaveLength(2);
+    expect(mockStore.set).not.toHaveBeenCalledWith(
+      "projects",
+      expect.arrayContaining([expect.objectContaining({ name: "another name" })]),
+    );
+  });
+
+  it("rebinds only the path and preserves the legacy project ID", async () => {
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([legacyProject]);
+      if (key === "selectedProjectId") return Promise.resolve(legacyProject.id);
+      return Promise.resolve(undefined);
+    });
+    mockOpen.mockResolvedValue("d:/Moved/Demo/");
+    const result = await initHook();
+
+    let rebound = false;
+    await act(async () => {
+      rebound = await result.current.rebindProject(legacyProject.id);
+    });
+
+    expect(rebound).toBe(true);
+    expect(result.current.projects).toEqual([
+      { ...legacyProject, path: "d:/Moved/Demo/" },
+    ]);
+    expect(mockStore.set).toHaveBeenCalledWith("projects", [
+      { ...legacyProject, path: "d:/Moved/Demo/" },
+    ]);
+  });
+
+  it("restores the Rust root when frontend rebinding persistence fails", async () => {
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([legacyProject]);
+      if (key === "selectedProjectId") return Promise.resolve(legacyProject.id);
+      return Promise.resolve(undefined);
+    });
+    mockOpen.mockResolvedValue("d:/Moved/Demo/");
+    const result = await initHook();
+    const rebindCalls: Array<{ projectPath: string; newProjectPath: string }> = [];
+    mockInvoke.mockImplementation((command: string, args?: { request?: { project?: { projectPath: string }; newProjectPath?: string } }) => {
+      if (command === "environment_rebind_project" && args?.request?.project) {
+        rebindCalls.push({
+          projectPath: args.request.project.projectPath,
+          newProjectPath: args.request.newProjectPath ?? "",
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+    mockStore.save.mockRejectedValueOnce(new Error("frontend save failed"));
+
+    await expect(act(async () => result.current.rebindProject(legacyProject.id))).resolves.toBe(false);
+
+    expect(rebindCalls).toEqual([
+      { projectPath: legacyProject.path, newProjectPath: "d:/Moved/Demo/" },
+      { projectPath: legacyProject.path, newProjectPath: legacyProject.path },
+    ]);
+    expect(result.current.projects).toEqual([legacyProject]);
+    expect(mockStore.set).toHaveBeenCalledWith("projects", [legacyProject]);
   });
 });
 
@@ -586,5 +734,462 @@ describe("useProject - project-level command override", () => {
 
     // Phase 22: no global mode — commands empty when no project-level data
     expect(result.current.commands.length).toBe(0);
+  });
+});
+
+describe("useProject - profile environment boundary", () => {
+  const project = {
+    id: "project-a",
+    name: "项目A",
+    path: "C:\\Workspace\\ProjectA",
+    addedAt: 1000,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockLoad.mockResolvedValue(mockStore);
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    mockStore.keys.mockResolvedValue([]);
+    mockStore.set.mockResolvedValue(undefined);
+    mockStore.delete.mockResolvedValue(undefined);
+    mockStore.save.mockResolvedValue(undefined);
+    mockInvoke.mockResolvedValue(undefined);
+    mockReadTextFile.mockReset();
+    mockWriteTextFile.mockReset();
+    mockToastInfo.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  async function initHook() {
+    const { result } = renderHook(() => useProject());
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+    return result;
+  }
+
+  it("does not export legacy environment keys", async () => {
+    mockStore.keys.mockResolvedValue([
+      "projectCommands:project-a",
+      "projectEnvs:project-a",
+      "projectActiveEnv:project-a",
+    ]);
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      if (key === "projectCommands:project-a") return Promise.resolve([]);
+      if (key === "projectEnvs:project-a") return Promise.resolve([{ legacy: true }]);
+      if (key === "projectActiveEnv:project-a") return Promise.resolve("legacy");
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+
+    await act(async () => {
+      await result.current.exportProfile("profile.json");
+    });
+
+    expect(mockWriteTextFile).toHaveBeenCalledOnce();
+    const payload = JSON.parse(mockWriteTextFile.mock.calls[0][1] as string) as {
+      data: Record<string, unknown>;
+    };
+    expect(payload.data).not.toHaveProperty("projectEnvs");
+    expect(payload.data).not.toHaveProperty("projectActiveEnvs");
+  });
+
+  it("ignores legacy environments on import and shows a hint", async () => {
+    mockReadTextFile.mockResolvedValue(JSON.stringify({
+      formatVersion: 1,
+      profileName: "旧配置",
+      data: {
+        projects: [project],
+        projectEnvs: "malformed legacy data",
+        projectActiveEnvs: { [project.id]: "legacy" },
+      },
+    }));
+    const result = await initHook();
+    mockStore.set.mockClear();
+
+    await act(async () => {
+      await result.current.importProfile("profile.json");
+    });
+
+    expect(mockStore.set.mock.calls.some(([key]) =>
+      key === "projectEnvs:project-a" || key === "projectActiveEnv:project-a",
+    )).toBe(false);
+    expect(mockToastInfo).toHaveBeenCalledWith(
+      "已忽略导入文件中的旧环境数据，请在新配置中重新创建环境",
+    );
+  });
+
+  it("keeps project metadata when Rust project deletion fails", async () => {
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) =>
+      command === "environment_prepare_delete_project"
+        ? Promise.reject(new Error("rust cleanup failed"))
+        : Promise.resolve(undefined),
+    );
+
+    await expect(act(async () => result.current.removeProject(project.id))).rejects.toThrow("删除项目失败");
+
+    expect(result.current.projects).toEqual([project]);
+    expect(mockStore.set).not.toHaveBeenCalledWith("projects", []);
+  });
+
+  it("keeps profile metadata when Rust profile deletion fails", async () => {
+    const profiles = [
+      { id: "profile-a", name: "A", createdAt: 1 },
+      { id: "profile-b", name: "B", createdAt: 2 },
+    ];
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve(profiles);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) =>
+      command === "environment_prepare_delete_profile"
+        ? Promise.reject(new Error("rust cleanup failed"))
+        : Promise.resolve(undefined),
+    );
+
+    await expect(act(async () => result.current.deleteProfile("profile-b"))).rejects.toThrow("删除配置失败");
+
+    expect(result.current.profileMetas).toEqual(profiles);
+    expect(mockStore.set).not.toHaveBeenCalledWith("profiles", [profiles[0]]);
+  });
+
+  it("restores a prepared project deletion when frontend save fails", async () => {
+    const result = await initHook();
+    const commands: string[] = [];
+    mockInvoke.mockImplementation((command: string) => {
+      commands.push(command);
+      if (command === "environment_prepare_delete_project") {
+        return Promise.resolve({ token: "project-token", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+    mockStore.save.mockReset();
+    mockStore.save
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("project store save failed"))
+      .mockResolvedValue(undefined);
+
+    await expect(act(async () => result.current.removeProject(project.id))).rejects.toThrow("删除项目失败");
+
+    expect(commands).toEqual([
+      "environment_prepare_delete_project",
+      "environment_restore_delete",
+    ]);
+    expect(result.current.projects).toEqual([project]);
+    expect(mockStore.delete).toHaveBeenCalledWith("projectEnvs:project-a");
+    expect(mockStore.delete).toHaveBeenCalledWith("projectActiveEnv:project-a");
+  });
+
+  it("restores a project deletion when finalize fails", async () => {
+    const result = await initHook();
+    const commands: string[] = [];
+    mockInvoke.mockImplementation((command: string) => {
+      commands.push(command);
+      if (command === "environment_prepare_delete_project") {
+        return Promise.resolve({ token: "project-token", projectCount: 1 });
+      }
+      if (command === "environment_finalize_delete") {
+        return Promise.reject(new Error("project finalize failed"));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await expect(act(async () => result.current.removeProject(project.id))).rejects.toThrow("删除项目失败");
+
+    expect(commands).toEqual([
+      "environment_prepare_delete_project",
+      "environment_finalize_delete",
+    ]);
+    expect(mockStore.delete.mock.calls.some(([key]) =>
+      typeof key === "string" && key.startsWith("pendingEnvironmentDeletion:"),
+    )).toBe(false);
+    expect(result.current.projects).toEqual([project]);
+  });
+
+  it("restores a prepared profile deletion when frontend save fails", async () => {
+    const profiles = [
+      { id: "profile-a", name: "A", createdAt: 1 },
+      { id: "profile-b", name: "B", createdAt: 2 },
+    ];
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve(profiles);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    const commands: string[] = [];
+    mockInvoke.mockImplementation((command: string) => {
+      commands.push(command);
+      if (command === "environment_prepare_delete_profile") {
+        return Promise.resolve({ token: "profile-token", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+    mockStore.save.mockReset();
+    mockStore.save
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("profile store save failed"))
+      .mockResolvedValue(undefined);
+
+    await expect(act(async () => result.current.deleteProfile("profile-b"))).rejects.toThrow("删除配置失败");
+
+    expect(commands).toEqual([
+      "environment_prepare_delete_profile",
+      "environment_restore_delete",
+    ]);
+    expect(result.current.profileMetas).toEqual(profiles);
+  });
+
+  it("restores a profile deletion when finalize fails", async () => {
+    const profiles = [
+      { id: "profile-a", name: "A", createdAt: 1 },
+      { id: "profile-b", name: "B", createdAt: 2 },
+    ];
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve(profiles);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    const commands: string[] = [];
+    mockInvoke.mockImplementation((command: string) => {
+      commands.push(command);
+      if (command === "environment_prepare_delete_profile") {
+        return Promise.resolve({ token: "profile-token", projectCount: 1 });
+      }
+      if (command === "environment_finalize_delete") {
+        return Promise.reject(new Error("profile finalize failed"));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await expect(act(async () => result.current.deleteProfile("profile-b"))).rejects.toThrow("删除配置失败");
+
+    expect(commands).toEqual([
+      "environment_prepare_delete_profile",
+      "environment_finalize_delete",
+    ]);
+    expect(mockStore.delete.mock.calls.some(([key]) =>
+      typeof key === "string" && key.startsWith("pendingEnvironmentDeletion:"),
+    )).toBe(false);
+    expect(result.current.profileMetas).toEqual(profiles);
+  });
+
+  it("restores a profile deletion when clearing the profile store fails", async () => {
+    const profiles = [
+      { id: "profile-a", name: "A", createdAt: 1 },
+      { id: "profile-b", name: "B", createdAt: 2 },
+    ];
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve(profiles);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    const commands: string[] = [];
+    mockInvoke.mockImplementation((command: string) => {
+      commands.push(command);
+      if (command === "environment_prepare_delete_profile") {
+        return Promise.resolve({ token: "profile-token", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+    mockStore.save.mockReset();
+    mockStore.save
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("profile store clear failed"))
+      .mockResolvedValue(undefined);
+
+    await expect(act(async () => result.current.deleteProfile("profile-b"))).rejects.toThrow("profile store clear failed");
+
+    expect(commands).toEqual([
+      "environment_prepare_delete_profile",
+      "environment_restore_delete",
+    ]);
+    expect(mockToastError).toHaveBeenLastCalledWith("删除配置失败", {
+      description: "已恢复，请重试。",
+    });
+  });
+
+  it("restores a profile deletion when switching to the next profile fails", async () => {
+    const profiles = [
+      { id: "profile-a", name: "A", createdAt: 1 },
+      { id: "profile-b", name: "B", createdAt: 2 },
+    ];
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve(profiles);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockLoad.mockImplementation((path: string) =>
+      path === "profile-profile-b.json"
+        ? Promise.reject(new Error("profile switch failed"))
+        : Promise.resolve(mockStore),
+    );
+    const commands: string[] = [];
+    mockInvoke.mockImplementation((command: string) => {
+      commands.push(command);
+      if (command === "environment_prepare_delete_profile") {
+        return Promise.resolve({ token: "profile-token", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await expect(act(async () => result.current.deleteProfile("profile-a"))).rejects.toThrow("profile switch failed");
+
+    expect(commands).toEqual([
+      "environment_prepare_delete_profile",
+      "environment_restore_delete",
+    ]);
+    expect(mockToastError).toHaveBeenLastCalledWith("删除配置失败", {
+      description: "已恢复，请重试。",
+    });
+  });
+
+  it("reports incomplete project recovery when frontend store restoration fails", async () => {
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "environment_prepare_delete_project") {
+        return Promise.resolve({ token: "project-token", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+    mockStore.save.mockReset();
+    mockStore.save
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("project frontend save failed"))
+      .mockRejectedValueOnce(new Error("project store restore failed"))
+      .mockResolvedValue(undefined);
+
+    await expect(act(async () => result.current.removeProject(project.id))).rejects.toThrow("project frontend save failed");
+
+    expect(mockToastError).toHaveBeenLastCalledWith("删除项目失败", {
+      description: "删除失败且恢复不完整，请检查数据后重试。",
+    });
+  });
+
+  it("reports incomplete project recovery when Rust restore fails", async () => {
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "environment_prepare_delete_project") {
+        return Promise.resolve({ token: "project-token", projectCount: 1 });
+      }
+      if (command === "environment_finalize_delete") {
+        return Promise.reject(new Error("project finalize failed"));
+      }
+      if (command === "environment_restore_delete") {
+        return Promise.reject(new Error("project restore failed"));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await expect(act(async () => result.current.removeProject(project.id))).rejects.toThrow("project finalize failed");
+
+    expect(mockToastError).toHaveBeenLastCalledWith("删除项目失败", {
+      description: "删除失败且恢复不完整，请检查数据后重试。",
+    });
+  });
+
+  it("reports incomplete profile recovery when frontend store restoration fails", async () => {
+    const profiles = [
+      { id: "profile-a", name: "A", createdAt: 1 },
+      { id: "profile-b", name: "B", createdAt: 2 },
+    ];
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve(profiles);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "environment_prepare_delete_profile") {
+        return Promise.resolve({ token: "profile-token", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+    mockStore.save.mockReset();
+    mockStore.save
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("profile frontend save failed"))
+      .mockRejectedValueOnce(new Error("profile store restore failed"))
+      .mockResolvedValue(undefined);
+
+    await expect(act(async () => result.current.deleteProfile("profile-b"))).rejects.toThrow("profile frontend save failed");
+
+    expect(mockToastError).toHaveBeenLastCalledWith("删除配置失败", {
+      description: "删除失败且恢复不完整，请检查数据后重试。",
+    });
+  });
+
+  it("reports incomplete profile recovery when Rust restore fails", async () => {
+    const profiles = [
+      { id: "profile-a", name: "A", createdAt: 1 },
+      { id: "profile-b", name: "B", createdAt: 2 },
+    ];
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve(profiles);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([project]);
+      if (key === "selectedProjectId") return Promise.resolve(project.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "environment_prepare_delete_profile") {
+        return Promise.resolve({ token: "profile-token", projectCount: 1 });
+      }
+      if (command === "environment_finalize_delete") {
+        return Promise.reject(new Error("profile finalize failed"));
+      }
+      if (command === "environment_restore_delete") {
+        return Promise.reject(new Error("profile restore failed"));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await expect(act(async () => result.current.deleteProfile("profile-b"))).rejects.toThrow("profile finalize failed");
+
+    expect(mockToastError).toHaveBeenLastCalledWith("删除配置失败", {
+      description: "删除失败且恢复不完整，请检查数据后重试。",
+    });
   });
 });

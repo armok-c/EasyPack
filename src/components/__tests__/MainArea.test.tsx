@@ -3,8 +3,10 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import "@testing-library/jest-dom";
 import { createRef } from "react";
 import { MainArea, type MainAreaHandle } from "@/components/MainArea";
+import type { EnvironmentWorkspaceProps } from "@/components/EnvironmentWorkspace";
+import type { ApplyPlan, ApplyResponse, EnvironmentProjectState } from "@/lib/environment-types";
 import type { ProjectItem } from "@/hooks/useProject";
-import type { CommandItem, Environment } from "@/lib/types";
+import type { CommandItem } from "@/lib/types";
 
 const mockProject: ProjectItem = {
   id: "e/gitlib/test-project",
@@ -13,16 +15,57 @@ const mockProject: ProjectItem = {
   addedAt: Date.now(),
 };
 
-/** Default props for tests -- matches the expanded MainAreaProps interface. */
+/** Default props for tests -- matches the current MainAreaProps interface. */
 const defaultCommands: CommandItem[] = [
   { id: "preset-git-pull", name: "拉取代码", command: "git pull", icon: "GitBranch", type: "preset", scope: "project", addedAt: 0 },
   { id: "preset-claude", name: "启动 Claude", command: "claude", icon: "Sparkles", type: "preset", scope: "project", addedAt: 1 },
 ];
 
-const defaultEnvs: Environment[] = [
-  { id: "env-work", name: "工作", createdAt: 1, updatedAt: 1, files: [] },
-  { id: "env-personal", name: "个人", createdAt: 2, updatedAt: 2, files: [] },
-];
+const defaultEnvironmentState: EnvironmentProjectState = {
+  profileId: "profile-a",
+  projectId: mockProject.id,
+  projectPath: mockProject.path,
+  managedPaths: [],
+  environments: [],
+  undoAvailable: false,
+  blocked: false,
+};
+
+const defaultPlan: ApplyPlan = {
+  token: "plan-token",
+  profileId: defaultEnvironmentState.profileId,
+  projectId: defaultEnvironmentState.projectId,
+  environmentId: "",
+  generation: 0,
+  changes: [],
+};
+
+const defaultApplyResponse: ApplyResponse = {
+  applied: false,
+  stale: false,
+  plan: defaultPlan,
+  undoAvailable: false,
+};
+
+const defaultEnvironment: EnvironmentWorkspaceProps = {
+  projectPath: mockProject.path,
+  state: defaultEnvironmentState,
+  busy: false,
+  error: null,
+  recoveryBlocked: false,
+  recoveryError: null,
+  migrationRequired: false,
+  migrationDraft: null,
+  onRefresh: vi.fn().mockResolvedValue(defaultEnvironmentState),
+  onCreate: vi.fn().mockResolvedValue(defaultEnvironmentState),
+  onCapture: vi.fn().mockResolvedValue(defaultEnvironmentState),
+  onCopy: vi.fn().mockResolvedValue(defaultEnvironmentState),
+  onMigrate: vi.fn().mockResolvedValue(defaultEnvironmentState),
+  onPlan: vi.fn().mockResolvedValue(defaultPlan),
+  onApply: vi.fn().mockResolvedValue(defaultApplyResponse),
+  onPlanUndo: vi.fn().mockResolvedValue(defaultPlan),
+  onUndo: vi.fn().mockResolvedValue(defaultApplyResponse),
+};
 
 function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -40,16 +83,7 @@ function getDefaultProps(overrides: Partial<Record<string, unknown>> = {}) {
     projectInfoLoading: false,
     projectInfoError: false,
     onOpenFolder: vi.fn(),
-    // Phase 23/24 required props — MainArea unconditionally renders EnvSwitchBar/EnvTabBar with envs.
-    envs: [],
-    activeEnvId: null,
-    onCreateEnv: vi.fn().mockResolvedValue(null),
-    onRenameEnv: vi.fn().mockResolvedValue(undefined),
-    onDeleteEnv: vi.fn().mockResolvedValue(undefined),
-    onApplyEnv: vi.fn().mockResolvedValue(false),
-    onAddFiles: vi.fn().mockResolvedValue(undefined),
-    onDeleteFiles: vi.fn().mockResolvedValue(undefined),
-    onUpdateFile: vi.fn().mockResolvedValue(undefined),
+    environment: defaultEnvironment,
     ...overrides,
   };
 }
@@ -161,6 +195,18 @@ describe("MainArea - Phase 4 edit mode UI", () => {
 });
 
 describe("MainArea - Phase 22 edit mode UI", () => {
+  it("blocks project leave while an environment operation is busy", async () => {
+    const mainAreaRef = createRef<MainAreaHandle>();
+    render(
+      <MainArea
+        ref={mainAreaRef}
+        {...getDefaultProps({ environment: { ...defaultEnvironment, busy: true } })}
+      />
+    );
+
+    await expect(mainAreaRef.current!.requestProjectLeave()).resolves.toBe(false);
+  });
+
   it("renders Terminal card when project is selected", () => {
     render(<MainArea {...getDefaultProps()} />);
     expect(screen.getByText("终端")).toBeInTheDocument();
@@ -205,7 +251,7 @@ describe("MainArea - Phase 22 edit mode UI", () => {
       expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
     });
     expect(screen.queryByText("拉取代码")).not.toBeInTheDocument();
-    expect(screen.getByText("暂无环境")).toBeVisible();
+    expect(screen.getByText("还没有环境")).toBeVisible();
     expect(screen.queryByRole("button", { name: "编辑指令" })).not.toBeInTheDocument();
   });
 
@@ -274,58 +320,4 @@ describe("MainArea - Phase 22 edit mode UI", () => {
     expect(screen.getByRole("button", { name: "启动 Claude" })).toHaveAttribute("tabindex", "-1");
   });
 
-  it("resets the selected environment when returning to the environment tab", async () => {
-    render(<MainArea {...getDefaultProps({ envs: defaultEnvs })} />);
-
-    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
-    await waitFor(() => {
-      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
-    });
-    fireEvent.click(screen.getByRole("button", { name: "个人" }));
-    expect(screen.getByRole("button", { name: "个人" })).toHaveClass("bg-accent");
-
-    fireEvent.click(screen.getByRole("tab", { name: "项目指令" }));
-    await waitFor(() => {
-      expect(screen.getByRole("tab", { name: "项目指令" })).toHaveAttribute("data-state", "active");
-    });
-    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
-    await waitFor(() => {
-      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
-      expect(screen.getByRole("button", { name: "工作" })).toHaveClass("bg-accent");
-    });
-    expect(screen.getByRole("button", { name: "个人" })).not.toHaveClass("bg-accent");
-  });
-
-  it("rejects leaving while environment creation is still writing", async () => {
-    const mainAreaRef = createRef<MainAreaHandle>();
-    let resolveCreate: (value: string | null) => void = () => undefined;
-    const createPromise = new Promise<string | null>((resolve) => {
-      resolveCreate = resolve;
-    });
-    const onCreateEnv = vi.fn().mockReturnValue(createPromise);
-
-    render(
-      <MainArea
-        ref={mainAreaRef}
-        {...getDefaultProps({ envs: defaultEnvs, onCreateEnv })}
-      />
-    );
-    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
-    await waitFor(() => {
-      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
-    });
-    fireEvent.click(screen.getByRole("button", { name: "管理环境" }));
-    fireEvent.change(await screen.findByPlaceholderText("环境名称"), {
-      target: { value: "临时环境" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "新增" }));
-    await waitFor(() => expect(onCreateEnv).toHaveBeenCalledWith("临时环境"));
-
-    fireEvent.click(screen.getByRole("tab", { name: "项目指令", hidden: true }));
-    expect(screen.getByRole("tab", { name: "项目环境", hidden: true })).toHaveAttribute("data-state", "active");
-    await expect(mainAreaRef.current!.requestProjectLeave()).resolves.toBe(false);
-    expect(screen.getByRole("tab", { name: "项目环境", hidden: true })).toHaveAttribute("data-state", "active");
-    resolveCreate(null);
-    await waitFor(() => expect(onCreateEnv).toHaveBeenCalledTimes(1));
-  });
 });
