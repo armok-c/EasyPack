@@ -21,7 +21,7 @@ interface CommandCardProps {
   shortcutNumber?: number;
   // Phase 11: global shortcut badge (display-only, recording moved to ShortcutPanel)
   shortcut?: string;
-  // Phase 17: multi-line script content display
+  // Phase 17: multi-line script content (not displayed on the card)
   scriptLines?: string;
 }
 
@@ -75,7 +75,7 @@ export function CommandCard({
       onClick={handleClick}
       disabled={disabled}
       tabIndex={tabIndex}
-      title={disabled ? undefined : (scriptLines || command)}
+      title={disabled || scriptLines ? undefined : command}
       className={cn(
         "group relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl",
         "bg-white/5 border border-white/10",
@@ -138,14 +138,6 @@ export function CommandCard({
       ) : null}
       <Icon className={cn("size-6", flashing && "animate-spin")} />
       <span>{name}</span>
-      {scriptLines && (
-        <div
-          className="w-full text-[10px] text-muted-foreground/70 leading-tight line-clamp-3 text-center whitespace-pre-line"
-          aria-label="脚本内容预览"
-        >
-          {scriptLines}
-        </div>
-      )}
     </button>
   );
 }

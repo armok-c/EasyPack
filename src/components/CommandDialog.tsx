@@ -249,26 +249,10 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
           executionMode: effectiveMode,
         });
       } else {
-      // WR-07/WR-01 (Phase 22 review): when submitting from the single-line
-      // tab, preserve the LIVE multi-line state, not the frozen initialData
-      // prop. scriptTouched distinguishes "user edited the multi-line tab"
-      // (respect their intent — including clearing the script, which yields
-      // undefined scriptLines) from "multi-line tab never visited" (fall
-      // back to initialData so an existing script is preserved). Reading
-      // initialData directly would silently drop edits (props don't update
-      // per keystroke); the earlier hasScript guard also dropped a clear.
-      const scriptLines = scriptTouched
-        ? (scriptContent.trim() || undefined)
-        : initialData?.scriptLines;
-      const effectiveMode = scriptTouched
-        ? executionMode
-        : initialData?.executionMode;
         await onSubmit({
           name: name.trim(),
           command: command.trim(),
           icon: selectedIcon,
-          scriptLines,
-          executionMode: effectiveMode,
         });
       }
       resetFormState();

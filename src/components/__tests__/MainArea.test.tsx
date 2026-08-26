@@ -60,6 +60,7 @@ const defaultEnvironment: EnvironmentWorkspaceProps = {
   onCreate: vi.fn().mockResolvedValue(defaultEnvironmentState),
   onCapture: vi.fn().mockResolvedValue(defaultEnvironmentState),
   onCopy: vi.fn().mockResolvedValue(defaultEnvironmentState),
+  onDelete: vi.fn().mockResolvedValue(defaultEnvironmentState),
   onMigrate: vi.fn().mockResolvedValue(defaultEnvironmentState),
   onPlan: vi.fn().mockResolvedValue(defaultPlan),
   onApply: vi.fn().mockResolvedValue(defaultApplyResponse),

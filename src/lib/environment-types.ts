@@ -200,6 +200,7 @@ export interface EnvironmentApi {
   create(request: CreateEnvironmentRequest): Promise<EnvironmentProjectState>;
   capture(request: EnvironmentRequest): Promise<EnvironmentProjectState>;
   copy(request: CopyEnvironmentRequest): Promise<EnvironmentProjectState>;
+  deleteEnvironment(request: EnvironmentRequest): Promise<EnvironmentProjectState>;
   migrateManifest(request: MigrateManifestRequest): Promise<EnvironmentProjectState>;
   bootstrapImport(request: BootstrapImportRequest): Promise<EnvironmentProjectState>;
   rebindProject(request: RebindProjectRequest): Promise<EnvironmentProjectState>;
@@ -238,6 +239,7 @@ export function createEnvironmentApi(
     create: (request) => call("environment_create", { request }),
     capture: (request) => call("environment_capture", { request }),
     copy: (request) => call("environment_copy", { request }),
+    deleteEnvironment: (request) => call("environment_delete", { request }),
     migrateManifest: (request) => call("environment_migrate_manifest", { request }),
     bootstrapImport: (request) => call("environment_bootstrap_import", { request }),
     rebindProject: (request) => call("environment_rebind_project", { request }),

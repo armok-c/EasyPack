@@ -32,6 +32,7 @@ function props(overrides: Partial<EnvironmentWorkspaceProps> = {}): EnvironmentW
     onCreate: vi.fn().mockResolvedValue(state),
     onCapture: vi.fn().mockResolvedValue(state),
     onCopy: vi.fn().mockResolvedValue(state),
+    onDelete: vi.fn().mockResolvedValue(state),
     onMigrate: vi.fn().mockResolvedValue(state),
     onPlan: vi.fn().mockResolvedValue({
       token: "token-1",
@@ -64,6 +65,33 @@ function migrationDraft(sourceEntries: LegacyMigrationDraft["environments"][numb
 }
 
 describe("EnvironmentWorkspace", () => {
+  it("hides the overview copy and confirms environment snapshot deletion", async () => {
+    const onDelete = vi.fn().mockResolvedValue({ ...state, environments: [] });
+    render(<EnvironmentWorkspace {...props({ onDelete })} />);
+
+    expect(screen.queryByText("按项目保存配置文件快照，应用前会先列出文件变更。")).not.toBeInTheDocument();
+    expect(screen.queryByText("受管文件 1 个")).not.toBeInTheDocument();
+    expect(screen.queryByText("环境 1 个")).not.toBeInTheDocument();
+    const row = screen.getByText("开发").closest("[data-environment-row]");
+    expect(row).not.toBeNull();
+    expect(row).toHaveClass("items-center", "px-3", "py-2");
+    expect(within(row as HTMLElement).getByText("1 个文件")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "删除环境 开发" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/快照/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/不能恢复/)).toBeInTheDocument();
+    expect(onDelete).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    expect(onDelete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "删除环境 开发" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dev"));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
   it("requires and confirms an apply plan without exposing legacy applied state", async () => {
     const onPlan = vi.fn().mockResolvedValue({
       token: "token-1",

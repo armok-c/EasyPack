@@ -613,6 +613,7 @@ function App() {
             onCreate: environment.create,
             onCapture: environment.capture,
             onCopy: environment.copy,
+            onDelete: environment.deleteEnvironment,
             onMigrate: environment.migrateManifest,
             onPlan: environment.plan,
             onApply: environment.apply,

@@ -36,6 +36,7 @@ pub fn run() {
             commands::environment::environment_create,
             commands::environment::environment_capture,
             commands::environment::environment_copy,
+            commands::environment::environment_delete,
             commands::environment::environment_migrate_manifest,
             commands::environment::environment_bootstrap_import,
             commands::environment::environment_import,

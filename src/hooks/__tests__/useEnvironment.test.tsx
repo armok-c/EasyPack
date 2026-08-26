@@ -31,6 +31,7 @@ function api(overrides: Partial<EnvironmentApi> = {}): EnvironmentApi {
     create: vi.fn(async () => state),
     capture: vi.fn(async () => state),
     copy: vi.fn(async () => state),
+    deleteEnvironment: vi.fn(async () => state),
     migrateManifest: vi.fn(async () => state),
     bootstrapImport: vi.fn(async () => state),
     rebindProject: vi.fn(async () => state),
@@ -127,6 +128,30 @@ describe("useEnvironment", () => {
     }, "undo-token");
     expect(result.current.state?.undoAvailable).toBe(false);
     expect(result.current.recoveryBlocked).toBe(false);
+  });
+
+  it("deletes an environment through the scoped API and stores the returned state", async () => {
+    const nextState = { ...state, environments: [] };
+    const environmentApi = api({ deleteEnvironment: vi.fn(async () => nextState) });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await act(async () => {
+      await result.current.deleteEnvironment("dev");
+    });
+
+    expect(environmentApi.deleteEnvironment).toHaveBeenCalledWith({
+      project: {
+        profileId: "profile-a",
+        projectId: project.id,
+        projectPath: project.path,
+      },
+      environmentId: "dev",
+    });
+    expect(result.current.state?.environments).toEqual([]);
   });
 
   it("can plan undo from persisted undo state after mounting", async () => {

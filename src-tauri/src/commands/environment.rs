@@ -1307,6 +1307,27 @@ impl EnvironmentStore {
         })
     }
 
+    pub fn delete_environment(&self, request: &EnvironmentRequest) -> Result<ProjectState, String> {
+        self.with_lock(&request.project, |store| {
+            store.ensure_ready(&request.project)?;
+            let mut manifest = store
+                .load_manifest_if_exists(&request.project)?
+                .ok_or_else(|| "项目环境不存在".to_string())?;
+            let index = manifest
+                .environments
+                .iter()
+                .position(|environment| environment.id == request.environment_id)
+                .ok_or_else(|| "环境不存在".to_string())?;
+            manifest.environments.remove(index);
+            manifest.generation = manifest.generation.saturating_add(1);
+            store.save_manifest(&request.project, &manifest)?;
+            // The manifest is the source of truth; reclaim blobs no longer
+            // referenced by the remaining environments after publishing it.
+            let _ = store.cleanup_unreferenced_blobs(&request.project, &manifest);
+            Ok(store.to_project_state(&request.project, &manifest))
+        })
+    }
+
     pub fn migrate_manifest(
         &self,
         request: &MigrateManifestRequest,
@@ -3232,6 +3253,14 @@ pub fn environment_copy(
 }
 
 #[tauri::command]
+pub fn environment_delete(
+    app: tauri::AppHandle,
+    request: EnvironmentRequest,
+) -> Result<ProjectState, String> {
+    from_app(&app)?.delete_environment(&request)
+}
+
+#[tauri::command]
 pub fn environment_migrate_manifest(
     app: tauri::AppHandle,
     request: MigrateManifestRequest,
@@ -3472,6 +3501,73 @@ mod tests {
         .unwrap();
         fs::write(store.blocked_path(project), b"secret transaction body").unwrap();
         fs::write(Path::new(&project.project_path).join("a.env"), b"after").unwrap();
+    }
+
+    #[test]
+    fn delete_environment_removes_snapshot_and_returns_updated_state() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let (store, project, state) = create(dir.path());
+        let source_id = state.environments[0].id.clone();
+        let copied = store
+            .copy_environment(
+                &EnvironmentRequest {
+                    project: project.clone(),
+                    environment_id: source_id.clone(),
+                },
+                "test",
+            )
+            .unwrap();
+        let manifest = store.load_manifest(&project).unwrap();
+        let source_blob = manifest.environments[0]
+            .entries
+            .get("a.env")
+            .and_then(|entry| entry.blob.clone())
+            .unwrap();
+        let copied_blob = manifest.environments[1]
+            .entries
+            .get("a.env")
+            .and_then(|entry| entry.blob.clone())
+            .unwrap();
+        let blobs = store
+            .key_dir(&project.profile_id, &project.project_id)
+            .join("blobs");
+        assert!(blobs.join(&source_blob).exists());
+        assert!(blobs.join(&copied_blob).exists());
+
+        let missing = store.delete_environment(&EnvironmentRequest {
+            project: project.clone(),
+            environment_id: "missing".to_string(),
+        });
+        assert_eq!(missing.unwrap_err(), "环境不存在");
+        assert_eq!(copied.environments.len(), 2);
+
+        let next = store
+            .delete_environment(&EnvironmentRequest {
+                project: project.clone(),
+                environment_id: source_id,
+            })
+            .unwrap();
+        assert_eq!(next.environments.len(), 1);
+        assert_eq!(next.environments[0].name, "test");
+        assert!(!blobs.join(source_blob).exists());
+        assert!(blobs.join(copied_blob).exists());
+        assert_eq!(store.load_manifest(&project).unwrap().environments.len(), 1);
+    }
+
+    #[test]
+    fn delete_environment_rejects_project_without_environment_data() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let store = EnvironmentStore::new(dir.path().join("data"));
+        let project = project(dir.path());
+        let error = store
+            .delete_environment(&EnvironmentRequest {
+                project,
+                environment_id: "missing".to_string(),
+            })
+            .unwrap_err();
+        assert_eq!(error, "项目环境不存在");
     }
 
     #[test]

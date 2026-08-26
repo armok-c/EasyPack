@@ -166,6 +166,31 @@ describe("CommandDialog", () => {
   });
 
   describe("onSubmit callback", () => {
+    it("clears multi-line fields when saving an edited command from single-line mode", () => {
+      const { props } = renderDialog({
+        initialData: {
+          id: "cmd-1",
+          name: "运行测试",
+          command: "npm test",
+          icon: "Terminal",
+          type: "custom" as const,
+          scope: "project",
+          addedAt: 1000,
+          scriptLines: "npm test\nnpm run lint",
+          executionMode: "lenient" as const,
+        },
+      });
+
+      fireEvent.click(screen.getByRole("radio", { name: "单行命令" }));
+      fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+      expect(props.onSubmit).toHaveBeenCalledWith({
+        name: "运行测试",
+        command: "npm test",
+        icon: "Terminal",
+      });
+    });
+
     it("calls onSubmit with correct data when save is clicked", () => {
       const { props } = renderDialog();
       const nameInput = screen.getByPlaceholderText("例如: 运行测试");

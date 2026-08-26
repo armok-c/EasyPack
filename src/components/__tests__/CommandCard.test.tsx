@@ -201,6 +201,21 @@ describe("CommandCard", () => {
     );
   });
 
+  it("does not render multi-line script content or expose it in the title", () => {
+    render(
+      <CommandCard
+        name="打包项目"
+        icon={Package}
+        command="npm run build"
+        scriptLines="npm run build\nnpm run test"
+      />
+    );
+
+    const button = screen.getByRole("button");
+    expect(button).not.toHaveTextContent("npm run test");
+    expect(button).not.toHaveAttribute("title");
+  });
+
   it("does not show title when disabled", () => {
     render(
       <CommandCard

@@ -72,6 +72,17 @@ async function openContextMenu(projectName: string) {
 }
 
 describe("Sidebar project context menu", () => {
+  it("allows long project names to shrink and shows the full name as a tooltip", () => {
+    const longProjectName = "这是一个非常长的项目名称用于测试省略显示";
+    renderSidebar(vi.fn().mockResolvedValue(true), {
+      projects: [{ ...project, name: longProjectName }],
+    });
+
+    const projectName = screen.getByText(longProjectName);
+    expect(projectName).toHaveClass("min-w-0", "truncate");
+    expect(projectName).toHaveAttribute("title", longProjectName);
+  });
+
   it("shows project actions in a desktop-friendly order", async () => {
     renderSidebar(vi.fn().mockResolvedValue(true));
     await openContextMenu(project.name);

@@ -40,6 +40,7 @@ export interface UseEnvironmentResult {
   create: (name: string, managedPaths: string[]) => Promise<EnvironmentProjectState>;
   capture: (environmentId: string) => Promise<EnvironmentProjectState>;
   copy: (environmentId: string, name: string) => Promise<EnvironmentProjectState>;
+  deleteEnvironment: (environmentId: string) => Promise<EnvironmentProjectState>;
   migrateManifest: (request: EnvironmentMigrationInput) => Promise<EnvironmentProjectState>;
   plan: (environmentId: string) => Promise<ApplyPlan>;
   apply: (environmentId: string, planToken: string) => Promise<ApplyResponse>;
@@ -259,6 +260,17 @@ export function useEnvironment(options: UseEnvironmentOptions): UseEnvironmentRe
     [api, isCurrentScope, perform, renderScope, requireProject],
   );
 
+  const deleteEnvironment = useCallback(
+    (environmentId: string) =>
+      perform(renderScope, async () => {
+        const ref = requireProject();
+        const next = await api.deleteEnvironment({ project: ref, environmentId });
+        if (isCurrentScope(renderScope)) setState(next);
+        return next;
+      }),
+    [api, isCurrentScope, perform, renderScope, requireProject],
+  );
+
   const migrateManifest = useCallback(
     (request: EnvironmentMigrationInput) =>
       perform(renderScope, async () => {
@@ -338,6 +350,7 @@ export function useEnvironment(options: UseEnvironmentOptions): UseEnvironmentRe
     create,
     capture,
     copy,
+    deleteEnvironment,
     migrateManifest,
     plan,
     apply,

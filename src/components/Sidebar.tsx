@@ -134,7 +134,10 @@ function SortableProjectItem({
             })())}
 
             {/* D-03: only show folder name, truncate if too long */}
-            <span className="text-xs text-foreground truncate flex-1">
+            <span
+              className="min-w-0 flex-1 text-xs text-foreground truncate"
+              title={project.name}
+            >
               {project.name}
             </span>
 
