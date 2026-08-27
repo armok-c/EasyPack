@@ -57,6 +57,14 @@ function renderSidebar(
   );
 }
 
+function getProjectCard(projectName: string) {
+  const projectCard = screen
+    .getByText(projectName)
+    .closest('[data-slot="context-menu-trigger"]');
+  expect(projectCard).not.toBeNull();
+  return projectCard as HTMLElement;
+}
+
 async function openDeleteConfirmation() {
   fireEvent.click(screen.getByRole("button", { name: "删除项目 项目A" }));
   expect(screen.getByText("永久删除项目？")).toBeInTheDocument();
@@ -94,6 +102,54 @@ describe("Sidebar project context menu", () => {
     const projectName = screen.getByText(longProjectName);
     expect(projectName).toHaveClass("min-w-0", "truncate");
     expect(projectName).toHaveAttribute("title", longProjectName);
+  });
+
+  it("separates focus styles for selected and unselected project cards", () => {
+    renderSidebar(vi.fn().mockResolvedValue(true), {
+      projects: [project, secondProject],
+    });
+
+    const selectedCard = getProjectCard(project.name);
+    const unselectedCard = getProjectCard(secondProject.name);
+
+    expect(selectedCard).toHaveClass(
+      "focus-visible:outline-none",
+      "focus-visible:bg-white/15",
+      "border-white/20",
+    );
+    expect(selectedCard).not.toHaveClass(
+      "focus-visible:ring-1",
+      "focus-visible:ring-2",
+      "focus-visible:border-white/30",
+    );
+    expect(unselectedCard).toHaveClass(
+      "focus-visible:outline-none",
+      "focus-visible:ring-1",
+      "focus-visible:ring-inset",
+      "focus-visible:ring-ring/50",
+    );
+    expect(unselectedCard).not.toHaveClass("focus-visible:bg-white/15", "focus-visible:border-white/30");
+  });
+
+  it("moves keyboard focus without selecting until Enter is pressed", () => {
+    const onSelectProject = vi.fn();
+    renderSidebar(vi.fn().mockResolvedValue(true), {
+      projects: [project, secondProject],
+      onSelectProject,
+    });
+
+    const firstCard = getProjectCard(project.name);
+    const secondCard = getProjectCard(secondProject.name);
+
+    firstCard.focus();
+    fireEvent.keyDown(firstCard, { key: "ArrowDown" });
+
+    expect(document.activeElement).toBe(secondCard);
+    expect(onSelectProject).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(secondCard, { key: "Enter" });
+
+    expect(onSelectProject).toHaveBeenCalledWith(secondProject.id);
   });
 
   it("shows project actions in a desktop-friendly order", async () => {

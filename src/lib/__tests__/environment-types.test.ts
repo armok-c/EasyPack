@@ -63,7 +63,7 @@ describe("environment API boundary", () => {
     await api.plan({ project, environmentId: "dev", operationId: "plan-001" });
     await api.apply({ project, environmentId: "dev", planToken: "token", operationId: "apply-001" });
     await api.planUndo(project);
-    await api.undo(project, "undo-token");
+    await api.undo(project, "undo-token", "undo-001");
     await api.prepareDeleteProject({ profileId: project.profileId, projectId: project.projectId, operationId: "delete-token" });
     await api.prepareDeleteProfile({ profileId: project.profileId, operationId: "delete-token" });
     await api.finalizeDelete({ token: "delete-token" });
@@ -100,7 +100,7 @@ describe("environment API boundary", () => {
     expect(calls[10][1]).toEqual({ request: { project, environmentId: "dev", operationId: "plan-001" } });
     expect(calls[11][1]).toEqual({ request: { project, environmentId: "dev", planToken: "token", operationId: "apply-001" } });
     expect(calls[12][1]).toEqual({ project });
-    expect(calls[13][1]).toEqual({ request: { project, planToken: "undo-token" } });
+    expect(calls[13][1]).toEqual({ request: { project, planToken: "undo-token", operationId: "undo-001" } });
     expect(calls[9][1]).toEqual({ request: { project, newProjectPath: "D:\\Project" } });
     expect(calls[18][1]).toEqual({ request: { token: "delete-token" } });
   });

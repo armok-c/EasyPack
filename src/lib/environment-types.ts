@@ -109,7 +109,7 @@ export interface EnvironmentDetailResponse {
   current: EnvironmentFileContent;
 }
 
-export type EnvironmentOperationKind = "capture" | "apply";
+export type EnvironmentOperationKind = "capture" | "apply" | "undo";
 
 export interface EnvironmentProgressEvent {
   operationId: string;
@@ -270,7 +270,7 @@ export interface EnvironmentApi {
   plan(request: EnvironmentRequest): Promise<ApplyPlan>;
   apply(request: ApplyRequest): Promise<ApplyResponse>;
   planUndo(project: EnvironmentProjectRef): Promise<ApplyPlan>;
-  undo(project: EnvironmentProjectRef, planToken: string): Promise<ApplyResponse>;
+  undo(project: EnvironmentProjectRef, planToken: string, operationId: string): Promise<ApplyResponse>;
   prepareDeleteProject(request: ProjectDeleteRequest): Promise<DeleteResponse>;
   prepareDeleteProfile(request: ProfileDeleteRequest): Promise<DeleteResponse>;
   finalizeDelete(request: DeleteFinalizeRequest): Promise<void>;
@@ -310,7 +310,7 @@ export function createEnvironmentApi(
     plan: (request) => call("environment_plan", { request }),
     apply: (request) => call("environment_apply", { request }),
     planUndo: (project) => call("environment_plan_undo", { project }),
-    undo: (project, planToken) => call("environment_undo", { request: { project, planToken } }),
+    undo: (project, planToken, operationId) => call("environment_undo", { request: { project, planToken, operationId } }),
     prepareDeleteProject: (request) => call("environment_prepare_delete_project", { request }),
     prepareDeleteProfile: (request) => call("environment_prepare_delete_profile", { request }),
     finalizeDelete: (request) => call("environment_finalize_delete", { request }),

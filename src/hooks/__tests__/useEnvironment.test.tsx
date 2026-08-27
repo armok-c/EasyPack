@@ -136,7 +136,7 @@ describe("useEnvironment", () => {
     expect(result.current.state?.undoAvailable).toBe(true);
     await act(async () => {
       await result.current.planUndo();
-      await result.current.undo("undo-token");
+      await result.current.undo("dev", "undo-token");
     });
     expect(environmentApi.planUndo).toHaveBeenCalledWith({
       profileId: "profile-a",
@@ -147,7 +147,7 @@ describe("useEnvironment", () => {
       profileId: "profile-a",
       projectId: project.id,
       projectPath: project.path,
-    }, "undo-token");
+    }, "undo-token", expect.stringMatching(/^undo-/));
     expect(result.current.state?.undoAvailable).toBe(false);
     expect(result.current.recoveryBlocked).toBe(false);
   });
@@ -352,6 +352,53 @@ describe("useEnvironment", () => {
       status: "success",
       percent: 100,
     });
+  });
+
+  it("tracks undo progress and clears it when the plan is stale", async () => {
+    let progressHandler: ((event: unknown) => void) | undefined;
+    mockListen.mockImplementationOnce(async (_name: string, handler: (event: unknown) => void) => {
+      progressHandler = handler;
+      return vi.fn();
+    });
+    const stalePlan = {
+      token: "fresh-undo-token",
+      profileId: state.profileId,
+      projectId: state.projectId,
+      environmentId: "dev",
+      generation: 2,
+      changes: [],
+    };
+    const environmentApi = api({
+      undo: vi.fn(async (_project, _planToken, operationId) => {
+        progressHandler?.({ payload: {
+          operationId,
+          profileId: state.profileId,
+          projectId: state.projectId,
+          environmentId: "dev",
+          kind: "undo",
+          completedFiles: 1,
+          totalFiles: 2,
+        } });
+        return { applied: false, stale: true, plan: stalePlan, undoAvailable: true };
+      }),
+    });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await waitFor(() => expect(mockListen).toHaveBeenCalledWith("environment-progress", expect.any(Function)));
+    await act(async () => {
+      await result.current.undo("dev", "undo-token");
+    });
+
+    expect(environmentApi.undo).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: project.id }),
+      "undo-token",
+      expect.stringMatching(/^undo-/),
+    );
+    expect(result.current.progress.dev).toBeUndefined();
   });
 
   it("continues a capture when progress listener setup fails", async () => {

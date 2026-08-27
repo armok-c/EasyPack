@@ -216,6 +216,7 @@ pub struct ApplyRequest {
 pub struct UndoRequest {
     pub project: ProjectRef,
     pub plan_token: String,
+    pub operation_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1738,6 +1739,15 @@ impl EnvironmentStore {
     }
 
     pub fn undo_environment(&self, request: &UndoRequest) -> Result<ApplyResponse, String> {
+        self.undo_environment_with_progress(request, None)
+    }
+
+    pub fn undo_environment_with_progress(
+        &self,
+        request: &UndoRequest,
+        progress: ProgressCallback<'_>,
+    ) -> Result<ApplyResponse, String> {
+        validate_operation_id(&request.operation_id)?;
         let project = &request.project;
         self.with_lock(project, |store| {
             store.ensure_ready(project)?;
@@ -1772,8 +1782,9 @@ impl EnvironmentStore {
                 &target,
                 &plan,
                 UndoIntent::Remove(snapshot_dirs),
-                "",
-                None,
+                &request.operation_id,
+                "undo",
+                progress,
             )?;
             let _ = store.cleanup_unreferenced_blobs(project, &manifest);
             Ok(response)
@@ -2073,6 +2084,7 @@ impl EnvironmentStore {
             plan,
             UndoIntent::Publish(env.id.as_str()),
             operation_id,
+            "apply",
             progress,
         )
     }
@@ -2086,6 +2098,7 @@ impl EnvironmentStore {
         plan: &ApplyPlan,
         undo_intent: UndoIntent<'_>,
         operation_id: &str,
+        operation_kind: &str,
         progress: ProgressCallback<'_>,
     ) -> Result<ApplyResponse, String> {
         let dir = self.ensure_dir(project)?;
@@ -2148,7 +2161,7 @@ impl EnvironmentStore {
             operation_id,
             project,
             &plan.environment_id,
-            "apply",
+            operation_kind,
             0,
             target_entries.len(),
         );
@@ -2159,6 +2172,7 @@ impl EnvironmentStore {
             operation_id,
             project,
             &plan.environment_id,
+            operation_kind,
             progress,
         );
         match result {
@@ -2176,7 +2190,7 @@ impl EnvironmentStore {
                                     operation_id,
                                     project,
                                     &plan.environment_id,
-                                    "apply",
+                                    operation_kind,
                                     target_entries.len(),
                                     target_entries.len(),
                                 );
@@ -2285,6 +2299,7 @@ impl EnvironmentStore {
         operation_id: &str,
         project: &ProjectRef,
         environment_id: &str,
+        operation_kind: &str,
         progress: ProgressCallback<'_>,
     ) -> Result<(), String> {
         let key = std::env::var("EASYPACK_ENV_FAIL_AFTER")
@@ -2319,7 +2334,7 @@ impl EnvironmentStore {
                     operation_id,
                     project,
                     environment_id,
-                    "apply",
+                    operation_kind,
                     index + 1,
                     entries.len(),
                 );
@@ -3676,7 +3691,9 @@ pub fn environment_undo(
     app: tauri::AppHandle,
     request: UndoRequest,
 ) -> Result<ApplyResponse, String> {
-    from_app(&app)?.undo_environment(&request)
+    let store = from_app(&app)?;
+    let callback = |event: &EnvironmentProgressEvent| emit_environment_progress(&app, event);
+    store.undo_environment_with_progress(&request, Some(&callback))
 }
 
 #[tauri::command]
@@ -4229,6 +4246,37 @@ mod tests {
                 && event.total_files == 3
                 && event.environment_id == environment_id
                 && event.operation_id == "apply-progress-1"
+        }));
+
+        let undo_plan = store.plan_undo_environment(&project).unwrap();
+        events.lock().unwrap().clear();
+        let undo_events = events.clone();
+        let undo_callback = move |event: &EnvironmentProgressEvent| {
+            undo_events.lock().unwrap().push(event.clone());
+        };
+        store
+            .undo_environment_with_progress(
+                &UndoRequest {
+                    project: project.clone(),
+                    plan_token: undo_plan.token,
+                    operation_id: "undo-progress-1".into(),
+                },
+                Some(&undo_callback),
+            )
+            .unwrap();
+        let undone = events.lock().unwrap().clone();
+        assert_eq!(
+            undone
+                .iter()
+                .map(|event| event.completed_files)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert!(undone.iter().all(|event| {
+            event.kind == "undo"
+                && event.total_files == 3
+                && event.environment_id == environment_id
+                && event.operation_id == "undo-progress-1"
         }));
 
         fs::write(dir.path().join("a.env"), b"failed-a").unwrap();
@@ -4951,6 +4999,7 @@ mod tests {
             .undo_environment(&UndoRequest {
                 project: project.clone(),
                 plan_token: undo_plan.token,
+                operation_id: "test-undo".into(),
             })
             .unwrap();
         assert!(undone.applied);
@@ -4964,6 +5013,7 @@ mod tests {
             .undo_environment(&UndoRequest {
                 project,
                 plan_token: "unused".to_string(),
+                operation_id: "test-undo-missing".into(),
             })
             .unwrap_err();
         assert!(no_undo.contains("没有可撤销的环境变更"));
@@ -5009,6 +5059,7 @@ mod tests {
             .undo_environment(&UndoRequest {
                 project: project.clone(),
                 plan_token: undo_plan.token,
+                operation_id: "test-undo-stale".into(),
             })
             .unwrap();
         assert!(!stale.applied);
@@ -5026,6 +5077,7 @@ mod tests {
             .undo_environment(&UndoRequest {
                 project: project.clone(),
                 plan_token: stale.plan.token,
+                operation_id: "test-undo-stale-retry".into(),
             })
             .unwrap();
         assert!(applied.applied);
@@ -5062,6 +5114,7 @@ mod tests {
         let result = store.undo_environment(&UndoRequest {
             project: project.clone(),
             plan_token: undo_plan.token,
+            operation_id: "test-undo-failure".into(),
         });
         std::env::remove_var("EASYPACK_ENV_FAIL_AFTER");
 

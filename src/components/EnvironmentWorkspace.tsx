@@ -93,7 +93,7 @@ export interface EnvironmentWorkspaceProps {
   onPlan: (environmentId: string) => Promise<ApplyPlan>;
   onApply: (environmentId: string, planToken: string) => Promise<ApplyResponse>;
   onPlanUndo: () => Promise<ApplyPlan>;
-  onUndo: (planToken: string) => Promise<ApplyResponse>;
+  onUndo: (environmentId: string, planToken: string) => Promise<ApplyResponse>;
   progress?: Record<string, EnvironmentProgress>;
 }
 
@@ -328,6 +328,9 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
   const canEdit = !busy && !migrationRequired && !recoveryBlocked;
   const selectedEnvironments = environments.filter((environment) => selectedIds.includes(environment.id));
   const selectedSingle = selectedEnvironments.length === 1 ? selectedEnvironments[0] : null;
+  const undoProgress = undoPlan && progress[undoPlan.environmentId]?.kind === "undo"
+    ? progress[undoPlan.environmentId]
+    : undefined;
 
   useEffect(() => {
     const available = new Set(environments.map((environment) => environment.id));
@@ -459,7 +462,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
   const confirmUndo = async () => {
     if (!undoPlan) return;
     try {
-      const response = await onUndo(undoPlan.token);
+      const response = await onUndo(undoPlan.environmentId, undoPlan.token);
       if (response.stale) { setUndoPlan(response.plan); setOperationError(null); return; }
       if (response.applied) { setUndoOpen(false); toast.success("已撤销上次应用"); }
     } catch (cause) { setOperationError(errorText(cause)); }
@@ -469,24 +472,26 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
   if (recoveryBlocked) return <div className="space-y-4 rounded-lg border border-red-500/30 bg-red-500/5 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 text-red-300" /><div><h3 className="text-sm font-medium">项目恢复未完成</h3><p className="mt-1 text-xs text-muted-foreground">环境操作已暂时停止。可以重试恢复并重新读取项目状态。</p>{recoveryError && <p role="alert" className="mt-2 text-xs text-red-200">恢复提示：{recoveryError}</p>}</div></div><Button variant="outline" onClick={() => void onRefresh()} disabled={busy}><RefreshCw className="size-4" />重试恢复</Button></div>;
 
   return <div className="space-y-5">
-     <div className="space-y-3">
-       <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-base font-medium">项目环境</h3><span className="text-xs text-muted-foreground">已选 {selectedEnvironments.length} 个</span></div>
-       <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-         <Button variant="outline" size="sm" onClick={() => setPathDialogOpen(true)} disabled={!canEdit || !state}><FolderSync className="size-4" />受管文件清单</Button>
+      <div className="space-y-3">
+       <div className="flex flex-wrap items-center gap-2">
+         <Button variant="outline" size="sm" onClick={() => setPathDialogOpen(true)} disabled={!canEdit || !state}><FolderSync className="size-4" />文件清单</Button>
          <Button size="sm" onClick={() => { setNewMode("current"); setCopySource(""); setNewDialogOpen(true); }} disabled={!canEdit}><Plus className="size-4" />新建</Button>
+         <span className="ml-auto text-xs text-muted-foreground">已选 {selectedEnvironments.length} 个</span>
+       </div>
+       <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
          <Button variant="outline" size="sm" onClick={() => setCaptureConfirmOpen(true)} disabled={!canEdit || selectedEnvironments.length === 0}><RefreshCw className="size-4" />捕获更新</Button>
          <Button variant="outline" size="sm" onClick={() => selectedSingle && void preparePlan(selectedSingle.id)} disabled={!canEdit || !selectedSingle}><Check className="size-4" />应用</Button>
          <Button variant="outline" size="sm" onClick={() => { if (selectedSingle) { setNewMode("copy"); setCopySource(selectedSingle.id); setNewDialogOpen(true); } }} disabled={!canEdit || !selectedSingle}><Copy className="size-4" />复制</Button>
          <Button variant="outline" size="sm" onClick={() => setDeleteConfirmOpen(true)} disabled={!canEdit || selectedEnvironments.length === 0}><Trash2 className="size-4" />删除</Button>
          {state?.undoAvailable && <Button variant="outline" size="sm" onClick={() => void prepareUndoPlan()} disabled={!canEdit}><RotateCcw className="size-4" />撤销</Button>}
        </div>
-     </div>
+      </div>
      {(error || operationError) && <div role="alert" className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-200">{operationError ?? errorText(error)}</div>}
      {!state && busy && <p className="text-sm text-muted-foreground">正在读取项目环境...</p>}
      {state && environments.length === 0 && <div className="rounded-lg border border-dashed border-border p-8 text-center"><p className="text-sm">还没有环境</p><p className="mt-1 text-xs text-muted-foreground">先选择项目内的文本文件，再从当前文件捕获第一个环境。</p><Button className="mt-4" onClick={() => setNewDialogOpen(true)} disabled={!canEdit}><FilePlus2 className="size-4" />创建第一个环境</Button></div>}
      <div className="space-y-1.5">{environments.map((environment) => {
        const pending = activeBatch?.pendingIds.includes(environment.id) ?? false;
-       const environmentProgress = pending ? undefined : progress[environment.id];
+       const environmentProgress = pending || progress[environment.id]?.kind === "undo" ? undefined : progress[environment.id];
        const waiting = pending && activeBatch?.environmentIds.includes(environment.id);
        const statusText = environmentProgress
          ? environmentProgress.status === "running" ? `${environmentProgress.kind === "capture" ? "更新" : "应用"}处理中 ${environmentProgress.percent}%`
@@ -505,7 +510,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
      <AlertDialog open={captureConfirmOpen} onOpenChange={setCaptureConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认捕获更新？</AlertDialogTitle><AlertDialogDescription>将按列表顺序更新选中的 {selectedEnvironments.length} 个环境，单个环境失败不会影响其他环境。</AlertDialogDescription></AlertDialogHeader><div className="max-h-40 overflow-auto rounded-md border border-border px-3 py-2 text-sm">{selectedEnvironments.map((environment) => <div key={environment.id} className="truncate py-1">{environment.name}</div>)}</div><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => void captureSelected()} disabled={busy || selectedEnvironments.length === 0}>确认捕获</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认删除环境？</AlertDialogTitle><AlertDialogDescription>将删除选中的 {selectedEnvironments.length} 个环境快照，且不能恢复。项目文件不会受到影响。</AlertDialogDescription></AlertDialogHeader><div className="max-h-40 overflow-auto rounded-md border border-border px-3 py-2 text-sm">{selectedEnvironments.map((environment) => <div key={environment.id} className="truncate py-1">{environment.name}</div>)}</div><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={(event) => { event.preventDefault(); void deleteSelected(); }} disabled={busy || selectedEnvironments.length === 0}>确认删除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
      <PlanDialog plan={plan} open={planOpen} busy={busy} onOpenChange={setPlanOpen} onConfirm={() => void confirmApply()} />
-     <AlertDialog open={undoOpen} onOpenChange={setUndoOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认撤销上次应用？</AlertDialogTitle><AlertDialogDescription>将按下面计划恢复上次应用前的文件状态。外部修改后会重新校验并更新计划，请重新确认。</AlertDialogDescription></AlertDialogHeader>{undoPlan && <div className="space-y-2"><div className="flex flex-wrap gap-4 text-xs">{(["create", "overwrite", "delete", "unchanged"] as const).map((action) => <span key={action} className={actionClass(action)}>{actionLabel(action)} {undoPlan.changes.filter((item) => item.action === action).length}</span>)}</div><div className="max-h-40 overflow-auto rounded-md border border-border px-3 py-2 text-xs">{undoPlan.changes.map((change) => <div key={change.path} className="flex gap-2 py-1"><span className={actionClass(change.action)}>{actionLabel(change.action)}</span><span>{change.path}</span></div>)}</div></div>}<AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void confirmUndo(); }} disabled={busy || !undoPlan}>确认撤销</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+     <AlertDialog open={undoOpen} onOpenChange={setUndoOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认撤销上次应用？</AlertDialogTitle><AlertDialogDescription>将按下面计划恢复上次应用前的文件状态。外部修改后会重新校验并更新计划，请重新确认。</AlertDialogDescription></AlertDialogHeader>{undoPlan && <div className="space-y-2"><div className="flex flex-wrap gap-4 text-xs">{(["create", "overwrite", "delete", "unchanged"] as const).map((action) => <span key={action} className={actionClass(action)}>{actionLabel(action)} {undoPlan.changes.filter((item) => item.action === action).length}</span>)}</div><div className="max-h-40 overflow-auto rounded-md border border-border px-3 py-2 text-xs">{undoPlan.changes.map((change) => <div key={change.path} className="flex gap-2 py-1"><span className={actionClass(change.action)}>{actionLabel(change.action)}</span><span>{change.path}</span></div>)}</div>{undoProgress && <div data-undo-progress className="space-y-1"><span className="text-xs text-muted-foreground">{undoProgress.status === "running" ? `撤销处理中 ${undoProgress.percent}%` : undoProgress.status === "success" ? "撤销成功" : "撤销失败"}</span><div role="progressbar" aria-label="撤销进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={undoProgress.percent} className="h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn("h-full transition-[width]", undoProgress.status === "failed" ? "bg-red-400" : undoProgress.status === "success" ? "bg-emerald-400" : "bg-primary")} style={{ width: `${undoProgress.percent}%` }} /></div></div>}</div>}<AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void confirmUndo(); }} disabled={busy || !undoPlan}>确认撤销</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
      <EnvironmentDiffDialog open={detailTarget !== null} environmentName={detailTarget?.name ?? ""} environmentId={detailTarget?.id ?? ""} paths={state?.managedPaths ?? []} busy={busy} onOpenChange={(open) => { if (!open) setDetailTarget(null); }} onDetail={onDetail} />
    </div>;
 }

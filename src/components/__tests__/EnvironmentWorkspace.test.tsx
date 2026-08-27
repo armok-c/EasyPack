@@ -74,6 +74,17 @@ describe("EnvironmentWorkspace", () => {
     ],
   };
 
+  it("keeps file list, creation, and selection count on the first row", () => {
+    render(<EnvironmentWorkspace {...props()} />);
+
+    const firstRow = screen.getByRole("button", { name: "文件清单" }).parentElement as HTMLElement;
+    const secondRow = screen.getByRole("button", { name: "捕获更新" }).parentElement as HTMLElement;
+    expect(within(firstRow).getByRole("button", { name: "新建" })).toBeInTheDocument();
+    expect(within(firstRow).queryByRole("button", { name: "捕获更新" })).not.toBeInTheDocument();
+    expect(within(firstRow).getByText("已选 0 个")).toHaveClass("ml-auto");
+    expect(within(secondRow).queryByText("已选 0 个")).not.toBeInTheDocument();
+  });
+
   it("uses one confirmation for batch capture, preserves list order, and keeps apply single-select", async () => {
     const onCaptureMany = vi.fn().mockResolvedValue({
       results: [
@@ -181,6 +192,7 @@ describe("EnvironmentWorkspace", () => {
     render(<EnvironmentWorkspace {...props({ onDelete })} />);
 
     expect(screen.queryByText("按项目保存配置文件快照，应用前会先列出文件变更。")).not.toBeInTheDocument();
+    expect(screen.queryByText("项目环境")).not.toBeInTheDocument();
     expect(screen.queryByText("受管文件 1 个")).not.toBeInTheDocument();
     expect(screen.queryByText("环境 1 个")).not.toBeInTheDocument();
     const row = screen.getByText("开发").closest("[data-environment-row]");
@@ -249,7 +261,7 @@ describe("EnvironmentWorkspace", () => {
     openFileDialogMock.mockReset().mockResolvedValue(null);
     render(<EnvironmentWorkspace {...props()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "受管文件清单" }));
+    fireEvent.click(screen.getByRole("button", { name: "文件清单" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).queryByPlaceholderText("输入项目内相对路径")).not.toBeInTheDocument();
 
@@ -352,9 +364,32 @@ describe("EnvironmentWorkspace", () => {
     expect(within(undoDialog).getByText("删除")).toBeInTheDocument();
     expect(within(undoDialog).getByText("不变")).toBeInTheDocument();
     fireEvent.click(within(undoDialog).getByRole("button", { name: "确认撤销" }));
-    await waitFor(() => expect(onUndo).toHaveBeenCalledWith("undo-token-1"));
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith("dev", "undo-token-1"));
     expect(within(await screen.findByRole("alertdialog")).getByText("删除")).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "确认撤销" }));
-    await waitFor(() => expect(onUndo).toHaveBeenLastCalledWith("undo-token-2"));
+    await waitFor(() => expect(onUndo).toHaveBeenLastCalledWith("dev", "undo-token-2"));
+  });
+
+  it("shows undo progress in the confirmation dialog without adding it to the environment row", async () => {
+    const onPlanUndo = vi.fn().mockResolvedValue({
+      token: "undo-token-1",
+      profileId: state.profileId,
+      projectId: state.projectId,
+      environmentId: "dev",
+      generation: 1,
+      changes: [],
+    });
+    render(<EnvironmentWorkspace {...props({
+      onPlanUndo,
+      progress: {
+        dev: { operationId: "undo-1", kind: "undo", completedFiles: 1, totalFiles: 4, percent: 25, status: "running" },
+      },
+    })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("撤销处理中 25%")).toBeInTheDocument();
+    expect(within(dialog).getByRole("progressbar", { name: "撤销进度" })).toHaveAttribute("aria-valuenow", "25");
+    expect(screen.getByText("开发").closest("[data-environment-row]")).not.toContainElement(screen.queryByRole("progressbar", { name: "撤销进度" }));
   });
 });

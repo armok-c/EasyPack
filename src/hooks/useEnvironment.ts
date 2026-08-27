@@ -65,7 +65,7 @@ export interface UseEnvironmentResult {
   plan: (environmentId: string) => Promise<ApplyPlan>;
   apply: (environmentId: string, planToken: string) => Promise<ApplyResponse>;
   planUndo: () => Promise<ApplyPlan>;
-  undo: (planToken: string) => Promise<ApplyResponse>;
+  undo: (environmentId: string, planToken: string) => Promise<ApplyResponse>;
 }
 
 function toProjectRef(
@@ -589,16 +589,27 @@ export function useEnvironment(options: UseEnvironmentOptions): UseEnvironmentRe
   );
 
   const undo = useCallback(
-    (planToken: string) =>
+    (environmentId: string, planToken: string) =>
       perform(renderScope, async () => {
         const ref = requireProject();
-        const response = await api.undo(ref, planToken);
+        const operationId = newOperationId("undo");
+        startProgress(renderScope, environmentId, "undo", operationId);
+        let response: ApplyResponse;
+        try {
+          response = await api.undo(ref, planToken, operationId);
+        } catch (cause) {
+          finishProgress(renderScope, operationId, "failed", cause);
+          await reloadCurrentState(renderScope, ref);
+          throw cause;
+        }
+        if (response.stale) clearProgress(renderScope, operationId);
+        else finishProgress(renderScope, operationId, response.applied ? "success" : "failed");
         if (response.applied && isCurrentScope(renderScope)) {
           setState((current) => current ? { ...current, undoAvailable: response.undoAvailable } : current);
         }
         return response;
       }),
-    [api, isCurrentScope, perform, renderScope, requireProject],
+    [api, clearProgress, finishProgress, isCurrentScope, perform, reloadCurrentState, renderScope, requireProject, startProgress],
   );
 
   const errorForScope = errorScopeRef.current === renderScope.token ? error : null;

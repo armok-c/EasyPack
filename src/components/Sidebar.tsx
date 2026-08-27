@@ -95,10 +95,10 @@ function SortableProjectItem({
             className={cn(
               "group relative flex items-center px-2 py-2 rounded-lg border cursor-pointer",
               "transition-all duration-150 overflow-hidden",
-              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              "focus-visible:outline-none",
               isSelected
-                ? "bg-white/10 border-white/20"
-                : "bg-white/5 border-white/10 hover:bg-white/[0.08]"
+                ? "bg-white/10 border-white/20 focus-visible:bg-white/15"
+                : "bg-white/5 border-white/10 hover:bg-white/[0.08] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50"
             )}
           >
             {/* Phase 5: colored left border (per D-02) */}
