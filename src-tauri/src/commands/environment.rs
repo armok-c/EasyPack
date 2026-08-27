@@ -152,6 +152,54 @@ pub struct CreateEnvironmentRequest {
 pub struct EnvironmentRequest {
     pub project: ProjectRef,
     pub environment_id: String,
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum EnvironmentFileState {
+    Text,
+    Absent,
+    NonUtf8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentFileContent {
+    pub state: EnvironmentFileState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentDetailRequest {
+    pub project: ProjectRef,
+    pub environment_id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentDetailResponse {
+    pub profile_id: String,
+    pub project_id: String,
+    pub environment_id: String,
+    pub path: String,
+    pub snapshot: EnvironmentFileContent,
+    pub current: EnvironmentFileContent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentProgressEvent {
+    pub operation_id: String,
+    pub profile_id: String,
+    pub project_id: String,
+    pub environment_id: String,
+    pub kind: String,
+    pub completed_files: usize,
+    pub total_files: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,6 +208,7 @@ pub struct ApplyRequest {
     pub project: ProjectRef,
     pub environment_id: String,
     pub plan_token: String,
+    pub operation_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -403,6 +452,30 @@ struct CurrentEntry {
     digest: Option<String>,
     size: Option<u64>,
     bytes: Option<Vec<u8>>,
+}
+
+type ProgressCallback<'a> = Option<&'a dyn Fn(&EnvironmentProgressEvent)>;
+
+fn report_progress(
+    callback: ProgressCallback<'_>,
+    operation_id: &str,
+    project: &ProjectRef,
+    environment_id: &str,
+    kind: &str,
+    completed_files: usize,
+    total_files: usize,
+) {
+    if let Some(callback) = callback {
+        callback(&EnvironmentProgressEvent {
+            operation_id: operation_id.to_string(),
+            profile_id: project.profile_id.clone(),
+            project_id: project.project_id.clone(),
+            environment_id: environment_id.to_string(),
+            kind: kind.to_string(),
+            completed_files,
+            total_files,
+        });
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1114,6 +1187,22 @@ impl EnvironmentStore {
         Ok((id, stage))
     }
 
+    fn cleanup_capture_failure(
+        &self,
+        project: &ProjectRef,
+        operation_id: &str,
+        previous_manifest: &Manifest,
+    ) {
+        let operation_dir = self
+            .key_dir(&project.profile_id, &project.project_id)
+            .join("staging")
+            .join(operation_id);
+        let _ = fs::remove_dir_all(operation_dir);
+        // A publish may have moved some staged blobs before the manifest write
+        // failed.  The previous manifest is still authoritative in that case.
+        let _ = self.cleanup_unreferenced_blobs(project, previous_manifest);
+    }
+
     fn publish_blob_staging(
         &self,
         project: &ProjectRef,
@@ -1210,7 +1299,15 @@ impl EnvironmentStore {
                 }
                 let id = new_id("env");
                 let (stage_id, stage) = store.begin_blob_staging(&request.project)?;
-                let entries = store.capture_entries(&root, &paths, &id, &stage)?;
+                let entries = store.capture_entries(
+                    &root,
+                    &paths,
+                    &id,
+                    &stage,
+                    &stage_id,
+                    &request.project,
+                    None,
+                )?;
                 manifest.environments.push(EnvironmentRecord {
                     id,
                     name: request.name.clone(),
@@ -1228,7 +1325,15 @@ impl EnvironmentStore {
             fs::create_dir_all(dir.join("blobs")).map_err(io_error)?;
             let id = new_id("env");
             let (stage_id, stage) = store.begin_blob_staging(&request.project)?;
-            let entries = store.capture_entries(&root, &paths, &id, &stage)?;
+            let entries = store.capture_entries(
+                &root,
+                &paths,
+                &id,
+                &stage,
+                &stage_id,
+                &request.project,
+                None,
+            )?;
             let manifest = Manifest {
                 schema_version: SCHEMA_VERSION,
                 profile_id: request.project.profile_id.clone(),
@@ -1256,22 +1361,107 @@ impl EnvironmentStore {
         &self,
         request: &EnvironmentRequest,
     ) -> Result<ProjectState, String> {
+        self.capture_environment_with_progress(request, None)
+    }
+
+    pub fn capture_environment_with_progress(
+        &self,
+        request: &EnvironmentRequest,
+        progress: ProgressCallback<'_>,
+    ) -> Result<ProjectState, String> {
+        validate_operation_id(&request.operation_id)?;
         self.with_lock(&request.project, |store| {
             store.ensure_ready(&request.project)?;
             let mut manifest = store.load_manifest(&request.project)?;
             let root = store.project_root(&request.project, &manifest)?;
             let managed_paths = manifest.managed_paths.clone();
-            let env = find_environment_mut(&mut manifest, &request.environment_id)?;
-            let env_id = env.id.clone();
+            let env_id = find_environment(&manifest, &request.environment_id)?
+                .id
+                .clone();
             let (stage_id, stage) = store.begin_blob_staging(&request.project)?;
-            env.entries = store.capture_entries(&root, &managed_paths, &env_id, &stage)?;
-            manifest.generation = manifest.generation.saturating_add(1);
-            store.save_manifest_and_publish(
+            let old_manifest = manifest.clone();
+            report_progress(
+                progress,
+                &request.operation_id,
                 &request.project,
-                &manifest,
-                Some((&stage, &stage_id)),
-            )?;
-            Ok(store.to_project_state(&request.project, &manifest))
+                &env_id,
+                "capture",
+                0,
+                managed_paths.len(),
+            );
+            let result = (|| {
+                let entries = store.capture_entries(
+                    &root,
+                    &managed_paths,
+                    &env_id,
+                    &stage,
+                    &request.operation_id,
+                    &request.project,
+                    progress,
+                )?;
+                find_environment_mut(&mut manifest, &request.environment_id)?.entries = entries;
+                manifest.generation = manifest.generation.saturating_add(1);
+                store.save_manifest_and_publish(
+                    &request.project,
+                    &manifest,
+                    Some((&stage, &stage_id)),
+                )?;
+                report_progress(
+                    progress,
+                    &request.operation_id,
+                    &request.project,
+                    &env_id,
+                    "capture",
+                    managed_paths.len(),
+                    managed_paths.len(),
+                );
+                Ok(store.to_project_state(&request.project, &manifest))
+            })();
+            if result.is_err() {
+                store.cleanup_capture_failure(&request.project, &stage_id, &old_manifest);
+            }
+            result
+        })
+    }
+
+    pub fn environment_detail(
+        &self,
+        request: &EnvironmentDetailRequest,
+    ) -> Result<EnvironmentDetailResponse, String> {
+        self.with_lock(&request.project, |store| {
+            store.ensure_ready(&request.project)?;
+            let manifest = store.load_manifest(&request.project)?;
+            let path = request.path.replace('\\', "/");
+            validate_relative_path(&path)?;
+            if !manifest
+                .managed_paths
+                .iter()
+                .any(|managed| managed == &path)
+            {
+                return Err("文件不属于受管清单".to_string());
+            }
+            let environment = find_environment(&manifest, &request.environment_id)?;
+            let profile_id = manifest.profile_id.clone();
+            let project_id = manifest.project_id.clone();
+            let environment_id = environment.id.clone();
+            let entry = environment
+                .entries
+                .get(&path)
+                .ok_or_else(|| "环境快照缺少受管文件".to_string())?;
+            if entry.path != path {
+                return Err("环境快照路径不一致".to_string());
+            }
+            let snapshot = store.read_snapshot_detail(&request.project, entry)?;
+            let root = store.project_root(&request.project, &manifest)?;
+            let current = read_current_detail(&root, &path)?;
+            Ok(EnvironmentDetailResponse {
+                profile_id,
+                project_id,
+                environment_id,
+                path,
+                snapshot,
+                current,
+            })
         })
     }
 
@@ -1499,6 +1689,15 @@ impl EnvironmentStore {
     }
 
     pub fn apply_environment(&self, request: &ApplyRequest) -> Result<ApplyResponse, String> {
+        self.apply_environment_with_progress(request, None)
+    }
+
+    pub fn apply_environment_with_progress(
+        &self,
+        request: &ApplyRequest,
+        progress: ProgressCallback<'_>,
+    ) -> Result<ApplyResponse, String> {
+        validate_operation_id(&request.operation_id)?;
         self.with_lock(&request.project, |store| {
             store.ensure_ready(&request.project)?;
             let manifest = store.load_manifest(&request.project)?;
@@ -1526,7 +1725,15 @@ impl EnvironmentStore {
                     undo_available: store.undo_exists(&request.project),
                 });
             }
-            store.commit_apply(&request.project, &root, &manifest, env, &plan)
+            store.commit_apply(
+                &request.project,
+                &root,
+                &manifest,
+                env,
+                &plan,
+                &request.operation_id,
+                progress,
+            )
         })
     }
 
@@ -1565,6 +1772,8 @@ impl EnvironmentStore {
                 &target,
                 &plan,
                 UndoIntent::Remove(snapshot_dirs),
+                "",
+                None,
             )?;
             let _ = store.cleanup_unreferenced_blobs(project, &manifest);
             Ok(response)
@@ -1734,10 +1943,13 @@ impl EnvironmentStore {
         paths: &[String],
         env_id: &str,
         staging: &Path,
+        operation_id: &str,
+        project: &ProjectRef,
+        progress: ProgressCallback<'_>,
     ) -> Result<BTreeMap<String, SnapshotEntry>, String> {
         let current = self.read_current(root, paths)?;
         let mut entries = BTreeMap::new();
-        for path in paths {
+        for (index, path) in paths.iter().enumerate() {
             let item = current.get(path).unwrap();
             let entry = if let Some(bytes) = &item.bytes {
                 let name = unique_blob_name(env_id, path);
@@ -1760,6 +1972,17 @@ impl EnvironmentStore {
                 }
             };
             entries.insert(path.clone(), entry);
+            if index + 1 < paths.len() {
+                report_progress(
+                    progress,
+                    operation_id,
+                    project,
+                    env_id,
+                    "capture",
+                    index + 1,
+                    paths.len(),
+                );
+            }
         }
         Ok(entries)
     }
@@ -1807,6 +2030,30 @@ impl EnvironmentStore {
         Ok(bytes)
     }
 
+    fn read_snapshot_detail(
+        &self,
+        project: &ProjectRef,
+        entry: &SnapshotEntry,
+    ) -> Result<EnvironmentFileContent, String> {
+        validate_relative_path(&entry.path)?;
+        let bytes = match entry.state {
+            SnapshotState::Absent => {
+                if entry.digest.is_some() || entry.size.is_some() || entry.blob.is_some() {
+                    return Err("环境快照完整性校验失败".to_string());
+                }
+                return Ok(EnvironmentFileContent {
+                    state: EnvironmentFileState::Absent,
+                    content: None,
+                });
+            }
+            SnapshotState::Present => self.read_blob_entry(
+                &self.key_dir(&project.profile_id, &project.project_id),
+                entry,
+            )?,
+        };
+        Ok(file_content_from_bytes(bytes))
+    }
+
     fn commit_apply(
         &self,
         project: &ProjectRef,
@@ -1814,6 +2061,8 @@ impl EnvironmentStore {
         manifest: &Manifest,
         env: &EnvironmentRecord,
         plan: &ApplyPlan,
+        operation_id: &str,
+        progress: ProgressCallback<'_>,
     ) -> Result<ApplyResponse, String> {
         let target = snapshot_from_environment(env)?;
         self.commit_apply_target(
@@ -1823,6 +2072,8 @@ impl EnvironmentStore {
             &target,
             plan,
             UndoIntent::Publish(env.id.as_str()),
+            operation_id,
+            progress,
         )
     }
 
@@ -1834,6 +2085,8 @@ impl EnvironmentStore {
         target: &BTreeMap<String, SnapshotEntry>,
         plan: &ApplyPlan,
         undo_intent: UndoIntent<'_>,
+        operation_id: &str,
+        progress: ProgressCallback<'_>,
     ) -> Result<ApplyResponse, String> {
         let dir = self.ensure_dir(project)?;
         let current = self.read_current(root, &manifest.managed_paths)?;
@@ -1890,7 +2143,24 @@ impl EnvironmentStore {
         self.save_transaction(project, &tx)?;
         tx.phase = TransactionPhase::Committing;
         self.save_transaction(project, &tx)?;
-        let result = self.apply_entries(root, &target_entries, &stage);
+        report_progress(
+            progress,
+            operation_id,
+            project,
+            &plan.environment_id,
+            "apply",
+            0,
+            target_entries.len(),
+        );
+        let result = self.apply_entries(
+            root,
+            &target_entries,
+            &stage,
+            operation_id,
+            project,
+            &plan.environment_id,
+            progress,
+        );
         match result {
             Ok(()) => {
                 tx.phase = TransactionPhase::Completed;
@@ -1901,6 +2171,15 @@ impl EnvironmentStore {
                         }
                         match self.complete_pending_undo(project, &tx.pending_undo) {
                             Ok(()) => {
+                                report_progress(
+                                    progress,
+                                    operation_id,
+                                    project,
+                                    &plan.environment_id,
+                                    "apply",
+                                    target_entries.len(),
+                                    target_entries.len(),
+                                );
                                 // 完成标记和 undo 动作都已持久化并完成。清理失败时保留事务记录，启动时会继续清理。
                                 let _ = self.cleanup_transaction(project, &tx_id);
                                 Ok(ApplyResponse {
@@ -2003,6 +2282,10 @@ impl EnvironmentStore {
         root: &Path,
         entries: &[TransactionEntry],
         stage: &Path,
+        operation_id: &str,
+        project: &ProjectRef,
+        environment_id: &str,
+        progress: ProgressCallback<'_>,
     ) -> Result<(), String> {
         let key = std::env::var("EASYPACK_ENV_FAIL_AFTER")
             .ok()
@@ -2029,6 +2312,17 @@ impl EnvironmentStore {
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                     Err(error) => return Err(io_error(error)),
                 },
+            }
+            if index + 1 < entries.len() {
+                report_progress(
+                    progress,
+                    operation_id,
+                    project,
+                    environment_id,
+                    "apply",
+                    index + 1,
+                    entries.len(),
+                );
             }
         }
         let actual = self.read_current(
@@ -2124,12 +2418,7 @@ impl EnvironmentStore {
     }
 
     fn checked_deletion_record_path(&self, token: &str) -> Result<PathBuf, String> {
-        if token.is_empty()
-            || token.len() > 128
-            || !token
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
-        {
+        if validate_operation_id(token).is_err() {
             return Err("删除事务标识无效".to_string());
         }
         Ok(self.deletion_record_path(token))
@@ -2930,6 +3219,40 @@ fn find_environment_mut<'a>(
         .ok_or_else(|| "环境不存在".to_string())
 }
 
+fn file_content_from_bytes(bytes: Vec<u8>) -> EnvironmentFileContent {
+    match String::from_utf8(bytes) {
+        Ok(content) => EnvironmentFileContent {
+            state: EnvironmentFileState::Text,
+            content: Some(content),
+        },
+        Err(_) => EnvironmentFileContent {
+            state: EnvironmentFileState::NonUtf8,
+            content: None,
+        },
+    }
+}
+
+fn read_current_detail(root: &Path, path: &str) -> Result<EnvironmentFileContent, String> {
+    let full = resolve_safe_path(root, path)?;
+    match fs::symlink_metadata(&full) {
+        Ok(metadata) if metadata.is_dir() => Err(format!("受管路径不是普通文件: {}", path)),
+        Ok(metadata) => {
+            if is_reparse_metadata(&metadata) {
+                return Err(format!("受管路径包含重解析点: {}", path));
+            }
+            if !metadata.is_file() {
+                return Err(format!("受管路径不是普通文件: {}", path));
+            }
+            Ok(file_content_from_bytes(fs::read(full).map_err(io_error)?))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(EnvironmentFileContent {
+            state: EnvironmentFileState::Absent,
+            content: None,
+        }),
+        Err(error) => Err(io_error(error)),
+    }
+}
+
 fn normalize_paths(paths: &[String]) -> Result<Vec<String>, String> {
     let mut result: Vec<String> = Vec::new();
     for path in paths {
@@ -3087,6 +3410,18 @@ fn validate_environment_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_operation_id(operation_id: &str) -> Result<(), String> {
+    if operation_id.is_empty()
+        || operation_id.len() > 128
+        || !operation_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
+        return Err("操作标识无效".to_string());
+    }
+    Ok(())
+}
+
 fn new_id(prefix: &str) -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -3198,6 +3533,13 @@ fn from_app(app: &tauri::AppHandle) -> Result<EnvironmentStore, String> {
     Ok(EnvironmentStore::new(root.join(DATA_DIR)))
 }
 
+fn emit_environment_progress(app: &tauri::AppHandle, event: &EnvironmentProgressEvent) {
+    use tauri::Emitter;
+    // Progress is advisory; a disconnected or closed frontend must not fail
+    // the underlying file operation.
+    let _ = app.emit("environment-progress", event);
+}
+
 #[tauri::command]
 pub fn environment_open_project(
     app: tauri::AppHandle,
@@ -3227,7 +3569,17 @@ pub fn environment_capture(
     app: tauri::AppHandle,
     request: EnvironmentRequest,
 ) -> Result<ProjectState, String> {
-    from_app(&app)?.capture_environment(&request)
+    let store = from_app(&app)?;
+    let callback = |event: &EnvironmentProgressEvent| emit_environment_progress(&app, event);
+    store.capture_environment_with_progress(&request, Some(&callback))
+}
+
+#[tauri::command]
+pub fn environment_detail(
+    app: tauri::AppHandle,
+    request: EnvironmentDetailRequest,
+) -> Result<EnvironmentDetailResponse, String> {
+    from_app(&app)?.environment_detail(&request)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3247,6 +3599,7 @@ pub fn environment_copy(
         &EnvironmentRequest {
             project: request.project,
             environment_id: request.environment_id,
+            operation_id: String::new(),
         },
         &request.name,
     )
@@ -3305,7 +3658,9 @@ pub fn environment_apply(
     app: tauri::AppHandle,
     request: ApplyRequest,
 ) -> Result<ApplyResponse, String> {
-    from_app(&app)?.apply_environment(&request)
+    let store = from_app(&app)?;
+    let callback = |event: &EnvironmentProgressEvent| emit_environment_progress(&app, event);
+    store.apply_environment_with_progress(&request, Some(&callback))
 }
 
 #[tauri::command]
@@ -3514,6 +3869,7 @@ mod tests {
                 &EnvironmentRequest {
                     project: project.clone(),
                     environment_id: source_id.clone(),
+                    operation_id: "test-copy".into(),
                 },
                 "test",
             )
@@ -3538,6 +3894,7 @@ mod tests {
         let missing = store.delete_environment(&EnvironmentRequest {
             project: project.clone(),
             environment_id: "missing".to_string(),
+            operation_id: "test-delete".into(),
         });
         assert_eq!(missing.unwrap_err(), "环境不存在");
         assert_eq!(copied.environments.len(), 2);
@@ -3546,6 +3903,7 @@ mod tests {
             .delete_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: source_id,
+                operation_id: "test-delete".into(),
             })
             .unwrap();
         assert_eq!(next.environments.len(), 1);
@@ -3565,6 +3923,7 @@ mod tests {
             .delete_environment(&EnvironmentRequest {
                 project,
                 environment_id: "missing".to_string(),
+                operation_id: "test-delete".into(),
             })
             .unwrap_err();
         assert_eq!(error, "项目环境不存在");
@@ -3684,6 +4043,7 @@ mod tests {
         let result = store.capture_environment(&EnvironmentRequest {
             project: project.clone(),
             environment_id: before.environments[0].id.clone(),
+            operation_id: "capture-manifest-failure".into(),
         });
         std::env::remove_var("EASYPACK_ENV_FAIL_MANIFEST");
         assert!(result.is_err());
@@ -3696,6 +4056,246 @@ mod tests {
                 .unwrap(),
             b"\xef\xbb\xbfA=1\r\n"
         );
+        assert_eq!(
+            file_count(
+                &store
+                    .key_dir(&project.profile_id, &project.project_id)
+                    .join("staging")
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn environment_detail_reads_snapshot_and_current_file_states() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let (store, project, state) = create(dir.path());
+        let environment_id = state.environments[0].id.clone();
+
+        fs::write(dir.path().join("a.env"), b"CURRENT=1\n").unwrap();
+        let text = store
+            .environment_detail(&EnvironmentDetailRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                path: "a.env".into(),
+            })
+            .unwrap();
+        assert_eq!(text.path, "a.env");
+        assert_eq!(text.snapshot.state, EnvironmentFileState::Text);
+        assert_eq!(text.snapshot.content.as_deref(), Some("\u{feff}A=1\r\n"));
+        assert_eq!(text.current.state, EnvironmentFileState::Text);
+        assert_eq!(text.current.content.as_deref(), Some("CURRENT=1\n"));
+
+        fs::write(dir.path().join("b.env"), [0xff, 0xfe]).unwrap();
+        let non_utf8 = store
+            .environment_detail(&EnvironmentDetailRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                path: "b.env".into(),
+            })
+            .unwrap();
+        assert_eq!(non_utf8.snapshot.state, EnvironmentFileState::Text);
+        assert_eq!(non_utf8.current.state, EnvironmentFileState::NonUtf8);
+        assert_eq!(non_utf8.current.content, None);
+
+        let absent = store
+            .environment_detail(&EnvironmentDetailRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                path: "missing.env".into(),
+            })
+            .unwrap();
+        assert_eq!(absent.snapshot.state, EnvironmentFileState::Absent);
+        assert_eq!(absent.current.state, EnvironmentFileState::Absent);
+
+        assert!(store
+            .environment_detail(&EnvironmentDetailRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                path: "../a.env".into(),
+            })
+            .is_err());
+        assert!(store
+            .environment_detail(&EnvironmentDetailRequest {
+                project,
+                environment_id,
+                path: "unmanaged.env".into(),
+            })
+            .is_err());
+    }
+
+    #[test]
+    fn environment_detail_rejects_corrupt_snapshot_content() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let (store, project, state) = create(dir.path());
+        let manifest = store.load_manifest(&project).unwrap();
+        let environment_id = state.environments[0].id.clone();
+        let entry = &manifest.environments[0].entries["a.env"];
+        fs::write(
+            store
+                .key_dir(&project.profile_id, &project.project_id)
+                .join("blobs")
+                .join(entry.blob.as_ref().unwrap()),
+            b"tampered",
+        )
+        .unwrap();
+
+        let result = store.environment_detail(&EnvironmentDetailRequest {
+            project,
+            environment_id,
+            path: "a.env".into(),
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn capture_and_apply_report_file_progress_and_omit_success_on_failure() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let (store, project, state) = create(dir.path());
+        let environment_id = state.environments[0].id.clone();
+        let events = Arc::new(Mutex::new(Vec::<EnvironmentProgressEvent>::new()));
+        let capture_events = events.clone();
+        let capture_callback = move |event: &EnvironmentProgressEvent| {
+            capture_events.lock().unwrap().push(event.clone());
+        };
+        store
+            .capture_environment_with_progress(
+                &EnvironmentRequest {
+                    project: project.clone(),
+                    environment_id: environment_id.clone(),
+                    operation_id: "capture-progress-1".into(),
+                },
+                Some(&capture_callback),
+            )
+            .unwrap();
+        let captured = events.lock().unwrap().clone();
+        assert_eq!(
+            captured
+                .iter()
+                .map(|event| event.completed_files)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert!(captured.iter().all(|event| {
+            event.kind == "capture"
+                && event.total_files == 3
+                && event.profile_id == "p"
+                && event.project_id == "C:\\project\\one"
+                && event.environment_id == environment_id
+                && event.operation_id == "capture-progress-1"
+        }));
+        assert!(captured
+            .windows(2)
+            .all(|pair| pair[0].operation_id == pair[1].operation_id));
+
+        fs::write(dir.path().join("a.env"), b"changed-a").unwrap();
+        fs::write(dir.path().join("b.env"), b"changed-b").unwrap();
+        let plan = store
+            .plan_environment(&EnvironmentRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                operation_id: "apply-plan-1".into(),
+            })
+            .unwrap();
+        events.lock().unwrap().clear();
+        let apply_events = events.clone();
+        let apply_callback = move |event: &EnvironmentProgressEvent| {
+            apply_events.lock().unwrap().push(event.clone());
+        };
+        store
+            .apply_environment_with_progress(
+                &ApplyRequest {
+                    project: project.clone(),
+                    environment_id: environment_id.clone(),
+                    plan_token: plan.token,
+                    operation_id: "apply-progress-1".into(),
+                },
+                Some(&apply_callback),
+            )
+            .unwrap();
+        let applied = events.lock().unwrap().clone();
+        assert_eq!(
+            applied
+                .iter()
+                .map(|event| event.completed_files)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert!(applied.iter().all(|event| {
+            event.kind == "apply"
+                && event.total_files == 3
+                && event.environment_id == environment_id
+                && event.operation_id == "apply-progress-1"
+        }));
+
+        fs::write(dir.path().join("a.env"), b"failed-a").unwrap();
+        fs::write(dir.path().join("b.env"), b"failed-b").unwrap();
+        let failed_plan = store
+            .plan_environment(&EnvironmentRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                operation_id: "apply-plan-2".into(),
+            })
+            .unwrap();
+        events.lock().unwrap().clear();
+        std::env::set_var("EASYPACK_ENV_FAIL_AFTER", "1");
+        let failed = store.apply_environment_with_progress(
+            &ApplyRequest {
+                project,
+                environment_id,
+                plan_token: failed_plan.token,
+                operation_id: "apply-progress-2".into(),
+            },
+            Some(&apply_callback),
+        );
+        std::env::remove_var("EASYPACK_ENV_FAIL_AFTER");
+        assert!(failed.is_err());
+        let failed_events = events.lock().unwrap().clone();
+        assert_eq!(
+            failed_events
+                .iter()
+                .map(|event| event.completed_files)
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+        assert!(failed_events
+            .iter()
+            .all(|event| event.completed_files < event.total_files));
+        assert!(failed_events
+            .iter()
+            .all(|event| event.operation_id == "apply-progress-2"));
+        assert_ne!(
+            applied.first().map(|event| &event.operation_id),
+            failed_events.first().map(|event| &event.operation_id)
+        );
+        assert_eq!(fs::read(dir.path().join("a.env")).unwrap(), b"failed-a");
+        assert_eq!(fs::read(dir.path().join("b.env")).unwrap(), b"failed-b");
+    }
+
+    #[test]
+    fn operation_id_uses_camel_case_and_rejects_invalid_values() {
+        let request = EnvironmentRequest {
+            project: ProjectRef {
+                profile_id: "profile".into(),
+                project_id: "project".into(),
+                project_path: "C:\\project".into(),
+            },
+            environment_id: "environment".into(),
+            operation_id: "capture-001".into(),
+        };
+        let value = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            value.get("operationId").and_then(|item| item.as_str()),
+            Some("capture-001")
+        );
+        assert!(value.get("operation_id").is_none());
+        assert!(validate_operation_id("capture-001").is_ok());
+        assert!(validate_operation_id("").is_err());
+        assert!(validate_operation_id("capture/id").is_err());
+        assert!(validate_operation_id(&"x".repeat(129)).is_err());
     }
 
     #[test]
@@ -3808,6 +4408,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         store
@@ -3815,6 +4416,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
                 plan_token: first_plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
         let undo_path = store
@@ -3828,6 +4430,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id,
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         std::env::set_var("EASYPACK_ENV_FAIL_UNDO_PUBLISH", "1");
@@ -3836,6 +4439,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: manifest.environments[0].id.clone(),
                 plan_token: second_plan.token,
+                operation_id: "test-apply".into(),
             })
             .is_err());
         std::env::remove_var("EASYPACK_ENV_FAIL_UNDO_PUBLISH");
@@ -3871,6 +4475,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         store
@@ -3878,6 +4483,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
                 plan_token: first_plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
         let undo_path = store
@@ -3891,6 +4497,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id,
+                operation_id: "test-plan".into(),
             })
             .unwrap();
 
@@ -3900,6 +4507,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: manifest.environments[0].id.clone(),
                 plan_token: second_plan.token,
+                operation_id: "test-apply".into(),
             })
             .is_err());
         std::env::remove_var("EASYPACK_ENV_FAIL_COMPLETED");
@@ -3923,6 +4531,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         store
@@ -3930,6 +4539,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
                 plan_token: first_plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
         let undo_path = store
@@ -3943,6 +4553,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id,
+                operation_id: "test-plan".into(),
             })
             .unwrap();
 
@@ -3952,6 +4563,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: manifest.environments[0].id.clone(),
                 plan_token: second_plan.token,
+                operation_id: "test-apply".into(),
             })
             .is_err());
         std::env::remove_var("EASYPACK_ENV_CRASH_AFTER_COMPLETED");
@@ -3988,6 +4600,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         store
@@ -3995,6 +4608,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
                 plan_token: first_plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
         let undo_path = store
@@ -4008,6 +4622,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id,
+                operation_id: "test-plan".into(),
             })
             .unwrap();
 
@@ -4017,6 +4632,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: manifest.environments[0].id.clone(),
                 plan_token: second_plan.token,
+                operation_id: "test-apply".into(),
             })
             .is_err());
         std::env::remove_var("EASYPACK_ENV_FAIL_UNDO_CLEANUP");
@@ -4128,6 +4744,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: manifest.environments[0].id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         std::env::set_var("EASYPACK_ENV_FAIL_AFTER", "0");
@@ -4136,6 +4753,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: manifest.environments[0].id.clone(),
                 plan_token: plan.token,
+                operation_id: "test-apply".into(),
             })
             .is_err());
         std::env::remove_var("EASYPACK_ENV_FAIL_AFTER");
@@ -4277,6 +4895,7 @@ mod tests {
         let plan = store.plan_environment(&EnvironmentRequest {
             project: project.clone(),
             environment_id: "env-does-not-exist".into(),
+            operation_id: "test-plan".into(),
         });
         assert!(plan.is_err());
         let manifest = store.load_manifest(&project).unwrap();
@@ -4285,6 +4904,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: env_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         assert!(plan
@@ -4304,6 +4924,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: env_id.clone(),
                 plan_token: plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
         assert!(applied.applied);
@@ -4360,6 +4981,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: environment_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         store
@@ -4367,6 +4989,7 @@ mod tests {
                 project: project.clone(),
                 environment_id,
                 plan_token: apply_plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
 
@@ -4422,6 +5045,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id,
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         store
@@ -4429,6 +5053,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: manifest.environments[0].id.clone(),
                 plan_token: apply_plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
         let undo_plan = store.plan_undo_environment(&project).unwrap();
@@ -4462,6 +5087,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: env_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         fs::write(dir.path().join("a.env"), b"outside").unwrap();
@@ -4470,6 +5096,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: env_id,
                 plan_token: plan.token,
+                operation_id: "test-apply".into(),
             })
             .unwrap();
         assert!(response.stale);
@@ -4489,6 +5116,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: env_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
         std::env::set_var("EASYPACK_ENV_FAIL_AFTER", "1");
@@ -4496,6 +5124,7 @@ mod tests {
             project: project.clone(),
             environment_id: env_id.clone(),
             plan_token: plan.token,
+            operation_id: "test-apply".into(),
         });
         std::env::remove_var("EASYPACK_ENV_FAIL_AFTER");
         assert!(result.is_err());
@@ -4516,6 +5145,7 @@ mod tests {
             .plan_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: env_id.clone(),
+                operation_id: "test-plan".into(),
             })
             .unwrap();
 
@@ -4524,6 +5154,7 @@ mod tests {
             project: project.clone(),
             environment_id: env_id,
             plan_token: plan.token,
+            operation_id: "test-apply".into(),
         });
         std::env::remove_var("EASYPACK_ENV_FAIL_UNDO");
 
@@ -4732,6 +5363,7 @@ mod tests {
             project: project.clone(),
             environment_id,
             plan_token: "unused".to_string(),
+            operation_id: "test-apply".into(),
         });
 
         assert!(result.is_err());
@@ -5087,6 +5719,7 @@ mod tests {
             .capture_environment(&EnvironmentRequest {
                 project: project.clone(),
                 environment_id: "env".to_string(),
+                operation_id: "test-capture".into(),
             })
             .is_err());
         assert!(store
@@ -5094,6 +5727,7 @@ mod tests {
                 project: project.clone(),
                 environment_id: "env".to_string(),
                 plan_token: "unused".to_string(),
+                operation_id: "test-apply".into(),
             })
             .is_err());
         store

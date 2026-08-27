@@ -1,6 +1,7 @@
 import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
+import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 function AlertDialog({
@@ -47,7 +48,7 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 flex flex-col w-full max-w-[calc(100%-2rem)] max-h-[90vh] translate-x-[-50%] translate-y-[-50%] rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-md",
+          "fixed top-[50%] left-[50%] z-50 flex w-[calc(100%-2rem)] max-h-[90vh] max-w-md translate-x-[-50%] translate-y-[-50%] flex-col rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}
@@ -63,7 +64,7 @@ function AlertDialogHeader({
   return (
     <div
       data-slot="alert-dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      className={cn("flex flex-col gap-2 text-left", className)}
       {...props}
     />
   )
@@ -77,7 +78,7 @@ function AlertDialogFooter({
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "mt-4 flex flex-row justify-end gap-2 border-t border-border bg-background pt-4",
         className
       )}
       {...props}
@@ -112,15 +113,32 @@ function AlertDialogDescription({
 }
 
 function AlertDialogCancel({
+  className,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Cancel>) {
-  return <AlertDialogPrimitive.Cancel data-slot="alert-dialog-cancel" {...props} />
+  return (
+    <AlertDialogPrimitive.Cancel
+      data-slot="alert-dialog-cancel"
+      className={cn(buttonVariants({ variant: "outline" }), className)}
+      {...props}
+    />
+  )
 }
 
 function AlertDialogAction({
+  className,
+  variant = "default",
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Action>) {
-  return <AlertDialogPrimitive.Action data-slot="alert-dialog-action" {...props} />
+}: React.ComponentProps<typeof AlertDialogPrimitive.Action> & {
+  variant?: "default" | "destructive";
+}) {
+  return (
+    <AlertDialogPrimitive.Action
+      data-slot="alert-dialog-action"
+      className={cn(buttonVariants({ variant }), className)}
+      {...props}
+    />
+  )
 }
 
 export {

@@ -1,7 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEnvironment } from "@/hooks/useEnvironment";
 import type { EnvironmentApi, EnvironmentProjectState } from "@/lib/environment-types";
+
+const { mockListen } = vi.hoisted(() => ({ mockListen: vi.fn() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: mockListen }));
 
 const project = { id: "project-a", path: "C:\\Workspace\\Project" };
 const state: EnvironmentProjectState = {
@@ -30,6 +33,14 @@ function api(overrides: Partial<EnvironmentApi> = {}): EnvironmentApi {
     getProjectPath: vi.fn(async () => null),
     create: vi.fn(async () => state),
     capture: vi.fn(async () => state),
+    detail: vi.fn(async () => ({
+      profileId: state.profileId,
+      projectId: state.projectId,
+      environmentId: "dev",
+      path: ".env",
+      snapshot: { state: "text", content: "A=1" },
+      current: { state: "text", content: "A=2" },
+    })),
     copy: vi.fn(async () => state),
     deleteEnvironment: vi.fn(async () => state),
     migrateManifest: vi.fn(async () => state),
@@ -92,6 +103,11 @@ function api(overrides: Partial<EnvironmentApi> = {}): EnvironmentApi {
   };
 }
 
+beforeEach(() => {
+  mockListen.mockReset();
+  mockListen.mockResolvedValue(vi.fn());
+});
+
 describe("useEnvironment", () => {
   it("loads by active profile and project, then plans and applies undo by token", async () => {
     const environmentApi = api();
@@ -111,6 +127,12 @@ describe("useEnvironment", () => {
     await act(async () => {
       await result.current.apply("dev", "token");
     });
+    expect(environmentApi.apply).toHaveBeenCalledWith(expect.objectContaining({
+      project: expect.objectContaining({ projectId: project.id }),
+      environmentId: "dev",
+      planToken: "token",
+      operationId: expect.stringMatching(/^apply-/),
+    }));
     expect(result.current.state?.undoAvailable).toBe(true);
     await act(async () => {
       await result.current.planUndo();
@@ -128,6 +150,271 @@ describe("useEnvironment", () => {
     }, "undo-token");
     expect(result.current.state?.undoAvailable).toBe(false);
     expect(result.current.recoveryBlocked).toBe(false);
+  });
+
+  it("loads one environment file detail through the scoped API", async () => {
+    const environmentApi = api();
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await act(async () => {
+      await result.current.detail("dev", ".env");
+    });
+
+    expect(environmentApi.detail).toHaveBeenCalledWith({
+      project: {
+        profileId: "profile-a",
+        projectId: project.id,
+        projectPath: project.path,
+      },
+      environmentId: "dev",
+      path: ".env",
+    });
+  });
+
+  it("runs batch capture in order, keeps partial failures, and filters progress by operation", async () => {
+    let progressHandler: ((event: unknown) => void) | undefined;
+    mockListen.mockImplementationOnce(async (_name: string, handler: (event: unknown) => void) => {
+      progressHandler = handler;
+      return vi.fn();
+    });
+    const batchState: EnvironmentProjectState = {
+      ...state,
+      environments: [
+        ...state.environments,
+        { id: "test", name: "test", fileCount: 2 },
+        { id: "prod", name: "prod", fileCount: 2 },
+      ],
+    };
+    const capturedOrder: string[] = [];
+    const environmentApi = api({
+      openProject: vi.fn(async () => batchState),
+      capture: vi.fn(async (request) => {
+        capturedOrder.push(request.environmentId);
+        progressHandler?.({ payload: {
+          operationId: request.operationId,
+          profileId: state.profileId,
+          projectId: state.projectId,
+          environmentId: request.environmentId,
+          kind: "capture",
+          completedFiles: 0,
+          totalFiles: 0,
+        } });
+        progressHandler?.({ payload: {
+          operationId: "old-operation",
+          profileId: state.profileId,
+          projectId: state.projectId,
+          environmentId: request.environmentId,
+          kind: "capture",
+          completedFiles: 2,
+          totalFiles: 2,
+        } });
+        progressHandler?.({ payload: {
+          operationId: request.operationId,
+          profileId: state.profileId,
+          projectId: state.projectId,
+          environmentId: request.environmentId,
+          kind: "capture",
+          completedFiles: 1,
+          totalFiles: 2,
+        } });
+        if (request.environmentId === "test") throw new Error("test capture failed");
+        return batchState;
+      }),
+    });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await waitFor(() => expect(mockListen).toHaveBeenCalledWith("environment-progress", expect.any(Function)));
+    let batch!: Awaited<ReturnType<typeof result.current.captureMany>>;
+    await act(async () => {
+      batch = await result.current.captureMany(["dev", "test", "prod"]);
+    });
+
+    expect(capturedOrder).toEqual(["dev", "test", "prod"]);
+    expect(batch.results.map((item) => item.success)).toEqual([true, false, true]);
+    expect(batch.results[1].error).toBeInstanceOf(Error);
+    expect(result.current.progress.dev).toMatchObject({ status: "success", percent: 100, totalFiles: 2 });
+    expect(result.current.progress.test).toMatchObject({ status: "failed", percent: 50, totalFiles: 2 });
+    expect(result.current.progress.prod).toMatchObject({ status: "success", percent: 100, totalFiles: 2 });
+    expect(Object.values(result.current.progress).every((item) => !Number.isNaN(item.percent))).toBe(true);
+  });
+
+  it("refreshes state after a capture failure and stops when rollback blocks the project", async () => {
+    const recoveryState: EnvironmentProjectState = {
+      ...state,
+      blocked: true,
+      recoveryError: "rollback failed",
+    };
+    let reloadForRecovery = false;
+    const environmentApi = api({
+      openProject: vi.fn(async () => reloadForRecovery ? recoveryState : state),
+      capture: vi.fn(async () => { throw new Error("capture failed"); }),
+    });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await waitFor(() => expect(result.current.state).not.toBeNull());
+    reloadForRecovery = true;
+    let batch!: Awaited<ReturnType<typeof result.current.captureMany>>;
+    await act(async () => {
+      batch = await result.current.captureMany(["dev", "test"]);
+    });
+
+    expect(environmentApi.capture).toHaveBeenCalledTimes(1);
+    expect(environmentApi.openProject.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(batch.results).toHaveLength(1);
+    expect(batch.results[0]).toMatchObject({ environmentId: "dev", success: false });
+    expect(result.current.state).toMatchObject({ blocked: true, recoveryError: "rollback failed" });
+    expect(result.current.recoveryBlocked).toBe(true);
+  });
+
+  it("refreshes state after an apply failure so rollback recovery is visible", async () => {
+    const recoveryState: EnvironmentProjectState = {
+      ...state,
+      blocked: true,
+      recoveryError: "apply rollback failed",
+    };
+    let reloadForRecovery = false;
+    const openedStates: EnvironmentProjectState[] = [];
+    const environmentApi = api({
+      openProject: vi.fn(async () => {
+        const opened = reloadForRecovery ? recoveryState : state;
+        openedStates.push(opened);
+        return opened;
+      }),
+      apply: vi.fn(async () => { throw new Error("apply failed"); }),
+    });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await waitFor(() => expect(result.current.state).not.toBeNull());
+    reloadForRecovery = true;
+    await act(async () => {
+      await expect(result.current.apply("dev", "token")).rejects.toThrow("apply failed");
+    });
+
+    expect(environmentApi.openProject.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(environmentApi.apply).toHaveBeenCalledTimes(1);
+    expect(openedStates).toContain(recoveryState);
+    await waitFor(() => expect(result.current.state).toMatchObject({ blocked: true, recoveryError: "apply rollback failed" }));
+    expect(result.current.recoveryBlocked).toBe(true);
+    expect(result.current.progress.dev).toMatchObject({ status: "failed" });
+  });
+
+  it("clears stale apply progress and starts a new operation after re-confirmation", async () => {
+    const stalePlan = {
+      token: "fresh-token",
+      profileId: state.profileId,
+      projectId: state.projectId,
+      environmentId: "dev",
+      generation: 2,
+      changes: [],
+    };
+    const environmentApi = api({
+      apply: vi.fn()
+        .mockResolvedValueOnce({ applied: false, stale: true, plan: stalePlan, undoAvailable: false })
+        .mockResolvedValueOnce({ applied: true, stale: false, plan: stalePlan, undoAvailable: true }),
+    });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await waitFor(() => expect(environmentApi.openProject).toHaveBeenCalledOnce());
+    await act(async () => {
+      const response = await result.current.apply("dev", "old-token");
+      expect(response.stale).toBe(true);
+    });
+    expect(result.current.progress.dev).toBeUndefined();
+
+    await act(async () => {
+      await result.current.apply("dev", "fresh-token");
+    });
+    const firstOperationId = (environmentApi.apply as ReturnType<typeof vi.fn>).mock.calls[0][0].operationId;
+    const secondOperationId = (environmentApi.apply as ReturnType<typeof vi.fn>).mock.calls[1][0].operationId;
+    expect(firstOperationId).not.toBe(secondOperationId);
+    expect(result.current.progress.dev).toMatchObject({
+      operationId: secondOperationId,
+      status: "success",
+      percent: 100,
+    });
+  });
+
+  it("continues a capture when progress listener setup fails", async () => {
+    mockListen.mockRejectedValueOnce(new Error("listener unavailable"));
+    const environmentApi = api();
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await act(async () => {
+      await result.current.capture("dev");
+    });
+
+    expect(environmentApi.capture).toHaveBeenCalledWith(expect.objectContaining({
+      environmentId: "dev",
+      operationId: expect.stringMatching(/^capture-/),
+    }));
+    expect(result.current.progress.dev).toMatchObject({ status: "success", percent: 100 });
+  });
+
+  it("runs batch delete in order and keeps failed targets in the result", async () => {
+    const batchState: EnvironmentProjectState = {
+      ...state,
+      environments: [
+        ...state.environments,
+        { id: "test", name: "test", fileCount: 2 },
+      ],
+    };
+    const deletedState = { ...batchState, environments: [{ id: "test", name: "test", fileCount: 2 }] };
+    const deletedOrder: string[] = [];
+    const environmentApi = api({
+      openProject: vi.fn(async () => batchState),
+      deleteEnvironment: vi.fn(async (request) => {
+        deletedOrder.push(request.environmentId);
+        if (request.environmentId === "test") throw new Error("test delete failed");
+        return deletedState;
+      }),
+    });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    let batch!: Awaited<ReturnType<typeof result.current.deleteMany>>;
+    await act(async () => {
+      batch = await result.current.deleteMany(["dev", "test"]);
+    });
+
+    expect(deletedOrder).toEqual(["dev", "test"]);
+    expect(batch.results.map((item) => item.success)).toEqual([true, false]);
+    expect(batch.results[1].environmentId).toBe("test");
+    expect(environmentApi.deleteEnvironment).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      environmentId: "dev",
+      operationId: expect.stringMatching(/^delete-/),
+    }));
+    expect(environmentApi.deleteEnvironment).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      environmentId: "test",
+      operationId: expect.stringMatching(/^delete-/),
+    }));
+    expect(result.current.state?.environments).toEqual(deletedState.environments);
   });
 
   it("deletes an environment through the scoped API and stores the returned state", async () => {
@@ -150,6 +437,7 @@ describe("useEnvironment", () => {
         projectPath: project.path,
       },
       environmentId: "dev",
+      operationId: expect.stringMatching(/^delete-/),
     });
     expect(result.current.state?.environments).toEqual([]);
   });

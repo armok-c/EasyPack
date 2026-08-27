@@ -71,9 +71,12 @@ export interface CreateEnvironmentRequest {
 export interface EnvironmentRequest {
   project: EnvironmentProjectRef;
   environmentId: string;
+  operationId: string;
 }
 
-export interface CopyEnvironmentRequest extends EnvironmentRequest {
+export interface CopyEnvironmentRequest {
+  project: EnvironmentProjectRef;
+  environmentId: string;
   name: string;
 }
 
@@ -81,6 +84,65 @@ export interface ApplyRequest {
   project: EnvironmentProjectRef;
   environmentId: string;
   planToken: string;
+  operationId: string;
+}
+
+export type EnvironmentFileState = "text" | "absent" | "nonUtf8";
+
+export interface EnvironmentFileContent {
+  state: EnvironmentFileState;
+  content?: string;
+}
+
+export interface EnvironmentDetailRequest {
+  project: EnvironmentProjectRef;
+  environmentId: string;
+  path: string;
+}
+
+export interface EnvironmentDetailResponse {
+  profileId: string;
+  projectId: string;
+  environmentId: string;
+  path: string;
+  snapshot: EnvironmentFileContent;
+  current: EnvironmentFileContent;
+}
+
+export type EnvironmentOperationKind = "capture" | "apply";
+
+export interface EnvironmentProgressEvent {
+  operationId: string;
+  profileId: string;
+  projectId: string;
+  environmentId: string;
+  kind: EnvironmentOperationKind;
+  completedFiles: number;
+  totalFiles: number;
+}
+
+export type EnvironmentProgressStatus = "running" | "success" | "failed";
+
+export interface EnvironmentProgress {
+  operationId: string;
+  kind: EnvironmentOperationKind;
+  completedFiles: number;
+  totalFiles: number;
+  percent: number;
+  status: EnvironmentProgressStatus;
+  error?: unknown;
+}
+
+export interface EnvironmentBatchItemResult {
+  environmentId: string;
+  success: boolean;
+  state?: EnvironmentProjectState;
+  error?: unknown;
+}
+
+export interface EnvironmentBatchResult {
+  results: EnvironmentBatchItemResult[];
+  state: EnvironmentProjectState | null;
 }
 
 export interface MigrationEntry {
@@ -199,6 +261,7 @@ export interface EnvironmentApi {
   getProjectPath(request: ProjectPathRequest): Promise<string | null>;
   create(request: CreateEnvironmentRequest): Promise<EnvironmentProjectState>;
   capture(request: EnvironmentRequest): Promise<EnvironmentProjectState>;
+  detail(request: EnvironmentDetailRequest): Promise<EnvironmentDetailResponse>;
   copy(request: CopyEnvironmentRequest): Promise<EnvironmentProjectState>;
   deleteEnvironment(request: EnvironmentRequest): Promise<EnvironmentProjectState>;
   migrateManifest(request: MigrateManifestRequest): Promise<EnvironmentProjectState>;
@@ -238,6 +301,7 @@ export function createEnvironmentApi(
     getProjectPath: (request) => call("environment_get_project_path", { request }),
     create: (request) => call("environment_create", { request }),
     capture: (request) => call("environment_capture", { request }),
+    detail: (request) => call("environment_detail", { request }),
     copy: (request) => call("environment_copy", { request }),
     deleteEnvironment: (request) => call("environment_delete", { request }),
     migrateManifest: (request) => call("environment_migrate_manifest", { request }),

@@ -2,9 +2,12 @@ import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -94,6 +97,8 @@ export function SettingsDialog({
   const [renameValue, setRenameValue] = useState("");
   const [deleteProfileId, setDeleteProfileId] = useState<string | null>(null);
   const [deletingProfile, setDeletingProfile] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [importingProfile, setImportingProfile] = useState(false);
 
   async function handleCheckNow() {
     if (checking) return;
@@ -118,12 +123,23 @@ export function SettingsDialog({
       });
       if (typeof selected !== "string") return;
 
-      const confirmed = window.confirm("确定要导入为新配置吗？");
-      if (!confirmed) return;
-
-      await onImportProfile(selected);
+      setPendingImportPath(selected);
     } catch (error) {
       console.error("导入失败:", error);
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (!pendingImportPath || importingProfile) return;
+
+    setImportingProfile(true);
+    try {
+      await onImportProfile(pendingImportPath);
+      setPendingImportPath(null);
+    } catch (error) {
+      console.error("导入失败:", error);
+    } finally {
+      setImportingProfile(false);
     }
   }
 
@@ -162,9 +178,12 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[380px]">
+      <DialogContent className="max-w-[380px]">
         <DialogHeader>
           <DialogTitle>设置</DialogTitle>
+          <DialogDescription className="sr-only">
+            管理应用设置和配置文件
+          </DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-6">
@@ -206,12 +225,12 @@ export function SettingsDialog({
               <div className="space-y-2 pl-1">
                 {/* 创建 profile */}
                 <div className="flex items-center gap-2">
-                  <input
+                  <Input
                     type="text"
                     placeholder="新配置名称"
                     value={newProfileName}
                     onChange={(e) => setNewProfileName(e.target.value)}
-                    className="flex-1 rounded-md border border-white/10 bg-background px-2 py-1 text-sm"
+                    className="flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && newProfileName.trim()) {
                         onCreateProfile(newProfileName.trim());
@@ -219,7 +238,10 @@ export function SettingsDialog({
                       }
                     }}
                   />
-                  <button
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
                     onClick={() => {
                       if (newProfileName.trim()) {
                         onCreateProfile(newProfileName.trim());
@@ -227,20 +249,19 @@ export function SettingsDialog({
                       }
                     }}
                     disabled={!newProfileName.trim()}
-                    className="px-2 py-1 text-xs rounded-md bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 disabled:opacity-50"
                   >
                     创建
-                  </button>
+                  </Button>
                 </div>
 
                 {/* 重命名当前 profile */}
                 <div className="flex items-center gap-2">
-                  <input
+                  <Input
                     type="text"
                     placeholder="重命名当前配置"
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
-                    className="flex-1 rounded-md border border-white/10 bg-background px-2 py-1 text-sm"
+                    className="flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && renameValue.trim() && activeProfileId) {
                         onRenameProfile(activeProfileId, renameValue.trim());
@@ -248,7 +269,10 @@ export function SettingsDialog({
                       }
                     }}
                   />
-                  <button
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
                     onClick={() => {
                       if (renameValue.trim() && activeProfileId) {
                         onRenameProfile(activeProfileId, renameValue.trim());
@@ -256,39 +280,47 @@ export function SettingsDialog({
                       }
                     }}
                     disabled={!renameValue.trim() || !activeProfileId}
-                    className="px-2 py-1 text-xs rounded-md bg-white/10 text-white/70 hover:bg-white/20 disabled:opacity-50"
                   >
                     重命名
-                  </button>
+                  </Button>
                 </div>
 
                 {/* 删除当前 profile */}
-                <button
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
                   onClick={() => {
                     if (activeProfileId && profileMetas.length > 1) {
                       setDeleteProfileId(activeProfileId);
                     }
                   }}
                   disabled={!activeProfileId || profileMetas.length <= 1}
-                  className="w-full px-2 py-1 text-xs rounded-md text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:pointer-events-none"
+                  className="w-full"
                 >
                   删除当前配置
-                </button>
+                </Button>
 
                 {/* 导入/导出 */}
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
                     onClick={handleImport}
-                    className="flex-1 px-2 py-1 text-xs rounded-md border border-white/10 hover:bg-white/10"
+                    className="flex-1"
                   >
                     导入配置
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
                     onClick={handleExport}
-                    className="flex-1 px-2 py-1 text-xs rounded-md border border-white/10 hover:bg-white/10"
+                    className="flex-1"
                   >
                     导出配置
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -302,7 +334,7 @@ export function SettingsDialog({
 
             <div className="space-y-4">
               {/* Switch: 启用系统托盘 */}
-              <div className="flex items-center justify-between">
+              <label htmlFor="settings-tray-enabled" className="flex items-center justify-between">
                 <div>
                   <p className="text-sm">启用系统托盘</p>
                   <p className="text-xs text-muted-foreground">
@@ -310,13 +342,16 @@ export function SettingsDialog({
                   </p>
                 </div>
                 <Switch
+                  id="settings-tray-enabled"
+                  aria-label="启用系统托盘"
                   checked={trayEnabled}
                   onCheckedChange={onTrayEnabledChange}
                 />
-              </div>
+              </label>
 
               {/* Switch: 关闭时隐藏到托盘 (depends on main switch) */}
-              <div
+              <label
+                htmlFor="settings-close-to-tray"
                 className={cn(
                   "flex items-center justify-between",
                   !trayEnabled && "opacity-50 pointer-events-none"
@@ -329,14 +364,17 @@ export function SettingsDialog({
                   </p>
                 </div>
                 <Switch
+                  id="settings-close-to-tray"
+                  aria-label="关闭时隐藏到托盘"
                   checked={closeToTray}
                   onCheckedChange={onCloseToTrayChange}
                   disabled={!trayEnabled}
                 />
-              </div>
+              </label>
 
               {/* Switch: 开机启动 (depends on closeToTray) */}
-              <div
+              <label
+                htmlFor="settings-autostart-enabled"
                 className={cn(
                   "flex items-center justify-between",
                   !closeToTray && "opacity-50 pointer-events-none"
@@ -349,11 +387,13 @@ export function SettingsDialog({
                   </p>
                 </div>
                 <Switch
+                  id="settings-autostart-enabled"
+                  aria-label="开机启动"
                   checked={autostartEnabled}
                   onCheckedChange={onAutostartEnabledChange}
                   disabled={!closeToTray}
                 />
-              </div>
+              </label>
             </div>
           </div>
 
@@ -363,7 +403,7 @@ export function SettingsDialog({
               <Label>边缘抽屉</Label>
             </div>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <label htmlFor="settings-drawer-enabled" className="flex items-center justify-between">
                 <div>
                   <p className="text-sm">启用边缘抽屉</p>
                   <p className="text-xs text-muted-foreground">
@@ -371,10 +411,12 @@ export function SettingsDialog({
                   </p>
                 </div>
                 <Switch
+                  id="settings-drawer-enabled"
+                  aria-label="启用边缘抽屉"
                   checked={drawerEnabled}
                   onCheckedChange={onDrawerEnabledChange}
                 />
-              </div>
+              </label>
             </div>
           </div>
         </div>
@@ -415,6 +457,34 @@ export function SettingsDialog({
           </p>
         </div>
       </DialogContent>
+
+      <AlertDialog
+        open={pendingImportPath !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !importingProfile) setPendingImportPath(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认导入配置？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此文件会作为新配置导入，不会覆盖当前配置。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={importingProfile}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={importingProfile}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmImport();
+              }}
+            >
+              {importingProfile ? "导入中..." : "确认导入"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={deleteProfileId !== null}

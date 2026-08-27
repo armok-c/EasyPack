@@ -5,6 +5,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -128,6 +129,20 @@ export function ShortcutPanel({
     onRecordingChange(false);
   }, [onRecordingChange]);
 
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) stopRecording();
+      onOpenChange(nextOpen);
+    },
+    [onOpenChange, stopRecording],
+  );
+
+  useEffect(() => {
+    if (!open && (recordingId !== null || conflictInfo !== null)) {
+      stopRecording();
+    }
+  }, [open, recordingId, conflictInfo, stopRecording]);
+
   // Confirm conflict override
   const confirmConflict = useCallback(async () => {
     if (!conflictInfo) return;
@@ -233,7 +248,8 @@ export function ShortcutPanel({
                     e.stopPropagation();
                     onClearBinding(action.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted text-muted-foreground"
+                  aria-label="清除快捷键"
+                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-0.5 rounded outline-none hover:bg-muted text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   title="清除快捷键"
                 >
                   <X className="size-3" />
@@ -253,7 +269,8 @@ export function ShortcutPanel({
             {binding && !isRecordingThis && (
               <button
                 onClick={() => startRecording(action.id)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 text-xs rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                aria-label={`更换${action.label}快捷键`}
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity px-2 py-0.5 text-xs rounded outline-none text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer focus-visible:ring-2 focus-visible:ring-ring"
               >
                 更换
               </button>
@@ -294,14 +311,17 @@ export function ShortcutPanel({
   return (
     <>
       {/* Main ShortcutPanel Dialog */}
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
-          className="sm:max-w-[420px]"
+          className="max-w-[420px]"
           onEscapeKeyDown={handleEscapeKeyDown}
           showCloseButton={recordingId === null}
         >
           <DialogHeader>
             <DialogTitle>快捷键设置</DialogTitle>
+            <DialogDescription className="sr-only">
+              配置应用内快捷键
+            </DialogDescription>
             {/* Search input — stays fixed at top */}
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -326,7 +346,7 @@ export function ShortcutPanel({
                 <div key={category}>
                   {/* Category header — clickable to toggle expand/collapse */}
                   <button
-                    className="flex items-center gap-1.5 w-full py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                    className="flex items-center gap-1.5 w-full py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => toggleCategory(category)}
                   >
                     {isExpanded ? (
@@ -335,7 +355,7 @@ export function ShortcutPanel({
                       <ChevronRight className="size-3.5" />
                     )}
                     {CATEGORY_LABELS[category]}
-                    <span className="text-muted-foreground/60 normal-case tracking-normal">
+                    <span className="text-muted-foreground">
                       ({groupActions.length})
                     </span>
                   </button>
@@ -358,7 +378,7 @@ export function ShortcutPanel({
             )}
           </div>
 
-          <DialogFooter className="sm:justify-start border-t border-white/10 pt-3">
+          <DialogFooter className="justify-start">
             <button
               onClick={() => setResetConfirmOpen(true)}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -372,9 +392,12 @@ export function ShortcutPanel({
 
       {/* Reset confirmation dialog */}
       <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent className="sm:max-w-[340px]" showCloseButton={false}>
+        <DialogContent className="max-w-[340px]" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>确认重置</DialogTitle>
+            <DialogDescription className="sr-only">
+              清除所有快捷键绑定
+            </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
             确定要清除所有快捷键绑定吗？此操作不可撤销。

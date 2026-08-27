@@ -319,7 +319,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className={cn(
-        activeTab === "multi" ? "sm:max-w-[560px]" : "sm:max-w-[480px]"
+        activeTab === "multi" ? "max-w-[560px]" : "max-w-[480px]"
       )}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
@@ -597,7 +597,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={() => resolveLeave(false)}>取消</AlertDialogCancel>
-          <AlertDialogAction onClick={(event) => { event.preventDefault(); handleLeaveDiscard(); }}>放弃</AlertDialogAction>
+          <AlertDialogAction variant="destructive" onClick={(event) => { event.preventDefault(); handleLeaveDiscard(); }}>放弃</AlertDialogAction>
           <AlertDialogAction onClick={(event) => { event.preventDefault(); void handleLeaveSave(); }}>保存</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

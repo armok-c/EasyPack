@@ -55,6 +55,7 @@ export function ProjectSettingsDialog({
   const [selectedColor, setSelectedColor] = useState(() => initialColor);
   const [colorInputValue, setColorInputValue] = useState(() => initialColor);
   const [candidates, setCandidates] = useState<IconCandidate[]>([]);
+  const [hasScanned, setHasScanned] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [rebinding, setRebinding] = useState(false);
@@ -67,6 +68,7 @@ export function ProjectSettingsDialog({
       setSelectedColor(color);
       setColorInputValue(color);
       setCandidates([]);
+      setHasScanned(false);
       setScanError(null);
     }
   }, [open, project]);
@@ -95,6 +97,9 @@ export function ProjectSettingsDialog({
         const color = normalizeHexColor(project.color);
         setSelectedColor(color);
         setColorInputValue(color);
+        setCandidates([]);
+        setHasScanned(false);
+        setScanError(null);
       }
       onOpenChange(newOpen);
     },
@@ -104,12 +109,14 @@ export function ProjectSettingsDialog({
   const handleScanIcons = useCallback(async () => {
     if (!project) return;
     setScanning(true);
+    setHasScanned(false);
     setScanError(null);
     try {
       const result = await invoke<IconCandidate[]>("scan_project_icons", {
         projectPath: project.path,
       });
       setCandidates(result);
+      setHasScanned(true);
     } catch {
       setScanError("图标扫描失败，请重试");
     } finally {
@@ -152,7 +159,7 @@ export function ProjectSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             项目设置
@@ -309,7 +316,7 @@ export function ProjectSettingsDialog({
             {!scanning && scanError && (
               <p className="text-xs text-destructive">{scanError}</p>
             )}
-            {!scanning && candidates.length === 0 && scanError === null && (
+            {!scanning && hasScanned && candidates.length === 0 && scanError === null && (
               <p className="text-xs text-muted-foreground">
                 未找到可用图标
               </p>
@@ -345,6 +352,7 @@ export function ProjectSettingsDialog({
                 }}
                 placeholder="#RRGGBB"
                 aria-label="颜色编号"
+                aria-invalid={!colorInputIsValid}
                 inputMode="text"
                 className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm uppercase outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
@@ -369,6 +377,11 @@ export function ProjectSettingsDialog({
                 <X className="size-3 text-muted-foreground" />
               </button>
             </div>
+            {!colorInputIsValid && (
+              <p className="text-xs text-destructive">
+                请输入 6 位十六进制颜色，例如 #112233
+              </p>
+            )}
           </div>
         </div>
 

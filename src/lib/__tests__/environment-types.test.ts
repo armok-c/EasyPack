@@ -49,9 +49,10 @@ describe("environment API boundary", () => {
     await api.openProject(project);
     await api.getProjectPath({ profileId: project.profileId, projectId: project.projectId });
     await api.create({ project, name: "dev", managedPaths: [".env"] });
-    await api.capture({ project, environmentId: "dev" });
+    await api.capture({ project, environmentId: "dev", operationId: "capture-001" });
+    await api.detail({ project, environmentId: "dev", path: ".env" });
     await api.copy({ project, environmentId: "dev", name: "test" });
-    await api.deleteEnvironment({ project, environmentId: "dev" });
+    await api.deleteEnvironment({ project, environmentId: "dev", operationId: "delete-001" });
     await api.migrateManifest({ project, managedPaths: [".env"], environments: [] });
     await api.bootstrapImport({
       project,
@@ -59,8 +60,8 @@ describe("environment API boundary", () => {
       environments: [{ environmentId: "dev", name: "dev", entries: [{ path: ".env", state: "present", content: [65] }] }],
     });
     await api.rebindProject({ project, newProjectPath: "D:\\Project" });
-    await api.plan({ project, environmentId: "dev" });
-    await api.apply({ project, environmentId: "dev", planToken: "token" });
+    await api.plan({ project, environmentId: "dev", operationId: "plan-001" });
+    await api.apply({ project, environmentId: "dev", planToken: "token", operationId: "apply-001" });
     await api.planUndo(project);
     await api.undo(project, "undo-token");
     await api.prepareDeleteProject({ profileId: project.profileId, projectId: project.projectId, operationId: "delete-token" });
@@ -74,6 +75,7 @@ describe("environment API boundary", () => {
       "environment_get_project_path",
       "environment_create",
       "environment_capture",
+      "environment_detail",
       "environment_copy",
       "environment_delete",
       "environment_migrate_manifest",
@@ -92,10 +94,15 @@ describe("environment API boundary", () => {
     expect(calls[0][1]).toEqual({ project });
     expect(calls[1][1]).toEqual({ request: { profileId: project.profileId, projectId: project.projectId } });
     expect(calls[2][1]).toEqual({ request: { project, name: "dev", managedPaths: [".env"] } });
-    expect(calls[11][1]).toEqual({ project });
-    expect(calls[12][1]).toEqual({ request: { project, planToken: "undo-token" } });
-    expect(calls[8][1]).toEqual({ request: { project, newProjectPath: "D:\\Project" } });
-    expect(calls[17][1]).toEqual({ request: { token: "delete-token" } });
+    expect(calls[3][1]).toEqual({ request: { project, environmentId: "dev", operationId: "capture-001" } });
+    expect(calls[4][1]).toEqual({ request: { project, environmentId: "dev", path: ".env" } });
+    expect(calls[6][1]).toEqual({ request: { project, environmentId: "dev", operationId: "delete-001" } });
+    expect(calls[10][1]).toEqual({ request: { project, environmentId: "dev", operationId: "plan-001" } });
+    expect(calls[11][1]).toEqual({ request: { project, environmentId: "dev", planToken: "token", operationId: "apply-001" } });
+    expect(calls[12][1]).toEqual({ project });
+    expect(calls[13][1]).toEqual({ request: { project, planToken: "undo-token" } });
+    expect(calls[9][1]).toEqual({ request: { project, newProjectPath: "D:\\Project" } });
+    expect(calls[18][1]).toEqual({ request: { token: "delete-token" } });
   });
 });
 

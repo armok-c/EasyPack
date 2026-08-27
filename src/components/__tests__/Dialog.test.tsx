@@ -106,6 +106,7 @@ describe("DialogContent", () => {
     expect(scrollWrapper).toBeDefined();
     expect(scrollWrapper!.classList.contains("flex-1")).toBe(true);
     expect(scrollWrapper!.classList.contains("min-h-0")).toBe(true);
+    expect(scrollWrapper!.classList.contains("pb-4")).toBe(true);
     expect(scrollWrapper!.textContent).toContain("Middle content");
   });
 
@@ -183,6 +184,27 @@ describe("DialogContent", () => {
     const footerIndex = directChildren.indexOf(footerChild!);
     const scrollIndex = directChildren.indexOf(scrollWrapper!);
     expect(footerIndex).toBeGreaterThan(scrollIndex);
+    expect(footerChild!.classList.contains("shrink-0")).toBe(true);
+    expect(footerChild!.classList.contains("border-t")).toBe(true);
+  });
+
+  it("keeps desktop width and alignment stable without sm breakpoint classes", () => {
+    renderDialog(
+      <>
+        <DialogHeader>
+          <DialogTitle>Header Title</DialogTitle>
+        </DialogHeader>
+        <div>Content</div>
+      </>,
+      "dialog-stable-layout"
+    );
+
+    const content = getDialogByTestId("dialog-stable-layout");
+    expect(content.className).not.toMatch(/(?:^|:)sm:/);
+    expect(content.className).toContain("w-[calc(100%-2rem)]");
+    expect(content.className).toContain("max-w-lg");
+    expect(content.className).toContain("overflow-hidden");
+    expect(content.querySelector('[data-slot="dialog-header"]')?.className).not.toContain("sm:text-left");
   });
 
   it("renders close button with absolute positioning", () => {

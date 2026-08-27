@@ -53,6 +53,16 @@ afterEach(() => {
 });
 
 describe("ProjectSettingsDialog custom icon picker", () => {
+  it("does not show an empty result before scanning, then reports an empty scan", async () => {
+    invokeMock.mockResolvedValueOnce([]);
+    renderSettings();
+
+    expect(screen.queryByText("未找到可用图标")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "从项目目录导入图标" }));
+
+    expect(await screen.findByText("未找到可用图标")).toBeInTheDocument();
+  });
+
   it("shows scanned icons in a bordered three-column, three-row scroll container", async () => {
     const candidates = Array.from({ length: 10 }, (_, index) => ({
       path: `C:/icons/icon-${index}.png`,
@@ -131,6 +141,8 @@ describe("ProjectSettingsDialog color picker", () => {
       backgroundColor: "#112233",
     });
     expect(screen.getByRole("button", { name: "保存设置" })).toBeDisabled();
+    expect(textInput).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("请输入 6 位十六进制颜色，例如 #112233")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
     expect(onSave).not.toHaveBeenCalled();

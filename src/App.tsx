@@ -612,13 +612,17 @@ function App() {
             onRefresh: environment.refresh,
             onCreate: environment.create,
             onCapture: environment.capture,
+            onCaptureMany: environment.captureMany,
+            onDetail: environment.detail,
             onCopy: environment.copy,
             onDelete: environment.deleteEnvironment,
+            onDeleteMany: environment.deleteMany,
             onMigrate: environment.migrateManifest,
             onPlan: environment.plan,
             onApply: environment.apply,
             onPlanUndo: environment.planUndo,
             onUndo: environment.undo,
+            progress: environment.progress,
           }}
         />
       </div>

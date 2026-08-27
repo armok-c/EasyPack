@@ -65,6 +65,117 @@ function migrationDraft(sourceEntries: LegacyMigrationDraft["environments"][numb
 }
 
 describe("EnvironmentWorkspace", () => {
+  const manyState: EnvironmentProjectState = {
+    ...state,
+    environments: [
+      { id: "dev", name: "开发", fileCount: 1 },
+      { id: "staging", name: "预发布", fileCount: 1 },
+      { id: "prod", name: "生产", fileCount: 1 },
+    ],
+  };
+
+  it("uses one confirmation for batch capture, preserves list order, and keeps apply single-select", async () => {
+    const onCaptureMany = vi.fn().mockResolvedValue({
+      results: [
+        { environmentId: "dev", success: true, state: manyState },
+        { environmentId: "staging", success: false, error: new Error("capture failed") },
+      ],
+      state: manyState,
+    });
+    render(<EnvironmentWorkspace {...props({ state: manyState, onCaptureMany })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 预发布" }));
+    expect(screen.getByRole("button", { name: "捕获更新" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "捕获更新" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("开发")).toBeInTheDocument();
+    expect(within(dialog).getByText("预发布")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认捕获" }));
+    await waitFor(() => expect(onCaptureMany).toHaveBeenCalledWith(["dev", "staging"]));
+  });
+
+  it("shows every selected environment as waiting before a new progress operation takes over old results", async () => {
+    let resolveBatch: ((value: unknown) => void) | undefined;
+    const onCaptureMany = vi.fn(() => new Promise((resolve) => { resolveBatch = resolve; }));
+    const progress = {
+      dev: { operationId: "old-capture", kind: "capture" as const, completedFiles: 1, totalFiles: 1, percent: 100, status: "success" as const },
+      staging: { operationId: "old-apply", kind: "apply" as const, completedFiles: 1, totalFiles: 1, percent: 100, status: "failed" as const },
+    };
+    const { rerender } = render(<EnvironmentWorkspace {...props({ state: manyState, progress, onCaptureMany })} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 预发布" }));
+    fireEvent.click(screen.getByRole("button", { name: "捕获更新" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "确认捕获" }));
+
+    const devRow = screen.getByText("开发").closest("[data-environment-row]") as HTMLElement;
+    const stagingRow = screen.getByText("预发布").closest("[data-environment-row]") as HTMLElement;
+    expect(devRow.querySelector("[data-progress-status]")).toHaveAttribute("data-progress-status", "waiting");
+    expect(stagingRow.querySelector("[data-progress-status]")).toHaveAttribute("data-progress-status", "waiting");
+
+    rerender(<EnvironmentWorkspace {...props({ state: manyState, progress: {
+      ...progress,
+      dev: { operationId: "new-capture", kind: "capture", completedFiles: 0, totalFiles: 1, percent: 0, status: "running" },
+    }, onCaptureMany })} />);
+    await waitFor(() => expect(devRow.querySelector("[data-progress-status]")).toHaveAttribute("data-progress-status", "running"));
+    expect(stagingRow.querySelector("[data-progress-status]")).toHaveAttribute("data-progress-status", "waiting");
+    resolveBatch?.({ results: [], state: manyState });
+    await waitFor(() => expect(onCaptureMany).toHaveBeenCalledOnce());
+  });
+
+  it("enables delete for multiple selected environments with one confirmation", async () => {
+    const onDeleteMany = vi.fn().mockResolvedValue({
+      results: [
+        { environmentId: "dev", success: true, state: manyState },
+        { environmentId: "staging", success: false, error: new Error("delete failed") },
+      ],
+      state: manyState,
+    });
+    render(<EnvironmentWorkspace {...props({ state: manyState, onDeleteMany })} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 预发布" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => expect(onDeleteMany).toHaveBeenCalledWith(["dev", "staging"]));
+  });
+
+  it("renders persisted per-environment progress without exposing it during planning", async () => {
+    const progress = {
+      dev: { operationId: "capture-1", kind: "capture" as const, completedFiles: 1, totalFiles: 4, percent: 25, status: "running" as const },
+    };
+    render(<EnvironmentWorkspace {...props({ progress })} />);
+    expect(screen.getByRole("progressbar", { name: "开发 更新进度" })).toHaveAttribute("aria-valuenow", "25");
+    expect(screen.getByText("更新处理中 25%")).toBeInTheDocument();
+  });
+
+  it("moves progress below the row content on narrow layouts without a fixed minimum width", () => {
+    render(<EnvironmentWorkspace {...props()} />);
+    const row = screen.getByText("开发").closest("[data-environment-row]");
+    expect(row).not.toBeNull();
+    expect(row).toHaveClass("min-w-0", "flex-wrap", "sm:flex-nowrap");
+
+    const progress = row?.querySelector("[data-progress-status]");
+    expect(progress).toHaveClass("order-last", "basis-full", "min-w-0", "sm:order-none", "sm:basis-auto", "sm:flex-1");
+    expect(progress).not.toHaveClass("min-w-[150px]");
+    expect(within(row as HTMLElement).getByText("1 个文件")).toHaveClass("whitespace-nowrap");
+  });
+
+  it("keeps successful and failed progress states visible until the next operation", () => {
+    const { rerender } = render(<EnvironmentWorkspace {...props({ progress: {
+      dev: { operationId: "capture-1", kind: "capture", completedFiles: 1, totalFiles: 1, percent: 100, status: "success" },
+    } })} />);
+    expect(screen.getByText("更新成功 100%")).toBeInTheDocument();
+
+    rerender(<EnvironmentWorkspace {...props({ progress: {
+      dev: { operationId: "apply-1", kind: "apply", completedFiles: 1, totalFiles: 2, percent: 50, status: "failed", error: new Error("apply failed") },
+    } })} />);
+    expect(screen.getByText("应用失败")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "开发 应用进度" })).toHaveAttribute("aria-valuenow", "50");
+  });
+
   it("hides the overview copy and confirms environment snapshot deletion", async () => {
     const onDelete = vi.fn().mockResolvedValue({ ...state, environments: [] });
     render(<EnvironmentWorkspace {...props({ onDelete })} />);
@@ -77,7 +188,8 @@ describe("EnvironmentWorkspace", () => {
     expect(row).toHaveClass("items-center", "px-3", "py-2");
     expect(within(row as HTMLElement).getByText("1 个文件")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "删除环境 开发" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText(/快照/)).toBeInTheDocument();
     expect(within(dialog).getByText(/不能恢复/)).toBeInTheDocument();
@@ -86,7 +198,7 @@ describe("EnvironmentWorkspace", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
     expect(onDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "删除环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "确认删除" }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dev"));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
@@ -105,6 +217,7 @@ describe("EnvironmentWorkspace", () => {
     render(<EnvironmentWorkspace {...props({ onPlan, onApply })} />);
 
     expect(screen.queryByText("已应用")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
     fireEvent.click(screen.getByRole("button", { name: "应用" }));
     await waitFor(() => expect(onPlan).toHaveBeenCalledWith("dev"));
     const dialog = await screen.findByRole("dialog");
@@ -118,6 +231,7 @@ describe("EnvironmentWorkspace", () => {
     const onCopy = vi.fn().mockResolvedValue(state);
     render(<EnvironmentWorkspace {...props({ onCapture, onCopy })} />);
 
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
     fireEvent.click(screen.getByRole("button", { name: "捕获更新" }));
     expect(screen.getByText("确认捕获更新？")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认捕获" }));
@@ -230,7 +344,7 @@ describe("EnvironmentWorkspace", () => {
       .mockResolvedValueOnce({ applied: true, stale: false, plan: refreshedPlan, undoAvailable: false });
     render(<EnvironmentWorkspace {...props({ onPlanUndo, onUndo })} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "撤销上次应用" }));
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
     await waitFor(() => expect(onPlanUndo).toHaveBeenCalledOnce());
     const undoDialog = await screen.findByRole("alertdialog");
     expect(within(undoDialog).getByText("新建")).toBeInTheDocument();
