@@ -72,6 +72,19 @@ async function openContextMenu(projectName: string) {
 }
 
 describe("Sidebar project context menu", () => {
+  it("does not render the EasyPack title above the project list", () => {
+    renderSidebar(vi.fn().mockResolvedValue(true));
+
+    expect(screen.queryByRole("heading", { name: "EasyPack" })).not.toBeInTheDocument();
+  });
+
+  it("aligns the add project button with the main project header", () => {
+    renderSidebar(vi.fn().mockResolvedValue(true));
+
+    const addButton = screen.getByRole("button", { name: "添加项目" });
+    expect(addButton.parentElement).toHaveClass("px-4", "pt-8", "pb-4");
+  });
+
   it("allows long project names to shrink and shows the full name as a tooltip", () => {
     const longProjectName = "这是一个非常长的项目名称用于测试省略显示";
     renderSidebar(vi.fn().mockResolvedValue(true), {

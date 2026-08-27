@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import type { CommandDialogHandle } from "@/components/CommandDialog";
 import type { ProjectItem } from "@/hooks/useProject";
 import type { CommandItem } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 
 interface MainAreaProps {
   currentProject: ProjectItem | null;
@@ -263,39 +264,42 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     <main className="flex-1 flex flex-col p-8 overflow-auto">
       {/* Project info area */}
       <div className="mb-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-foreground">
-            当前项目: {currentProject.name}
-          </h2>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {currentProject.path}
-          {/* "打开文件夹" link moved from below to project info area */}
-          <button
-            onClick={onOpenFolder}
-            className="inline-flex items-center gap-0.5 ml-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer align-baseline"
-            aria-label="打开项目文件夹"
-          >
-            <FolderOpen className="size-3" />
-            打开文件夹
-          </button>
-        </p>
-        {/* Phase 8: folder size + Git branch (per D-04, D-07, D-08) */}
-        {(projectInfo || projectInfoLoading) && (
-          <div className="flex items-center gap-1 mt-1" aria-live="polite">
-            <span className="text-xs text-muted-foreground">
-              {projectInfoLoading ? "计算中..." : projectInfoError ? "无法计算" : projectInfo?.size}
-            </span>
-            {projectInfo?.branch && (
-              <>
-                <span className="text-xs text-muted-foreground">·</span>
+        <h2 className="text-sm font-medium text-foreground">
+          当前项目: {currentProject.name}
+        </h2>
+        <div className="mt-1 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground truncate" title={currentProject.path}>
+              {currentProject.path}
+            </p>
+            {/* Phase 8: folder size + Git branch (per D-04, D-07, D-08) */}
+            {(projectInfo || projectInfoLoading) && (
+              <div className="flex items-center gap-1 mt-1" aria-live="polite">
                 <span className="text-xs text-muted-foreground">
-                  分支: {projectInfo.branch}
+                  {projectInfoLoading ? "计算中..." : projectInfoError ? "无法计算" : projectInfo?.size}
                 </span>
-              </>
+                {projectInfo?.branch && (
+                  <>
+                    <span className="text-xs text-muted-foreground">·</span>
+                    <span className="text-xs text-muted-foreground">
+                      分支: {projectInfo.branch}
+                    </span>
+                  </>
+                )}
+              </div>
             )}
           </div>
-        )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 bg-white text-black hover:bg-white/90 hover:text-black"
+            onClick={onOpenFolder}
+            aria-label="打开项目文件夹"
+          >
+            <FolderOpen className="size-3.5" />
+            打开文件夹
+          </Button>
+        </div>
       </div>
 
       <Tabs

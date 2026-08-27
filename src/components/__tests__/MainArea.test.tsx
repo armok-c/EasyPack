@@ -115,7 +115,10 @@ describe("MainArea - existing tests", () => {
     expect(
       screen.getByText(`当前项目: ${mockProject.name}`)
     ).toBeInTheDocument();
-    expect(screen.getByText(mockProject.path)).toBeInTheDocument();
+    const projectPath = screen.getByText(mockProject.path);
+    expect(projectPath).toBeInTheDocument();
+    expect(projectPath).toHaveClass("truncate");
+    expect(projectPath).toHaveAttribute("title", mockProject.path);
   });
 
   it("uses auto-fill and minmax for grid layout", () => {
@@ -155,9 +158,17 @@ describe("MainArea - Phase 4 edit mode UI", () => {
   });
 
   // Test 3: "打开文件夹" button
-  it("shows '打开文件夹' button with outline variant", () => {
-    render(<MainArea {...getDefaultProps()} />);
-    expect(screen.getByLabelText("打开项目文件夹")).toBeInTheDocument();
+  it("shows the folder button on the right and calls onOpenFolder", () => {
+    const onOpenFolder = vi.fn();
+    render(<MainArea {...getDefaultProps({ onOpenFolder })} />);
+
+    const button = screen.getByLabelText("打开项目文件夹");
+    expect(button).toBeInTheDocument();
+    expect(button.parentElement).toHaveClass("flex", "items-center", "justify-between");
+    expect(button).toHaveClass("bg-white", "text-black", "hover:bg-white/90", "hover:text-black");
+
+    fireEvent.click(button);
+    expect(onOpenFolder).toHaveBeenCalledTimes(1);
   });
 
   // Test 4: Edit mode shows "添加指令" placeholder card

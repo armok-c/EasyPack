@@ -307,13 +307,8 @@ export function Sidebar({
 
   return (
     <aside className="w-[240px] flex-shrink-0 border-r border-white/10 bg-black/40 backdrop-blur-sm flex flex-col">
-      {/* App title (per UI-SPEC: 16px semibold) */}
-      <div className="p-6 border-b border-white/5">
-        <h1 className="text-base font-semibold text-foreground">EasyPack</h1>
-      </div>
-
       {/* Add project button (per D-15: sidebar top) */}
-      <div className="p-4">
+      <div className="px-4 pt-8 pb-4">
         <Button
           onClick={onAddProject}
           variant="default"
