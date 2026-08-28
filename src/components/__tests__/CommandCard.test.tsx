@@ -30,10 +30,11 @@ describe("CommandCard", () => {
   // --- Phase 4: Edit mode & custom marker tests ---
 
   describe("custom command visual marker", () => {
-    it("applies left blue border when isCustom=true", () => {
+    it("does not apply a left blue border when isCustom=true", () => {
       render(<CommandCard name="自定义" icon={Package} isCustom />);
       const button = screen.getByRole("button");
-      expect(button.className).toContain("border-l-blue-400/50");
+      expect(button).not.toHaveClass("border-l-2", "border-l-blue-400/50");
+      expect(button).not.toHaveClass("hover:border-l-blue-400/70");
     });
 
     it("does not apply left blue border when isCustom is not set", () => {
@@ -41,6 +42,14 @@ describe("CommandCard", () => {
       const button = screen.getByRole("button");
       expect(button.className).not.toContain("border-l-blue-400/50");
     });
+  });
+
+  it("keeps hover and keyboard focus feedback inside the card bounds", () => {
+    render(<CommandCard name="打包项目" icon={Package} />);
+    const button = screen.getByRole("button");
+
+    expect(button).toHaveClass("focus-visible:ring-inset");
+    expect(button).not.toHaveClass("hover:scale-[1.02]");
   });
 
   describe("edit mode delete button", () => {
@@ -51,6 +60,20 @@ describe("CommandCard", () => {
       const deleteBtn = screen.getByLabelText("删除指令: 自定义");
       expect(deleteBtn).toBeInTheDocument();
       expect(deleteBtn).toHaveClass("absolute", "top-2", "right-2");
+      expect(deleteBtn).toHaveClass(
+        "size-6",
+        "rounded-md",
+        "text-destructive",
+        "bg-destructive/15",
+        "hover:bg-destructive/30"
+      );
+      expect(deleteBtn).not.toHaveClass(
+        "size-4",
+        "rounded-full",
+        "bg-red-500/80",
+        "text-white"
+      );
+      expect(deleteBtn.querySelector("svg")).toHaveClass("size-3.5");
       expect(deleteBtn).not.toHaveClass("-top-1", "-right-1");
     });
 

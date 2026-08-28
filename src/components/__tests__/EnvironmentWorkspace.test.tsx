@@ -115,6 +115,41 @@ describe("EnvironmentWorkspace", () => {
     expect(screen.getByRole("checkbox", { name: "选择环境 生产" })).toBeChecked();
   });
 
+  it("uses a darker default gray surface and a brighter selected surface", () => {
+    render(<EnvironmentWorkspace {...props({ state: manyState })} />);
+    const developmentRow = screen.getByText("开发").closest("[data-environment-row]") as HTMLElement;
+    const stagingRow = screen.getByText("预发布").closest("[data-environment-row]") as HTMLElement;
+
+    expect(developmentRow).toHaveClass("bg-muted/40");
+    expect(stagingRow).toHaveClass("bg-muted/40");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+
+    expect(developmentRow).toHaveClass("bg-muted/70", "border-white/25");
+    expect(stagingRow).toHaveClass("bg-muted/40", "border-border");
+  });
+
+  it("makes environment actions visible while keeping disabled actions subdued", () => {
+    render(<EnvironmentWorkspace {...props({ state: manyState })} />);
+
+    for (const name of ["文件清单", "反选", "捕获更新", "应用", "复制"]) {
+      expect(screen.getByRole("button", { name })).toHaveClass(
+        "border-white/20",
+        "bg-white/5",
+        "text-foreground",
+        "hover:border-white/30",
+        "hover:bg-white/15",
+      );
+    }
+    const deleteButton = screen.getByRole("button", { name: "删除" });
+    expect(deleteButton).toHaveClass("border-red-400/40", "bg-red-500/10", "text-red-200", "hover:border-red-300/60", "hover:bg-red-500/20");
+    expect(screen.getByRole("button", { name: "捕获更新" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "复制" })).toBeDisabled();
+    expect(deleteButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: "新建" })).not.toHaveClass("bg-white/5");
+  });
+
   it("disables invert selection without environments or editing permission", () => {
     const emptyState = { ...state, environments: [] };
     const { rerender } = render(<EnvironmentWorkspace {...props({ state: emptyState })} />);
@@ -145,8 +180,26 @@ describe("EnvironmentWorkspace", () => {
     expect(within(dialog).getByText("开发")).toBeInTheDocument();
     expect(within(dialog).getByText("预发布")).toBeInTheDocument();
     expect(dialog.querySelector(".max-h-40")).toHaveClass("mt-4");
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 预发布", hidden: true })).toBeChecked();
     fireEvent.click(within(dialog).getByRole("button", { name: "确认捕获" }));
     await waitFor(() => expect(onCaptureMany).toHaveBeenCalledWith(["dev", "staging"]));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 预发布" })).not.toBeChecked();
+  });
+
+  it("keeps batch capture selection when the request throws", async () => {
+    const onCaptureMany = vi.fn().mockRejectedValue(new Error("capture request failed"));
+    render(<EnvironmentWorkspace {...props({ state: manyState, onCaptureMany })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 预发布" }));
+    fireEvent.click(screen.getByRole("button", { name: "捕获更新" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "确认捕获" }));
+
+    await waitFor(() => expect(onCaptureMany).toHaveBeenCalledWith(["dev", "staging"]));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 预发布", hidden: true })).toBeChecked();
   });
 
   it("shows every selected environment as waiting before a new progress operation takes over old results", async () => {
@@ -192,6 +245,21 @@ describe("EnvironmentWorkspace", () => {
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "确认删除" }));
     await waitFor(() => expect(onDeleteMany).toHaveBeenCalledWith(["dev", "staging"]));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 预发布" })).not.toBeChecked();
+  });
+
+  it("keeps batch delete selection when the request throws", async () => {
+    const onDeleteMany = vi.fn().mockRejectedValue(new Error("delete request failed"));
+    render(<EnvironmentWorkspace {...props({ state: manyState, onDeleteMany })} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 预发布" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "确认删除" }));
+
+    await waitFor(() => expect(onDeleteMany).toHaveBeenCalledWith(["dev", "staging"]));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 预发布", hidden: true })).toBeChecked();
   });
 
   it("renders persisted per-environment progress without exposing it during planning", async () => {
@@ -239,13 +307,17 @@ describe("EnvironmentWorkspace", () => {
     render(<EnvironmentWorkspace {...props()} />);
     const row = screen.getByText("开发").closest("[data-environment-row]");
     expect(row).not.toBeNull();
-    expect(row).toHaveClass("min-w-0", "items-center");
-    expect(row).not.toHaveClass("flex-wrap", "sm:flex-nowrap");
+    expect(row).toHaveClass("min-w-0", "items-center", "grid-cols-[minmax(0,1fr)_minmax(5rem,9rem)_auto_auto]");
+    expect(row).not.toHaveClass("flex", "flex-wrap", "sm:flex-nowrap");
 
-    const columns = row?.querySelector(".grid");
+    const selectionCell = row?.querySelector("label");
+    expect(selectionCell).toHaveClass("-ml-3", "-my-2", "min-w-0", "self-stretch", "items-center", "py-2", "pl-3", "cursor-pointer");
+    expect(selectionCell).toHaveAttribute("for", "environment-select-dev");
+    expect(within(selectionCell as HTMLElement).getByRole("checkbox", { name: "选择环境 开发" })).toHaveAttribute("id", "environment-select-dev");
+
+    const columns = row;
     expect(columns).toHaveClass(
       "min-w-0",
-      "flex-1",
       "grid-cols-[minmax(0,1fr)_minmax(5rem,9rem)_auto_auto]",
       "gap-x-2",
     );
@@ -271,6 +343,41 @@ describe("EnvironmentWorkspace", () => {
     expect(name).toHaveClass("min-w-0", "truncate");
     expect(name).toHaveAttribute("title", longName);
     unmount();
+  });
+
+  it("toggles from the full first column without selecting from the right side", () => {
+    render(<EnvironmentWorkspace {...props()} />);
+    const row = screen.getByText("开发").closest("[data-environment-row]") as HTMLElement;
+    const selectionCell = row.querySelector("label") as HTMLElement;
+    const checkbox = screen.getByRole("checkbox", { name: "选择环境 开发" });
+
+    fireEvent.click(screen.getByText("开发"));
+    expect(checkbox).toBeChecked();
+    fireEvent.click(selectionCell);
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(within(row).getByText("就绪"));
+    fireEvent.click(within(row).getByText("文件：1"));
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(within(row).getByRole("button", { name: "查看" }));
+    expect(screen.getByRole("heading", { name: "查看环境：开发" })).toBeInTheDocument();
+    expect(checkbox).toBeChecked();
+  });
+
+  it("does not change selection from the first column when editing is disabled", () => {
+    render(<EnvironmentWorkspace {...props({ busy: true })} />);
+    const row = screen.getByText("开发").closest("[data-environment-row]") as HTMLElement;
+    const selectionCell = row.querySelector("label") as HTMLElement;
+    const checkbox = screen.getByRole("checkbox", { name: "选择环境 开发" });
+
+    expect(selectionCell).toHaveClass("cursor-not-allowed");
+    expect(checkbox).toBeDisabled();
+    fireEvent.click(selectionCell);
+    fireEvent.click(screen.getByText("开发"));
+    expect(checkbox).not.toBeChecked();
   });
 
   it("keeps successful and failed progress states visible until the next operation", () => {
@@ -308,6 +415,7 @@ describe("EnvironmentWorkspace", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
     expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).toBeChecked();
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "确认删除" }));
@@ -338,6 +446,58 @@ describe("EnvironmentWorkspace", () => {
     expect(footer?.parentElement).toHaveAttribute("data-slot", "dialog-content");
     fireEvent.click(within(dialog).getByRole("button", { name: "确认应用" }));
     await waitFor(() => expect(onApply).toHaveBeenCalledWith("dev", "token-1"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).not.toBeChecked();
+  });
+
+  it("uses fixed columns for short and long application plan file names", async () => {
+    const shortPath = "COOK.txt";
+    const longPath = "这是一个非常长的中文文件名称用于验证应用变更明细不会挤压状态列.txt";
+    const onPlan = vi.fn().mockResolvedValue({
+      token: "token-1",
+      profileId: state.profileId,
+      projectId: state.projectId,
+      environmentId: "dev",
+      generation: 1,
+      changes: [
+        { path: shortPath, action: "overwrite", currentState: "present", targetState: "present", currentDigest: "a", targetDigest: "b", targetSize: 3 },
+        { path: longPath, action: "delete", currentState: "present", targetState: "absent", currentDigest: "b", targetDigest: null, targetSize: null },
+      ],
+    });
+    render(<EnvironmentWorkspace {...props({ onPlan })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用" }));
+    const dialog = await screen.findByRole("dialog");
+    const shortPathElement = within(dialog).getByText(shortPath);
+    const longPathElement = within(dialog).getByText(longPath);
+    const shortRow = shortPathElement.parentElement as HTMLElement;
+    const longRow = longPathElement.parentElement as HTMLElement;
+
+    for (const row of [shortRow, longRow]) expect(row).toHaveClass("grid", "grid-cols-[3rem_minmax(0,1fr)]", "items-center", "gap-x-3");
+    expect(shortPathElement).toHaveClass("min-w-0", "truncate", "text-sm");
+    expect(longPathElement).toHaveClass("min-w-0", "truncate", "text-sm");
+    expect(within(shortRow).getByText("覆盖")).toHaveClass("whitespace-nowrap", "text-xs");
+    expect(within(longRow).getByText("删除")).toHaveClass("whitespace-nowrap", "text-xs");
+  });
+
+  it("keeps selection when apply is stale or throws", async () => {
+    const onApply = vi.fn()
+      .mockResolvedValueOnce({ applied: false, stale: true, plan: {
+        token: "token-2", profileId: state.profileId, projectId: state.projectId, environmentId: "dev", generation: 2, changes: [],
+      }, undoAvailable: true })
+      .mockRejectedValueOnce(new Error("apply request failed"));
+    render(<EnvironmentWorkspace {...props({ onApply })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认应用" }));
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith("dev", "token-1"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
+
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "确认应用" }));
+    await waitFor(() => expect(onApply).toHaveBeenLastCalledWith("dev", "token-2"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
   });
 
   it("asks before capturing external file changes and supports copying an environment", async () => {
@@ -350,6 +510,7 @@ describe("EnvironmentWorkspace", () => {
     expect(screen.getByText("确认捕获更新？")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认捕获" }));
     await waitFor(() => expect(onCapture).toHaveBeenCalledWith("dev"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
 
     fireEvent.click(screen.getByRole("button", { name: "复制" }));
     fireEvent.change(screen.getByPlaceholderText("环境名称"), { target: { value: "测试" } });
@@ -363,6 +524,33 @@ describe("EnvironmentWorkspace", () => {
     expect(createFooter).toHaveAttribute("data-slot", "dialog-footer");
     fireEvent.click(screen.getByRole("button", { name: "创建" }));
     await waitFor(() => expect(onCopy).toHaveBeenCalledWith("dev", "测试"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).not.toBeChecked();
+  });
+
+  it("keeps selection when copying an environment fails", async () => {
+    const onCopy = vi.fn().mockRejectedValue(new Error("copy request failed"));
+    render(<EnvironmentWorkspace {...props({ onCopy })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "复制" }));
+    fireEvent.change(screen.getByPlaceholderText("环境名称"), { target: { value: "测试" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建" }));
+
+    await waitFor(() => expect(onCopy).toHaveBeenCalledWith("dev", "测试"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
+  });
+
+  it("keeps selection for a regular new environment", async () => {
+    const onCreate = vi.fn().mockResolvedValue(state);
+    render(<EnvironmentWorkspace {...props({ onCreate })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "新建" }));
+    fireEvent.change(screen.getByPlaceholderText("环境名称"), { target: { value: "测试" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建" }));
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith("测试", [".env"]));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).toBeChecked();
   });
 
   it("opens the managed file picker at the project root without a manual path input", async () => {
@@ -468,6 +656,7 @@ describe("EnvironmentWorkspace", () => {
       .mockResolvedValueOnce({ applied: true, stale: false, plan: refreshedPlan, undoAvailable: false });
     render(<EnvironmentWorkspace {...props({ onPlanUndo, onUndo })} />);
 
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
     fireEvent.click(screen.getByRole("button", { name: "撤销" }));
     await waitFor(() => expect(onPlanUndo).toHaveBeenCalledOnce());
     const undoDialog = await screen.findByRole("alertdialog");
@@ -477,9 +666,57 @@ describe("EnvironmentWorkspace", () => {
     expect(within(undoDialog).getByText("不变")).toBeInTheDocument();
     fireEvent.click(within(undoDialog).getByRole("button", { name: "确认撤销" }));
     await waitFor(() => expect(onUndo).toHaveBeenCalledWith("dev", "undo-token-1"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
     expect(within(await screen.findByRole("alertdialog")).getByText("删除")).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "确认撤销" }));
     await waitFor(() => expect(onUndo).toHaveBeenLastCalledWith("dev", "undo-token-2"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).not.toBeChecked();
+  });
+
+  it("uses fixed columns for short and long undo plan file names", async () => {
+    const shortPath = "COOK.txt";
+    const longPath = "这是一个非常长的中文文件名称用于验证撤销变更明细不会挤压状态列.txt";
+    const onPlanUndo = vi.fn().mockResolvedValue({
+      token: "undo-token-1",
+      profileId: state.profileId,
+      projectId: state.projectId,
+      environmentId: "dev",
+      generation: 1,
+      changes: [
+        { path: shortPath, action: "overwrite", currentState: "present", targetState: "present", currentDigest: "a", targetDigest: "b", targetSize: 3 },
+        { path: longPath, action: "delete", currentState: "present", targetState: "absent", currentDigest: "b", targetDigest: null, targetSize: null },
+      ],
+    });
+    render(<EnvironmentWorkspace {...props({ onPlanUndo })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const shortPathElement = within(dialog).getByText(shortPath);
+    const longPathElement = within(dialog).getByText(longPath);
+    const shortRow = shortPathElement.parentElement as HTMLElement;
+    const longRow = longPathElement.parentElement as HTMLElement;
+
+    for (const row of [shortRow, longRow]) expect(row).toHaveClass("grid", "grid-cols-[3rem_minmax(0,1fr)]", "items-center", "gap-x-3");
+    expect(shortPathElement).toHaveClass("min-w-0", "truncate", "text-sm");
+    expect(longPathElement).toHaveClass("min-w-0", "truncate", "text-sm");
+    expect(within(shortRow).getByText("覆盖")).toHaveClass("whitespace-nowrap", "text-xs");
+    expect(within(longRow).getByText("删除")).toHaveClass("whitespace-nowrap", "text-xs");
+  });
+
+  it("keeps selection when undo throws", async () => {
+    const onPlanUndo = vi.fn().mockResolvedValue({
+      token: "undo-token-1", profileId: state.profileId, projectId: state.projectId, environmentId: "dev", generation: 1, changes: [],
+    });
+    const onUndo = vi.fn().mockRejectedValue(new Error("undo request failed"));
+    render(<EnvironmentWorkspace {...props({ onPlanUndo, onUndo })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认撤销" }));
+
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith("dev", "undo-token-1"));
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发", hidden: true })).toBeChecked();
   });
 
   it("shows undo progress in the confirmation dialog without adding it to the environment row", async () => {
