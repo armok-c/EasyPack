@@ -163,20 +163,21 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
               <SelectTrigger
                 id="environment-diff-file"
                 aria-label="选择文件"
+                title={selectedPath || undefined}
                 className="min-w-0 flex-1"
               >
                 <SelectValue placeholder="没有受管文件" />
               </SelectTrigger>
-              <SelectContent>
-                {paths.filter(Boolean).map((path) => <SelectItem key={path} value={path}>{path}</SelectItem>)}
+              <SelectContent className="min-w-0 w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-content-available-width)]">
+                {paths.filter(Boolean).map((path) => <SelectItem key={path} value={path} title={path} className="min-w-0">{path}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div data-testid="environment-diff-scroll" className="min-w-0 overflow-x-auto rounded-md border border-border">
             <div className="min-w-[880px]">
               <div className="grid grid-cols-2 gap-px border-b border-border bg-border">
-                <div className="min-w-[440px] bg-card px-3 py-2 text-xs font-medium text-muted-foreground">环境快照 · {selectedPath || "未选择文件"}</div>
-                <div className="min-w-[440px] bg-card px-3 py-2 text-xs font-medium text-muted-foreground">项目当前文件 · {selectedPath || "未选择文件"}</div>
+                <div className="min-w-[440px] truncate bg-card px-3 py-2 text-xs font-medium text-muted-foreground" title={`环境快照 · ${selectedPath || "未选择文件"}`}>环境快照 · {selectedPath || "未选择文件"}</div>
+                <div className="min-w-[440px] truncate bg-card px-3 py-2 text-xs font-medium text-muted-foreground" title={`项目当前文件 · ${selectedPath || "未选择文件"}`}>项目当前文件 · {selectedPath || "未选择文件"}</div>
               </div>
               {!onDetail || !selectedPath ? <p className="p-6 text-center text-sm text-muted-foreground">无法读取文件详情</p> : loading ? <p className="p-6 text-center text-sm text-muted-foreground">正在读取文件...</p> : !detail ? <p className="p-6 text-center text-sm text-red-300">无法读取文件详情</p> : (
                 <>

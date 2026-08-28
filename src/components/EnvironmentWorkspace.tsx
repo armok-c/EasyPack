@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
-import { AlertCircle, Check, Copy, Eye, FilePlus2, FolderSync, Plus, RefreshCw, RotateCcw, Save, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeftRight, Check, Copy, Eye, FilePlus2, FolderSync, Plus, RefreshCw, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -357,6 +357,13 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
     try { await operation(); if (success) toast.success(success); } catch (cause) { setOperationError(errorText(cause)); }
   };
 
+  const invertSelection = () => {
+    setSelectedIds((current) => {
+      const selected = new Set(current);
+      return environments.filter((environment) => !selected.has(environment.id)).map((environment) => environment.id);
+    });
+  };
+
   const fallbackBatch = async (ids: string[], operation: (id: string) => Promise<EnvironmentProjectState>): Promise<EnvironmentBatchResult> => {
     const results: EnvironmentBatchResult["results"] = [];
     let latestState = state;
@@ -474,11 +481,12 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
   if (migrationRequired && migrationDraft) return <MigrationWizard draft={migrationDraft} projectPath={projectPath} busy={busy} onMigrate={onMigrate} />;
   if (recoveryBlocked) return <div className="space-y-4 rounded-lg border border-red-500/30 bg-red-500/5 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 text-red-300" /><div><h3 className="text-sm font-medium">项目恢复未完成</h3><p className="mt-1 text-xs text-muted-foreground">环境操作已暂时停止。可以重试恢复并重新读取项目状态。</p>{recoveryError && <p role="alert" className="mt-2 text-xs text-red-200">恢复提示：{recoveryError}</p>}</div></div><Button variant="outline" onClick={() => void onRefresh()} disabled={busy}><RefreshCw className="size-4" />重试恢复</Button></div>;
 
-  return <div className="space-y-5">
-      <div className="space-y-3">
+  return <div className="flex h-full min-h-0 flex-col">
+      <div data-environment-toolbar className="shrink-0 space-y-3">
        <div className="flex flex-wrap items-center gap-2">
          <Button variant="outline" size="sm" onClick={() => setPathDialogOpen(true)} disabled={!canEdit || !state}><FolderSync className="size-4" />文件清单</Button>
          <Button size="sm" onClick={() => { setNewMode("current"); setCopySource(""); setNewDialogOpen(true); }} disabled={!canEdit}><Plus className="size-4" />新建</Button>
+         <Button variant="outline" size="sm" onClick={invertSelection} disabled={!canEdit || environments.length === 0}><ArrowLeftRight className="size-4" />反选</Button>
          <span className="ml-auto text-xs text-muted-foreground">已选 {selectedEnvironments.length} 个</span>
        </div>
        <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
@@ -489,10 +497,11 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
          {state?.undoAvailable && <Button variant="outline" size="sm" onClick={() => void prepareUndoPlan()} disabled={!canEdit}><RotateCcw className="size-4" />撤销</Button>}
        </div>
       </div>
-     {(error || operationError) && <div role="alert" className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-200">{operationError ?? errorText(error)}</div>}
-     {!state && busy && <p className="text-sm text-muted-foreground">正在读取项目环境...</p>}
-      {state && environments.length === 0 && <div className="rounded-lg border border-dashed border-border p-8 text-center"><p className="text-sm">还没有环境</p><p className="mt-1 text-xs text-muted-foreground">先选择项目内的文本文件，再从当前文件捕获第一个环境。</p><Button className="mt-4" onClick={() => setNewDialogOpen(true)} disabled={!canEdit}><FilePlus2 className="size-4" />创建第一个环境</Button></div>}
-      <div className="space-y-1.5">{environments.map((environment) => {
+     <div data-environment-list className="mt-5 min-h-0 flex-1 overflow-y-auto scrollbar-none">
+       {(error || operationError) && <div role="alert" className="mb-5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-200">{operationError ?? errorText(error)}</div>}
+       {!state && busy && <p className="text-sm text-muted-foreground">正在读取项目环境...</p>}
+        {state && environments.length === 0 && <div className="rounded-lg border border-dashed border-border p-8 text-center"><p className="text-sm">还没有环境</p><p className="mt-1 text-xs text-muted-foreground">先选择项目内的文本文件，再从当前文件捕获第一个环境。</p><Button className="mt-4" onClick={() => setNewDialogOpen(true)} disabled={!canEdit}><FilePlus2 className="size-4" />创建第一个环境</Button></div>}
+       <div className="space-y-1.5">{environments.map((environment) => {
         const pending = activeBatch?.pendingIds.includes(environment.id) ?? false;
         const environmentProgress = pending || progress[environment.id]?.kind === "undo" ? undefined : progress[environment.id];
         const waiting = pending && activeBatch?.environmentIds.includes(environment.id);
@@ -511,7 +520,8 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
             <div className="flex min-w-0 justify-end"><Button variant="ghost" size="icon" className="size-7 min-w-0 shrink-0" aria-label="查看" title="查看" onClick={() => setDetailTarget({ id: environment.id, name: environment.name })} disabled={!canEdit}><Eye className="size-4" /></Button></div>
           </div>
         </div>;
-     })}</div>
+       })}</div>
+     </div>
 
     <ManagedPathsDialog open={pathDialogOpen} projectPath={projectPath} paths={environments.length === 0 ? initialPaths : state?.managedPaths ?? []} busy={busy} onOpenChange={setPathDialogOpen} onSave={environments.length === 0 ? async (paths) => { setInitialPaths(paths); setPathDialogOpen(false); } : savePaths} />
       <Dialog open={newDialogOpen} onOpenChange={(open) => { setNewDialogOpen(open); if (open && environments.length === 0) { setInitialPaths(state?.managedPaths ?? []); setNewMode("current"); } }}><DialogContent className="max-w-[420px]"><DialogHeader><DialogTitle>{environments.length === 0 ? "创建第一个环境" : "新建环境"}</DialogTitle></DialogHeader><div className="space-y-3"><Input autoFocus placeholder="环境名称" value={newName} onChange={(event) => setNewName(event.target.value)} />{environments.length === 0 && <div className="rounded-md border border-border px-3 py-2"><div className="flex items-center justify-between gap-2"><span className="text-sm">受管文件 {initialPaths.length} 个</span><Button variant="outline" size="sm" onClick={() => setPathDialogOpen(true)}><FilePlus2 className="size-4" />选择文件</Button></div>{initialPaths.length === 0 && <p className="mt-1 text-xs text-muted-foreground">先选择项目内文本文件</p>}</div>}<div className="space-y-2 text-sm"><label className="flex items-center gap-2"><input type="radio" checked={newMode === "current"} onChange={() => setNewMode("current")} />从当前文件捕获</label>{environments.length > 0 && <label className="flex items-center gap-2"><input type="radio" checked={newMode === "copy"} onChange={() => setNewMode("copy")} />复制已有环境</label>}</div>{newMode === "copy" && <Select value={copySource} onValueChange={setCopySource}><SelectTrigger className="w-full" aria-label="选择复制来源"><SelectValue placeholder="选择复制来源" /></SelectTrigger><SelectContent>{environments.map((environment) => <SelectItem key={environment.id} value={environment.id}>{environment.name}</SelectItem>)}</SelectContent></Select>}</div><DialogFooter><Button variant="outline" onClick={() => setNewDialogOpen(false)}>取消</Button><Button onClick={() => void createEnvironment()} disabled={!newName.trim() || (environments.length === 0 && initialPaths.length === 0) || (newMode === "copy" && !copySource) || !canEdit}><Plus className="size-4" />创建</Button></DialogFooter></DialogContent></Dialog>

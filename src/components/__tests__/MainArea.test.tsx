@@ -245,6 +245,31 @@ describe("MainArea - Phase 22 edit mode UI", () => {
     expect(screen.getByText("拉取代码")).toBeVisible();
   });
 
+  it("keeps project info fixed and gives each tab content its own hidden scrollbar", async () => {
+    const { container } = render(<MainArea {...getDefaultProps()} />);
+    const main = screen.getByRole("main");
+    const projectHeading = screen.getByText(`当前项目: ${mockProject.name}`);
+    const tabs = container.querySelector('[data-slot="tabs"]');
+
+    expect(main).toHaveClass("min-h-0", "overflow-hidden");
+    expect(tabs).toHaveClass("flex", "min-h-0", "flex-1", "flex-col");
+    expect(tabs).not.toContainElement(projectHeading);
+    expect(tabs?.previousElementSibling).toContainElement(projectHeading);
+
+    const commandContent = container.querySelector('[data-slot="tabs-content"][data-state="active"]');
+    expect(commandContent).toHaveClass("min-h-0", "flex-1", "overflow-y-auto", "scrollbar-none");
+
+    fireEvent.click(screen.getByRole("tab", { name: "项目环境" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "项目环境" })).toHaveAttribute("data-state", "active");
+    });
+    const environmentContent = container.querySelector('[data-slot="tabs-content"][data-state="active"]');
+    expect(environmentContent).toHaveClass("min-h-0", "flex-1");
+    expect(environmentContent).not.toHaveClass("overflow-y-auto", "scrollbar-none");
+    expect(environmentContent?.querySelector("[data-environment-toolbar]")).toBeInTheDocument();
+    expect(environmentContent?.querySelector("[data-environment-list]")).toBeInTheDocument();
+  });
+
   it("places the tab button group and command editor in one row", () => {
     render(<MainArea {...getDefaultProps()} />);
 

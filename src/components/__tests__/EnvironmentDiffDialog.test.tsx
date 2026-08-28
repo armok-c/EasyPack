@@ -16,6 +16,40 @@ function response(path: string, snapshot: EnvironmentDetailResponse["snapshot"] 
 }
 
 describe("EnvironmentDiffDialog", () => {
+  it("truncates long file paths in the selector and both diff headers", async () => {
+    const longPath = "nested/" + "very-long-file-name-".repeat(12) + "config.txt";
+    const onDetail = vi.fn().mockResolvedValue(response(longPath));
+    render(<EnvironmentDiffDialog open environmentName="开发" environmentId="dev" paths={[longPath]} busy={false} onOpenChange={vi.fn()} onDetail={onDetail} />);
+
+    const trigger = screen.getByRole("combobox", { name: "选择文件" });
+    expect(trigger).toHaveClass("min-w-0", "flex-1");
+    expect(trigger).toHaveAttribute("title", longPath);
+    expect(trigger.className).toContain("*:data-[slot=select-value]:min-w-0");
+    expect(trigger.className).toContain("*:data-[slot=select-value]:truncate");
+
+    const snapshotHeader = screen.getByTitle(`环境快照 · ${longPath}`);
+    const currentHeader = screen.getByTitle(`项目当前文件 · ${longPath}`);
+    expect(snapshotHeader).toHaveClass("min-w-[440px]", "truncate");
+    expect(currentHeader).toHaveClass("min-w-[440px]", "truncate");
+
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+    try {
+      fireEvent.click(trigger);
+      const content = screen.getByRole("listbox");
+      expect(content).toHaveClass("min-w-0", "w-[var(--radix-select-trigger-width)]", "max-w-[var(--radix-select-content-available-width)]");
+      const option = await screen.findByRole("option", { name: longPath });
+      expect(option).toHaveClass("min-w-0");
+      expect(option).toHaveAttribute("title", longPath);
+      expect(option.querySelector('[data-slot="select-item-text"]')).toBeInTheDocument();
+      expect(option.className).toContain("*:[span]:last:min-w-0");
+      expect(option.className).toContain("*:[span]:last:truncate");
+    } finally {
+      if (originalScrollIntoView) Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: originalScrollIntoView });
+      else delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
+  });
+
   it("truncates a long title without colliding with the close button", async () => {
     const longName = "这是一个非常长的环境名称用于测试标题省略显示";
     const onDetail = vi.fn().mockResolvedValue(response(".env"));

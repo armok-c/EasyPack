@@ -50,6 +50,8 @@ describe("CommandCard", () => {
       );
       const deleteBtn = screen.getByLabelText("删除指令: 自定义");
       expect(deleteBtn).toBeInTheDocument();
+      expect(deleteBtn).toHaveClass("absolute", "top-2", "right-2");
+      expect(deleteBtn).not.toHaveClass("-top-1", "-right-1");
     });
 
     it("does not show delete button when editMode=true but isCustom=false", () => {
@@ -126,6 +128,19 @@ describe("CommandCard", () => {
     const button = screen.getByRole("button");
     expect(button.querySelector("svg")).toBeInTheDocument();
     expect(screen.getByText("打包项目")).toBeInTheDocument();
+  });
+
+  it("shows up to two lines for a long name and keeps the full name in its tooltip", () => {
+    const longName = "测试指令".repeat(20);
+    render(<CommandCard name={longName} icon={Package} />);
+
+    const name = screen.getByText(longName);
+    const button = screen.getByRole("button");
+    expect(button).toHaveClass("h-24", "p-3");
+    expect(button.querySelector("svg")).toHaveClass("shrink-0");
+    expect(name).toHaveClass("h-8", "w-full", "min-w-0", "shrink-0", "line-clamp-2", "text-center");
+    expect(name).not.toHaveClass("truncate");
+    expect(name).toHaveAttribute("title", longName);
   });
 
   it("calls onClick when clicked on enabled card", () => {

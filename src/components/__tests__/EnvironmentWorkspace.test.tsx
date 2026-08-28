@@ -75,14 +75,54 @@ describe("EnvironmentWorkspace", () => {
   };
 
   it("keeps file list, creation, and selection count on the first row", () => {
-    render(<EnvironmentWorkspace {...props()} />);
+    const { container } = render(<EnvironmentWorkspace {...props()} />);
 
     const firstRow = screen.getByRole("button", { name: "文件清单" }).parentElement as HTMLElement;
     const secondRow = screen.getByRole("button", { name: "捕获更新" }).parentElement as HTMLElement;
+    const toolbar = container.querySelector("[data-environment-toolbar]");
+    const list = container.querySelector("[data-environment-list]");
+
+    expect(toolbar).toHaveClass("shrink-0");
+    expect(list).toHaveClass("min-h-0", "flex-1", "overflow-y-auto", "scrollbar-none");
+    expect(toolbar).not.toContainElement(list);
+    expect(list).not.toContainElement(screen.getByRole("button", { name: "文件清单" }));
     expect(within(firstRow).getByRole("button", { name: "新建" })).toBeInTheDocument();
     expect(within(firstRow).queryByRole("button", { name: "捕获更新" })).not.toBeInTheDocument();
     expect(within(firstRow).getByText("已选 0 个")).toHaveClass("ml-auto");
     expect(within(secondRow).queryByText("已选 0 个")).not.toBeInTheDocument();
+  });
+
+  it("selects every environment when inverting an empty selection", () => {
+    render(<EnvironmentWorkspace {...props({ state: manyState })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "反选" }));
+
+    expect(screen.getByText("已选 3 个")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 预发布" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 生产" })).toBeChecked();
+  });
+
+  it("selects only the previously unselected environments when inverting", () => {
+    render(<EnvironmentWorkspace {...props({ state: manyState })} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
+    fireEvent.click(screen.getByRole("button", { name: "反选" }));
+
+    expect(screen.getByText("已选 2 个")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "选择环境 开发" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 预发布" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "选择环境 生产" })).toBeChecked();
+  });
+
+  it("disables invert selection without environments or editing permission", () => {
+    const emptyState = { ...state, environments: [] };
+    const { rerender } = render(<EnvironmentWorkspace {...props({ state: emptyState })} />);
+
+    expect(screen.getByRole("button", { name: "反选" })).toBeDisabled();
+
+    rerender(<EnvironmentWorkspace {...props({ busy: true })} />);
+    expect(screen.getByRole("button", { name: "反选" })).toBeDisabled();
   });
 
   it("uses one confirmation for batch capture, preserves list order, and keeps apply single-select", async () => {

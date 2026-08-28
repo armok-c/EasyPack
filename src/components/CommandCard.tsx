@@ -77,7 +77,7 @@ export function CommandCard({
       tabIndex={tabIndex}
       title={disabled || scriptLines ? undefined : command}
       className={cn(
-        "group relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl",
+        "group relative flex h-24 min-w-0 flex-col items-center justify-center gap-2 p-3 rounded-xl",
         "bg-white/5 border border-white/10",
         "cursor-pointer select-none",
         "text-xs text-card-foreground",
@@ -107,7 +107,7 @@ export function CommandCard({
           onClick={handleDelete}
           aria-label={`删除指令: ${name}`}
           className={cn(
-            "absolute -top-1 -right-1",
+            "absolute top-2 right-2",
             "bg-red-500/80 hover:bg-red-500 text-white rounded-full",
             "size-4 flex items-center justify-center",
             "transition-colors duration-100 cursor-pointer"
@@ -136,8 +136,8 @@ export function CommandCard({
           {shortcutNumber}
         </span>
       ) : null}
-      <Icon className={cn("size-6", flashing && "animate-spin")} />
-      <span>{name}</span>
+      <Icon className={cn("size-6 shrink-0", flashing && "animate-spin")} />
+      <span className="h-8 w-full min-w-0 shrink-0 line-clamp-2 text-center" title={name}>{name}</span>
     </button>
   );
 }

@@ -261,7 +261,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
   }
 
   return (
-    <main className="flex-1 flex flex-col p-8 overflow-auto">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-8">
       {/* Project info area */}
       <div className="mb-4">
         <h2 className="min-w-0 truncate text-sm font-medium text-foreground" title={currentProject.name}>
@@ -305,7 +305,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
       <Tabs
         value={activePanel}
         activationMode="manual"
-        className="flex-1"
+        className="flex min-h-0 flex-1 flex-col"
       >
         <div className="flex w-full items-center">
           <TabsList className="shrink-0">
@@ -338,7 +338,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
           )}
         </div>
 
-        <TabsContent value="commands" className="mt-4">
+        <TabsContent value="commands" className="mt-4 min-h-0 flex-1 overflow-y-auto scrollbar-none">
           <div
             ref={gridRef}
             className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3"
@@ -408,7 +408,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
           />
         </TabsContent>
 
-        <TabsContent value="environment" className="mt-4">
+        <TabsContent value="environment" className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden">
           <EnvironmentWorkspace key={environment.scopeKey} {...environment} />
         </TabsContent>
       </Tabs>
