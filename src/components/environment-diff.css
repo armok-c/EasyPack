@@ -1,0 +1,119 @@
+.environment-diff-shell {
+  min-height: 0;
+}
+
+.environment-diff-table-wrapper {
+  max-height: 52vh;
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.environment-diff-table {
+  min-width: 100%;
+  width: max-content;
+  border-collapse: collapse;
+  border-spacing: 0;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.environment-diff-table th,
+.environment-diff-table td {
+  box-sizing: border-box;
+}
+
+.environment-diff-old-line-num,
+.environment-diff-new-line-num {
+  position: sticky;
+  z-index: 2;
+  width: 5.5rem;
+  min-width: 5.5rem;
+  max-width: 5.5rem;
+  padding: 0 10px;
+  background: #111827;
+  color: #9ca3af;
+  text-align: right;
+  user-select: none;
+}
+
+.environment-diff-old-line-num {
+  left: 0;
+}
+
+.environment-diff-new-line-num {
+  left: 5.5rem;
+}
+
+.environment-diff-line-content {
+  min-width: 2rem;
+  padding: 0 10px 0 0;
+  white-space: pre;
+  word-break: normal;
+}
+
+.environment-diff-line-context .environment-diff-old-line-num,
+.environment-diff-line-context .environment-diff-new-line-num,
+.environment-diff-line-context .environment-diff-line-content {
+  background: #111827;
+}
+
+.environment-diff-line-deletion .environment-diff-old-line-num,
+.environment-diff-line-deletion .environment-diff-line-content {
+  background: #3b171a;
+}
+
+.environment-diff-line-addition .environment-diff-new-line-num,
+.environment-diff-line-addition .environment-diff-line-content {
+  background: #17351f;
+}
+
+.environment-diff-operator {
+  display: inline-block;
+  width: 1.5em;
+  color: #9ca3af;
+}
+
+.environment-diff-inline-change {
+  border-radius: 2px;
+  background: #713431;
+}
+
+.environment-diff-line-addition .environment-diff-inline-change {
+  background: #2f5732;
+}
+
+.environment-diff-no-newline {
+  margin-left: 0.5rem;
+  color: #fbbf24;
+}
+
+.environment-diff-hunk-header {
+  padding: 5px 10px;
+  background: #1f2937;
+  color: #93c5fd;
+  text-align: left;
+  white-space: pre;
+}
+
+.environment-diff-gap-cell {
+  padding: 0;
+  background: #1f2937;
+}
+
+.environment-diff-gap-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 32px;
+  color: #9ca3af;
+}
+
+.environment-diff-gap-count {
+  min-width: 5rem;
+  text-align: center;
+  font-size: 11px;
+}

@@ -1530,6 +1530,11 @@ impl EnvironmentStore {
             let old_paths: std::collections::BTreeSet<_> =
                 manifest.managed_paths.iter().cloned().collect();
             let new_paths: std::collections::BTreeSet<_> = paths.iter().cloned().collect();
+            let old_undo_snapshot_dirs = if old_paths != new_paths {
+                Some(store.undo_snapshot_dirs(&request.project)?)
+            } else {
+                None
+            };
             for env in &manifest.environments {
                 let migration = request
                     .environments
@@ -1580,6 +1585,17 @@ impl EnvironmentStore {
                 &manifest,
                 Some((&stage, &stage_id)),
             )?;
+            if let Some(snapshot_dirs) = old_undo_snapshot_dirs {
+                // 清单已提交后，撤销记录是一次性缓存；记录已删时仅快照回收失败不影响迁移结果。
+                if let Err(error) = store.complete_pending_undo(
+                    &request.project,
+                    &PendingUndoAction::RemoveExisting { snapshot_dirs },
+                ) {
+                    if store.undo_exists(&request.project) {
+                        return Err(format!("环境清单已保存，但旧撤销记录清理失败: {}", error));
+                    }
+                }
+            }
             Ok(store.to_project_state(&request.project, &manifest))
         })
     }
@@ -4048,6 +4064,93 @@ mod tests {
                 .and_then(|projects| projects.get(&project.project_id)),
             Some(&expected_key)
         );
+    }
+
+    #[test]
+    fn migrate_manifest_invalidates_undo_after_save_only() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        fs::create_dir_all(dir.path()).unwrap();
+        fs::write(dir.path().join("a.env"), b"initial").unwrap();
+        let store = EnvironmentStore::new(dir.path().join("data"));
+        let project = project(dir.path());
+        let created = store
+            .create_environment(&CreateEnvironmentRequest {
+                project: project.clone(),
+                name: "dev".into(),
+                managed_paths: vec!["a.env".into()],
+            })
+            .unwrap();
+        let environment_id = created.environments[0].id.clone();
+
+        fs::write(dir.path().join("a.env"), b"external").unwrap();
+        let plan = store
+            .plan_environment(&EnvironmentRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                operation_id: "migrate-undo-plan".into(),
+            })
+            .unwrap();
+        let applied = store
+            .apply_environment(&ApplyRequest {
+                project: project.clone(),
+                environment_id: environment_id.clone(),
+                plan_token: plan.token,
+                operation_id: "migrate-undo-apply".into(),
+            })
+            .unwrap();
+        assert!(applied.undo_available);
+        let undo_path = store
+            .key_dir(&project.profile_id, &project.project_id)
+            .join(UNDO_FILE);
+        let old_undo = fs::read(&undo_path).unwrap();
+        let old_record: UndoRecord = serde_json::from_slice(&old_undo).unwrap();
+        let old_snapshot = store.undo_snapshot_root(&project, &old_record);
+
+        let unchanged = store
+            .migrate_manifest(&MigrateManifestRequest {
+                project: project.clone(),
+                managed_paths: vec!["a.env".into()],
+                environments: vec![MigrationEnvironment {
+                    environment_id: environment_id.clone(),
+                    entries: Vec::new(),
+                }],
+            })
+            .unwrap();
+        assert!(unchanged.undo_available);
+        assert_eq!(fs::read(&undo_path).unwrap(), old_undo);
+        assert!(old_snapshot.exists());
+
+        let migration = || MigrateManifestRequest {
+            project: project.clone(),
+            managed_paths: vec!["a.env".into(), "b.env".into()],
+            environments: vec![MigrationEnvironment {
+                environment_id: environment_id.clone(),
+                entries: vec![MigrationEntry {
+                    path: "b.env".into(),
+                    state: SnapshotState::Present,
+                    content: Some(b"migrated".to_vec()),
+                }],
+            }],
+        };
+
+        std::env::set_var("EASYPACK_ENV_FAIL_MANIFEST", "1");
+        assert!(store.migrate_manifest(&migration()).is_err());
+        std::env::remove_var("EASYPACK_ENV_FAIL_MANIFEST");
+        assert_eq!(
+            store.load_manifest(&project).unwrap().managed_paths,
+            vec!["a.env"]
+        );
+        assert_eq!(fs::read(&undo_path).unwrap(), old_undo);
+        assert!(store.plan_undo_environment(&project).is_ok());
+
+        let migrated = store.migrate_manifest(&migration()).unwrap();
+        assert_eq!(migrated.managed_paths, vec!["a.env", "b.env"]);
+        assert!(!migrated.undo_available);
+        assert!(!store.undo_exists(&project));
+        assert!(!old_snapshot.exists());
+        let no_undo = store.plan_undo_environment(&project).unwrap_err();
+        assert!(no_undo.contains("没有可撤销的环境变更"));
     }
 
     #[test]
