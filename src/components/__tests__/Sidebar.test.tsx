@@ -93,7 +93,7 @@ describe("Sidebar project context menu", () => {
     expect(addButton.parentElement).toHaveClass("px-4", "pt-8", "pb-4");
   });
 
-  it("allows long project names to shrink and shows the full name as a tooltip", () => {
+  it("allows long project names to shrink without a native tooltip", () => {
     const longProjectName = "这是一个非常长的项目名称用于测试省略显示";
     const { container } = renderSidebar(vi.fn().mockResolvedValue(true), {
       projects: [{ ...project, name: longProjectName }],
@@ -101,7 +101,7 @@ describe("Sidebar project context menu", () => {
 
     const projectName = screen.getByText(longProjectName);
     expect(projectName).toHaveClass("min-w-0", "truncate");
-    expect(projectName).toHaveAttribute("title", longProjectName);
+    expect(projectName).not.toHaveAttribute("title");
 
     const scrollArea = container.querySelector('[data-slot="scroll-area"]');
     expect(scrollArea).toHaveClass(

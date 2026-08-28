@@ -45,7 +45,7 @@ const ANIMATION_DURATION_MS = 200;
 
 /** 默认最小窗口尺寸 (与 tauri.conf.json 一致) */
 const DEFAULT_MIN_WIDTH = 720;
-const DEFAULT_MIN_HEIGHT = 480;
+const DEFAULT_MIN_HEIGHT = 540;
 
 /**
  * 边缘抽屉核心 hook。

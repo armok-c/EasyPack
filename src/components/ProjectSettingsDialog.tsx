@@ -304,7 +304,6 @@ export function ProjectSettingsDialog({
                       />
                       <span
                         className="max-w-full truncate text-xs text-muted-foreground"
-                        title={candidate.name}
                       >
                         {candidate.name}
                       </span>
@@ -414,7 +413,7 @@ export function ProjectSettingsDialog({
               ) : (
                 <PreviewIcon className="size-3.5 text-muted-foreground flex-shrink-0" />
               )}
-              <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={project?.name ?? "项目名称"}>
+              <span className="min-w-0 flex-1 truncate text-xs text-foreground">
                 {project?.name ?? "项目名称"}
               </span>
             </div>

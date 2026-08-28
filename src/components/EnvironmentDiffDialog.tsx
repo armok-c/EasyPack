@@ -87,7 +87,7 @@ function DiffLine({ row, index }: { row: EnvironmentDiffRow; index: number }) {
             {segment.text}
           </span>
         ))}
-        {row.noNewline && <span className="environment-diff-no-newline" title="文件末尾没有换行" aria-label="文件末尾没有换行">↵</span>}
+        {row.noNewline && <span className="environment-diff-no-newline" aria-label="文件末尾没有换行">↵</span>}
       </td>
     </tr>
   );
@@ -120,11 +120,11 @@ function GapRow({
     <tr data-state="gap" data-gap-index={gap.index}>
       <td colSpan={3} className="environment-diff-gap-cell">
         <div className="environment-diff-gap-actions">
-          <Button type="button" variant="ghost" size="icon" title="向上展开3行" aria-label="向上展开3行" onClick={() => onExpand("up")}>
+          <Button type="button" variant="ghost" size="icon" aria-label="向上展开3行" onClick={() => onExpand("up")}>
             <ChevronUp />
           </Button>
           <span className="environment-diff-gap-count">还有 {hidden} 行</span>
-          <Button type="button" variant="ghost" size="icon" title="向下展开3行" aria-label="向下展开3行" onClick={() => onExpand("down")}>
+          <Button type="button" variant="ghost" size="icon" aria-label="向下展开3行" onClick={() => onExpand("down")}>
             <ChevronDown />
           </Button>
         </div>
@@ -170,7 +170,6 @@ function UnifiedDiff({ model }: { model: EnvironmentDiffModel }) {
           type="button"
           variant="ghost"
           size="icon"
-          title="展开当前文件全部内容"
           aria-label="展开当前文件全部内容"
           disabled={!hasHiddenRows || allExpanded}
           onClick={expandAll}
@@ -274,33 +273,33 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1100px]">
-        <DialogHeader>
-          <DialogTitle className="min-w-0 truncate pr-8" title={`查看环境：${environmentName}`}>查看环境：{environmentName}</DialogTitle>
-        </DialogHeader>
-        <DialogDescription className="sr-only">单栏显示项目当前文件到环境快照的只读差异。</DialogDescription>
-        <div className="space-y-3">
-          <div className="flex min-w-0 items-center gap-3">
+      <DialogContent className="max-w-[1100px] h-[calc(100vh-40px)] max-h-[calc(100vh-40px)]">
+        <DialogHeader className="grid min-w-0 grid-cols-[minmax(0,1fr)_25%_minmax(0,1fr)] items-center gap-0 pr-8">
+          <DialogTitle className="min-w-0 text-base leading-normal break-words">查看环境：{environmentName}</DialogTitle>
+          <div data-testid="environment-diff-file-selector" className="flex w-full min-w-0 items-center gap-3 justify-self-center">
             <label htmlFor="environment-diff-file" className="shrink-0 text-xs text-muted-foreground">文件</label>
             <Select value={selectedPath} onValueChange={setSelectedPath} disabled={paths.length === 0}>
               <SelectTrigger
                 id="environment-diff-file"
                 aria-label="选择文件"
-                title={selectedPath || undefined}
                 className="min-w-0 flex-1"
               >
                 <SelectValue placeholder="没有受管文件" />
               </SelectTrigger>
               <SelectContent className="min-w-0 w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-content-available-width)]">
-                {paths.filter(Boolean).map((path) => <SelectItem key={path} value={path} title={path} className="min-w-0">{path}</SelectItem>)}
+                {paths.filter(Boolean).map((path) => <SelectItem key={path} value={path} className="min-w-0">{path}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+          <div aria-hidden="true" className="min-w-0" />
+        </DialogHeader>
+        <DialogDescription className="sr-only">单栏显示项目当前文件到环境快照的只读差异。</DialogDescription>
+        <div className="space-y-3">
           <div data-testid="environment-diff-scroll" className="environment-diff-shell min-w-0 overflow-hidden rounded-md border border-border">
             <div className="min-w-0">
               <div className="environment-diff-header flex min-w-0 items-center gap-3 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground">
-                <span className="min-w-0 flex-1 truncate" title={`项目当前文件 · ${selectedPath || "未选择文件"}`}>旧 · 项目当前文件 · {selectedPath || "未选择文件"}</span>
-                <span className="min-w-0 flex-1 truncate" title={`环境快照 · ${selectedPath || "未选择文件"}`}>新 · 环境快照 · {selectedPath || "未选择文件"}</span>
+                <span className="min-w-0 flex-1 truncate">旧 · 项目当前文件 · {selectedPath || "未选择文件"}</span>
+                <span className="min-w-0 flex-1 truncate">新 · 环境快照 · {selectedPath || "未选择文件"}</span>
                 {model && <DiffStats model={model} />}
               </div>
               {!onDetail || !selectedPath ? <p className="p-6 text-center text-sm text-muted-foreground">无法读取文件详情</p> : loading ? <p className="p-6 text-center text-sm text-muted-foreground">正在读取文件...</p> : !detail || !model ? <p className="p-6 text-center text-sm text-red-300">无法读取文件详情</p> : (

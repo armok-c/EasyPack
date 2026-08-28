@@ -91,10 +91,7 @@ describe("ProjectSettingsDialog custom icon picker", () => {
     });
     expect(card).toHaveClass("min-w-0");
     expect(card.querySelector("span")).toHaveClass("truncate");
-    expect(card.querySelector("span")).toHaveAttribute(
-      "title",
-      "a-very-long-icon-file-name.png",
-    );
+    expect(card.querySelector("span")).not.toHaveAttribute("title");
   });
 });
 
@@ -105,7 +102,7 @@ describe("ProjectSettingsDialog color picker", () => {
 
     const name = screen.getByText(longName);
     expect(name).toHaveClass("flex-1", "min-w-0", "truncate");
-    expect(name).toHaveAttribute("title", longName);
+    expect(name).not.toHaveAttribute("title");
     expect(name.parentElement).toHaveClass("min-w-0");
   });
 

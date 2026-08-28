@@ -111,7 +111,6 @@ export function TitleBar({
         <button
           className={`titlebar-button ${floatVisible ? 'text-foreground' : ''}`}
           onClick={onFloatToggle}
-          title="悬浮窗"
           aria-label="切换悬浮窗"
           aria-pressed={floatVisible}
         >

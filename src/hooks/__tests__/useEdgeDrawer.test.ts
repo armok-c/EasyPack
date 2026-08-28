@@ -372,7 +372,7 @@ describe("useEdgeDrawer", () => {
     expect(result.current.snapEdge).toBeNull();
     expect(mockEmit).toHaveBeenCalledWith("drawer:stop-polling");
     // 恢复最小窗口尺寸
-    expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 720, height: 480 }));
+    expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 720, height: 540 }));
   });
 
   // ---- drawerEnabled=false ----
@@ -471,8 +471,8 @@ describe("useEdgeDrawer", () => {
       await Promise.resolve();
     });
 
-    // 应该恢复最小窗口尺寸到 720x480
-    expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 720, height: 480 }));
+    // 应该恢复最小窗口尺寸到 720x540
+    expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 720, height: 540 }));
   });
 
   // ---- restoreFromDrawer ----
@@ -510,7 +510,7 @@ describe("useEdgeDrawer", () => {
     // 应该停止轮询
     expect(mockEmit).toHaveBeenCalledWith("drawer:stop-polling");
     // 应该恢复最小窗口尺寸
-    expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 720, height: 480 }));
+    expect(mockSetMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 720, height: 540 }));
     // 应该清除 snapEdge
     expect(result.current.snapEdge).toBeNull();
     // 不应该调用 showFromDrawer（由调用方负责）

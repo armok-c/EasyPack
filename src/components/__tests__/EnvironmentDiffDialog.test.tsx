@@ -51,6 +51,32 @@ afterEach(() => {
 });
 
 describe("EnvironmentDiffDialog", () => {
+  it("sets the dialog height to 40px less than the viewport", () => {
+    renderDialog(undefined);
+
+    expect(screen.getByRole("dialog")).toHaveClass("h-[calc(100vh-40px)]", "max-h-[calc(100vh-40px)]");
+    expect(screen.getByRole("dialog")).not.toHaveClass("min-h-[520px]");
+  });
+
+  it("keeps the title and compact file selector centered on the same row", () => {
+    renderDialog(undefined);
+
+    const title = screen.getByRole("heading", { name: "查看环境：开发" });
+    const selectorGroup = screen.getByTestId("environment-diff-file-selector");
+    const header = title.parentElement;
+
+    expect(header).toBe(selectorGroup.parentElement);
+    expect(header).toHaveClass(
+      "grid",
+      "grid-cols-[minmax(0,1fr)_25%_minmax(0,1fr)]",
+      "items-center",
+      "pr-8",
+    );
+    expect(title).toHaveClass("min-w-0", "text-base", "leading-normal", "break-words");
+    expect(title).not.toHaveClass("truncate");
+    expect(selectorGroup).toHaveClass("w-full", "min-w-0", "justify-self-center");
+  });
+
   it("truncates long file paths in the selector and unified headers", async () => {
     const longPath = "nested/" + "very-long-file-name-".repeat(12) + "config.txt";
     const onDetail = vi.fn().mockResolvedValue(response(longPath));
@@ -58,12 +84,12 @@ describe("EnvironmentDiffDialog", () => {
 
     const trigger = screen.getByRole("combobox", { name: "选择文件" });
     expect(trigger).toHaveClass("min-w-0", "flex-1");
-    expect(trigger).toHaveAttribute("title", longPath);
+    expect(trigger).not.toHaveAttribute("title");
     expect(trigger.className).toContain("*:data-[slot=select-value]:min-w-0");
     expect(trigger.className).toContain("*:data-[slot=select-value]:truncate");
 
-    const oldHeader = screen.getByTitle(`项目当前文件 · ${longPath}`);
-    const newHeader = screen.getByTitle(`环境快照 · ${longPath}`);
+    const oldHeader = screen.getByText(`旧 · 项目当前文件 · ${longPath}`);
+    const newHeader = screen.getByText(`新 · 环境快照 · ${longPath}`);
     expect(oldHeader).toHaveClass("min-w-0", "truncate");
     expect(newHeader).toHaveClass("min-w-0", "truncate");
 
@@ -75,7 +101,7 @@ describe("EnvironmentDiffDialog", () => {
       expect(content).toHaveClass("min-w-0", "w-[var(--radix-select-trigger-width)]", "max-w-[var(--radix-select-content-available-width)]");
       const option = await screen.findByRole("option", { name: longPath });
       expect(option).toHaveClass("min-w-0");
-      expect(option).toHaveAttribute("title", longPath);
+      expect(option).not.toHaveAttribute("title");
     } finally {
       if (originalScrollIntoView) Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: originalScrollIntoView });
       else delete (Element.prototype as Partial<Element>).scrollIntoView;

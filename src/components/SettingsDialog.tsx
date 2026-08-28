@@ -190,7 +190,7 @@ export function SettingsDialog({
               <button
                 onClick={() => setManageExpanded(!manageExpanded)}
                 className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
-                title="管理配置"
+                aria-label="管理配置"
               >
                 <Settings className="size-4" />
               </button>

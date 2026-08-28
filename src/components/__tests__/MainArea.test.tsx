@@ -120,11 +120,22 @@ describe("MainArea - existing tests", () => {
     const projectHeading = screen.getByText(`当前项目: ${longProjectName}`);
     expect(projectHeading).toBeInTheDocument();
     expect(projectHeading).toHaveClass("min-w-0", "truncate");
-    expect(projectHeading).toHaveAttribute("title", longProjectName);
+    expect(projectHeading).not.toHaveAttribute("title");
     const projectPath = screen.getByText(mockProject.path);
     expect(projectPath).toBeInTheDocument();
     expect(projectPath).toHaveClass("truncate");
-    expect(projectPath).toHaveAttribute("title", mockProject.path);
+    expect(projectPath).not.toHaveAttribute("title");
+  });
+
+  it("shrinks a long branch label without moving the folder button", () => {
+    const longBranch = "1".repeat(160);
+    render(<MainArea {...getDefaultProps({ projectInfo: { size: "1 KB", branch: longBranch } })} />);
+
+    const branch = screen.getByText(`分支: ${longBranch}`);
+    const folderButton = screen.getByLabelText("打开项目文件夹");
+    expect(branch).toHaveClass("min-w-0", "truncate");
+    expect(branch.parentElement).toHaveClass("min-w-0");
+    expect(folderButton).toHaveClass("shrink-0");
   });
 
   it("uses auto-fill and minmax for grid layout", () => {

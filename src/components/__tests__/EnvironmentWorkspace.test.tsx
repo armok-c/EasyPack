@@ -1,12 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { buildMigrationEnvironments, EnvironmentWorkspace, type EnvironmentWorkspaceProps } from "@/components/EnvironmentWorkspace";
 import type { EnvironmentProjectState, LegacyMigrationDraft } from "@/lib/environment-types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(async () => "A=1") }));
+
+beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 const state: EnvironmentProjectState = {
   profileId: "profile-a",
@@ -330,7 +334,7 @@ describe("EnvironmentWorkspace", () => {
     const viewButton = within(columns as HTMLElement).getByRole("button", { name: "查看" });
     expect(viewButton).toHaveClass("min-w-0", "size-7");
     expect(viewButton).toHaveAttribute("aria-label", "查看");
-    expect(viewButton).toHaveAttribute("title", "查看");
+    expect(viewButton).not.toHaveAttribute("title");
     expect(viewButton.textContent).toBe("");
     expect(within(columns as HTMLElement).queryByText("查看")).not.toBeInTheDocument();
     expect(Array.from(columns?.children ?? []).map((column) => column.textContent)).toEqual(["开发", "就绪", "文件：1", ""]);
@@ -341,7 +345,7 @@ describe("EnvironmentWorkspace", () => {
     })} />);
     const name = screen.getByText(longName);
     expect(name).toHaveClass("min-w-0", "truncate");
-    expect(name).toHaveAttribute("title", longName);
+    expect(name).not.toHaveAttribute("title");
     unmount();
   });
 
@@ -600,13 +604,13 @@ describe("EnvironmentWorkspace", () => {
     const draft = migrationDraft();
     const onMigrate = vi.fn().mockResolvedValue(state);
     const { rerender } = render(<EnvironmentWorkspace {...props({ migrationRequired: true, migrationDraft: draft, onMigrate })} />);
-    const comboboxes = screen.getAllByRole("combobox");
-    fireEvent.change(comboboxes[0], { target: { value: "copy" } });
-    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "prod" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "copy" } });
+    fireEvent.click(screen.getByRole("combobox", { name: "选择来源环境" }));
+    fireEvent.click(await screen.findByRole("option", { name: "prod" }));
 
     rerender(<EnvironmentWorkspace {...props({ migrationRequired: true, migrationDraft: migrationDraft([{ path: "local.txt", state: "absent", content: null }]), onMigrate })} />);
 
-    await waitFor(() => expect(screen.getAllByRole("combobox")[1]).toHaveValue(""));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "选择来源环境" })).toHaveTextContent("选择来源环境"));
     expect(screen.getByRole("button", { name: "完成迁移" })).toBeDisabled();
     expect(screen.getByText("请选择来源环境")).toBeInTheDocument();
     expect(onMigrate).not.toHaveBeenCalled();
@@ -617,9 +621,28 @@ describe("EnvironmentWorkspace", () => {
     render(<EnvironmentWorkspace {...props({ migrationRequired: true, migrationDraft: migrationDraft(), onMigrate })} />);
 
     fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "copy" } });
-    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "prod" } });
+    fireEvent.click(screen.getByRole("combobox", { name: "选择来源环境" }));
+    fireEvent.click(await screen.findByRole("option", { name: "prod" }));
     fireEvent.click(screen.getByRole("button", { name: "完成迁移" }));
 
+    await waitFor(() => expect(onMigrate).toHaveBeenCalledOnce());
+    expect(onMigrate.mock.calls[0][0].environments[0].entries).toEqual([{ path: "local.txt", state: "present", content: [80] }]);
+  });
+
+  it("keeps a long migration source selectable through the shared Select", async () => {
+    const longSourceId = "1".repeat(160);
+    const onMigrate = vi.fn().mockResolvedValue(state);
+    const draft = migrationDraft();
+    draft.environments[1].environmentId = longSourceId;
+    render(<EnvironmentWorkspace {...props({ migrationRequired: true, migrationDraft: draft, onMigrate })} />);
+
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "copy" } });
+    const sourceSelect = screen.getByRole("combobox", { name: "选择来源环境" });
+    expect(sourceSelect).toHaveAttribute("data-slot", "select-trigger");
+    fireEvent.click(sourceSelect);
+    fireEvent.click(await screen.findByRole("option", { name: longSourceId }));
+
+    fireEvent.click(screen.getByRole("button", { name: "完成迁移" }));
     await waitFor(() => expect(onMigrate).toHaveBeenCalledOnce());
     expect(onMigrate.mock.calls[0][0].environments[0].entries).toEqual([{ path: "local.txt", state: "present", content: [80] }]);
   });

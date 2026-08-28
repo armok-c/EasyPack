@@ -43,7 +43,7 @@ function renderSettings(
 }
 
 async function openDeleteConfirmation() {
-  fireEvent.click(screen.getByTitle("管理配置"));
+  fireEvent.click(screen.getByRole("button", { name: "管理配置" }));
   fireEvent.click(screen.getByRole("button", { name: "删除当前配置" }));
   expect(screen.getByText("永久删除当前配置？")).toBeInTheDocument();
 }
@@ -138,7 +138,7 @@ describe("SettingsDialog controls", () => {
         onExportProfile={vi.fn().mockResolvedValue(undefined)}
       />,
     );
-    fireEvent.click(screen.getByTitle("管理配置"));
+    fireEvent.click(screen.getByRole("button", { name: "管理配置" }));
     fireEvent.click(screen.getByRole("button", { name: "导入配置" }));
 
     await waitFor(() => expect(screen.getByText("确认导入配置？")).toBeInTheDocument());
@@ -152,7 +152,7 @@ describe("SettingsDialog controls", () => {
     const onImportProfile = vi.fn().mockResolvedValue(undefined);
     renderSettings(vi.fn().mockResolvedValue(true), onImportProfile);
 
-    fireEvent.click(screen.getByTitle("管理配置"));
+    fireEvent.click(screen.getByRole("button", { name: "管理配置" }));
     fireEvent.click(screen.getByRole("button", { name: "导入配置" }));
     await waitFor(() => expect(screen.getByText("确认导入配置？")).toBeInTheDocument());
 

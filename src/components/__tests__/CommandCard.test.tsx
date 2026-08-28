@@ -153,7 +153,7 @@ describe("CommandCard", () => {
     expect(screen.getByText("打包项目")).toBeInTheDocument();
   });
 
-  it("shows up to two lines for a long name and keeps the full name in its tooltip", () => {
+  it("shows up to two lines for a long name without a native tooltip", () => {
     const longName = "测试指令".repeat(20);
     render(<CommandCard name={longName} icon={Package} />);
 
@@ -163,7 +163,7 @@ describe("CommandCard", () => {
     expect(button.querySelector("svg")).toHaveClass("shrink-0");
     expect(name).toHaveClass("h-8", "w-full", "min-w-0", "shrink-0", "line-clamp-2", "text-center");
     expect(name).not.toHaveClass("truncate");
-    expect(name).toHaveAttribute("title", longName);
+    expect(name).not.toHaveAttribute("title");
   });
 
   it("calls onClick when clicked on enabled card", () => {
@@ -230,16 +230,14 @@ describe("CommandCard", () => {
     expect(button.className).not.toContain("animate-card-flash");
   });
 
-  it("shows title tooltip with command text when enabled", () => {
+  it("does not expose command text in a native tooltip when enabled", () => {
     render(
       <CommandCard name="打包项目" icon={Package} command="npm run build" />
     );
-    expect(screen.getByRole("button").getAttribute("title")).toBe(
-      "npm run build"
-    );
+    expect(screen.getByRole("button")).not.toHaveAttribute("title");
   });
 
-  it("does not render multi-line script content or expose it in the title", () => {
+  it("does not render multi-line script content or expose it in a native tooltip", () => {
     render(
       <CommandCard
         name="打包项目"

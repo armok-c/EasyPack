@@ -28,6 +28,13 @@ interface UseTrayOptions {
 
 const TRAY_ID = "main-tray";
 
+export function truncateForTray(name: string): string {
+  const characters = Array.from(name);
+  return characters.length <= 10
+    ? name
+    : `${characters.slice(0, 9).join("")}…`;
+}
+
 export function useTray({
   currentProject,
   commands,
@@ -113,7 +120,7 @@ export function useTray({
       items.push(
         await MenuItem.new({
           id: "current-project",
-          text: `▸ EasyPack (${currentProjectRef.current!.name})`,
+          text: `▸ EasyPack (${truncateForTray(currentProjectRef.current!.name)})`,
           enabled: false,
           action: () => {},
         })

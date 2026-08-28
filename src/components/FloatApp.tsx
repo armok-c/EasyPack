@@ -245,7 +245,6 @@ function FloatApp() {
                     ? "bg-green-500/20 border border-green-500/40"
                     : "hover:bg-white/5 active:bg-white/10 border border-transparent"
                 }`}
-                title={cmd.command}
                 aria-label={`${cmd.name}: ${cmd.command}`}
                 onClick={() => handleRowClick(index, cmd.command)}
               >

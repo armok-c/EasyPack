@@ -75,7 +75,6 @@ export function CommandCard({
       onClick={handleClick}
       disabled={disabled}
       tabIndex={tabIndex}
-      title={disabled || scriptLines ? undefined : command}
       className={cn(
         "group relative flex h-24 min-w-0 flex-col items-center justify-center gap-2 p-3 rounded-xl",
         "bg-white/5 border border-white/10",
@@ -134,7 +133,7 @@ export function CommandCard({
         </span>
       ) : null}
       <Icon className={cn("size-6 shrink-0", flashing && "animate-spin")} />
-      <span className="h-8 w-full min-w-0 shrink-0 line-clamp-2 text-center" title={name}>{name}</span>
+      <span className="h-8 w-full min-w-0 shrink-0 line-clamp-2 text-center">{name}</span>
     </button>
   );
 }

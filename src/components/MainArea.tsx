@@ -264,24 +264,24 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-8">
       {/* Project info area */}
       <div className="mb-4">
-        <h2 className="min-w-0 truncate text-sm font-medium text-foreground" title={currentProject.name}>
+        <h2 className="min-w-0 truncate text-sm font-medium text-foreground">
           当前项目: {currentProject.name}
         </h2>
-        <div className="mt-1 flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate" title={currentProject.path}>
+        <div className="mt-1 flex min-w-0 items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted-foreground truncate">
               {currentProject.path}
             </p>
             {/* Phase 8: folder size + Git branch (per D-04, D-07, D-08) */}
             {(projectInfo || projectInfoLoading) && (
-              <div className="flex items-center gap-1 mt-1" aria-live="polite">
-                <span className="text-xs text-muted-foreground">
+              <div className="mt-1 flex min-w-0 items-center gap-1" aria-live="polite">
+                <span className="shrink-0 text-xs text-muted-foreground">
                   {projectInfoLoading ? "计算中..." : projectInfoError ? "无法计算" : projectInfo?.size}
                 </span>
                 {projectInfo?.branch && (
                   <>
                     <span className="text-xs text-muted-foreground">·</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">
                       分支: {projectInfo.branch}
                     </span>
                   </>
