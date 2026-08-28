@@ -29,8 +29,6 @@ pub fn run() {
             commands::project_info::get_project_info,
             commands::shell::open_folder,
             commands::shell::read_file_content,
-            commands::update::check_for_updates,
-            commands::update::open_release_page,
             commands::environment::environment_open_project,
             commands::environment::environment_get_project_path,
             commands::environment::environment_create,

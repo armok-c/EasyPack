@@ -399,10 +399,10 @@ export function ShortcutPanel({
               清除所有快捷键绑定
             </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground py-2">
+          <p className="text-sm text-muted-foreground">
             确定要清除所有快捷键绑定吗？此操作不可撤销。
           </p>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
               size="sm"
@@ -417,7 +417,7 @@ export function ShortcutPanel({
             >
               确认重置
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

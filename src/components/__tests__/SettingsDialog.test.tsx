@@ -26,10 +26,6 @@ function renderSettings(
       autostartEnabled={false}
       onAutostartEnabledChange={vi.fn()}
       currentVersion="1.0.0"
-      updateAvailable={false}
-      latestVersion={null}
-      onOpenReleasePage={vi.fn()}
-      onCheckNow={vi.fn().mockResolvedValue(true)}
       onOpenShortcutPanel={vi.fn()}
       profileMetas={[
         { id: "profile-a", name: "A", createdAt: 1 },
@@ -87,6 +83,26 @@ describe("SettingsDialog deletion confirmation", () => {
 });
 
 describe("SettingsDialog controls", () => {
+  it("only shows the current version and adds space below the settings header", () => {
+    renderSettings(vi.fn().mockResolvedValue(true));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("max-w-[380px]");
+    expect(dialog).not.toHaveClass("pb-8");
+    const header = screen
+      .getByRole("heading", { name: "设置" })
+      .closest('[data-slot="dialog-header"]');
+    expect(header).not.toBeNull();
+    expect(header).toHaveClass("mb-2");
+    const scrollWrapper = Array.from(dialog.children).find((child) => child.classList.contains("overflow-y-auto"));
+    const body = scrollWrapper?.children[0];
+    expect(body).toHaveClass("pb-4");
+    expect(body).not.toHaveClass("py-4");
+    expect(screen.getByText("v1.0.0")).toBeInTheDocument();
+    expect(screen.queryByText("检查更新")).not.toBeInTheDocument();
+    expect(screen.queryByText(/发现新版本/)).not.toBeInTheDocument();
+  });
+
   it("gives each switch an accessible name and makes its text row clickable", () => {
     renderSettings(vi.fn().mockResolvedValue(true));
     expect(screen.getByRole("switch", { name: "启用系统托盘" })).toBeInTheDocument();
@@ -111,10 +127,6 @@ describe("SettingsDialog controls", () => {
         autostartEnabled={false}
         onAutostartEnabledChange={vi.fn()}
         currentVersion="1.0.0"
-        updateAvailable={false}
-        latestVersion={null}
-        onOpenReleasePage={vi.fn()}
-        onCheckNow={vi.fn().mockResolvedValue(true)}
         onOpenShortcutPanel={vi.fn()}
         profileMetas={[{ id: "profile-a", name: "A", createdAt: 1 }]}
         activeProfileId="profile-a"

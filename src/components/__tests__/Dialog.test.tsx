@@ -106,7 +106,9 @@ describe("DialogContent", () => {
     expect(scrollWrapper).toBeDefined();
     expect(scrollWrapper!.classList.contains("flex-1")).toBe(true);
     expect(scrollWrapper!.classList.contains("min-h-0")).toBe(true);
-    expect(scrollWrapper!.classList.contains("pb-4")).toBe(true);
+    expect(scrollWrapper!.classList.contains("pt-4")).toBe(true);
+    expect(scrollWrapper!.classList.contains("px-2")).toBe(false);
+    expect(scrollWrapper!.classList.contains("pb-4")).toBe(false);
     expect(scrollWrapper!.textContent).toContain("Middle content");
   });
 

@@ -34,6 +34,18 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof ShortcutPane
 afterEach(() => cleanup());
 
 describe("ShortcutPanel recording", () => {
+  it("uses a fixed footer for reset confirmation actions", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "重置所有快捷键" }));
+
+    const dialog = screen.getByRole("dialog", { name: "确认重置" });
+    expect(screen.getByText("确定要清除所有快捷键绑定吗？此操作不可撤销。")).not.toHaveClass("py-2");
+    const footer = screen.getByRole("button", { name: "取消" }).parentElement;
+    expect(footer).toHaveAttribute("data-slot", "dialog-footer");
+    expect(footer?.parentElement).toHaveAttribute("data-slot", "dialog-content");
+    expect(dialog).toBeInTheDocument();
+  });
+
   it("stops recording when the dialog is closed through the overlay", () => {
     const onOpenChange = vi.fn();
     const { onRecordingChange } = renderPanel({ onOpenChange });

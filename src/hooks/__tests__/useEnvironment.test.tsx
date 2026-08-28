@@ -175,6 +175,84 @@ describe("useEnvironment", () => {
     });
   });
 
+  it("keeps only the latest successful apply progress", async () => {
+    const multiState: EnvironmentProjectState = {
+      ...state,
+      environments: [
+        ...state.environments,
+        { id: "test", name: "test", fileCount: 1 },
+      ],
+    };
+    const environmentApi = api({
+      openProject: vi.fn(async () => multiState),
+      apply: vi.fn(async (request) => ({
+        applied: true,
+        stale: false,
+        plan: { token: request.planToken, profileId: state.profileId, projectId: state.projectId, environmentId: request.environmentId, generation: 1, changes: [] },
+        undoAvailable: true,
+      })),
+    });
+    const { result } = renderHook(() => useEnvironment({ profileId: "profile-a", project, api: environmentApi }));
+
+    await waitFor(() => expect(result.current.state).toEqual(multiState));
+    await act(async () => {
+      await result.current.apply("dev", "dev-token");
+      await result.current.apply("test", "test-token");
+    });
+
+    expect(result.current.progress.dev).toBeUndefined();
+    expect(result.current.progress.test).toMatchObject({ kind: "apply", status: "success", percent: 100 });
+  });
+
+  it("keeps the previous apply success when a later apply fails", async () => {
+    const multiState: EnvironmentProjectState = {
+      ...state,
+      environments: [
+        ...state.environments,
+        { id: "test", name: "test", fileCount: 1 },
+      ],
+    };
+    const environmentApi = api({
+      openProject: vi.fn(async () => multiState),
+      apply: vi.fn()
+        .mockResolvedValueOnce({ applied: true, stale: false, plan: { token: "dev-token", profileId: state.profileId, projectId: state.projectId, environmentId: "dev", generation: 1, changes: [] }, undoAvailable: true })
+        .mockRejectedValueOnce(new Error("test apply failed")),
+    });
+    const { result } = renderHook(() => useEnvironment({ profileId: "profile-a", project, api: environmentApi }));
+
+    await waitFor(() => expect(result.current.state).toEqual(multiState));
+    await act(async () => {
+      await result.current.apply("dev", "dev-token");
+      await expect(result.current.apply("test", "test-token")).rejects.toThrow("test apply failed");
+    });
+
+    expect(result.current.progress.dev).toMatchObject({ kind: "apply", status: "success", percent: 100 });
+    expect(result.current.progress.test).toMatchObject({ kind: "apply", status: "failed" });
+  });
+
+  it("records completed copy progress for the newly created environment", async () => {
+    const copiedState: EnvironmentProjectState = {
+      ...state,
+      environments: [
+        ...state.environments,
+        { id: "copy-1", name: "测试", fileCount: 1 },
+      ],
+    };
+    const environmentApi = api({
+      openProject: vi.fn(async () => state),
+      copy: vi.fn(async () => copiedState),
+    });
+    const { result } = renderHook(() => useEnvironment({ profileId: "profile-a", project, api: environmentApi }));
+
+    await waitFor(() => expect(result.current.state).toEqual(state));
+    await act(async () => {
+      await result.current.copy("dev", "测试");
+    });
+
+    expect(result.current.progress["copy-1"]).toMatchObject({ kind: "copy", status: "success", percent: 100 });
+    expect(result.current.progress["copy-1"]?.operationId).toMatch(/^copy-/);
+  });
+
   it("runs batch capture in order, keeps partial failures, and filters progress by operation", async () => {
     let progressHandler: ((event: unknown) => void) | undefined;
     mockListen.mockImplementationOnce(async (_name: string, handler: (event: unknown) => void) => {

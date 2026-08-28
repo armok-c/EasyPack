@@ -108,7 +108,10 @@ describe("TitleBar", () => {
 
   it("renders settings button", () => {
     render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
-    expect(screen.getByLabelText("设置")).toBeInTheDocument();
+    const settingsButton = screen.getByLabelText("设置");
+    expect(settingsButton).toBeInTheDocument();
+    expect(settingsButton).not.toHaveClass("relative");
+    expect(settingsButton.querySelector("span")).not.toBeInTheDocument();
   });
 
   it("settings button calls onSettingsOpen", () => {

@@ -95,13 +95,37 @@ describe("Sidebar project context menu", () => {
 
   it("allows long project names to shrink and shows the full name as a tooltip", () => {
     const longProjectName = "这是一个非常长的项目名称用于测试省略显示";
-    renderSidebar(vi.fn().mockResolvedValue(true), {
+    const { container } = renderSidebar(vi.fn().mockResolvedValue(true), {
       projects: [{ ...project, name: longProjectName }],
     });
 
     const projectName = screen.getByText(longProjectName);
     expect(projectName).toHaveClass("min-w-0", "truncate");
     expect(projectName).toHaveAttribute("title", longProjectName);
+
+    const scrollArea = container.querySelector('[data-slot="scroll-area"]');
+    expect(scrollArea).toHaveClass(
+      "h-full",
+      "w-full",
+      "min-w-0",
+      "[&>[data-slot=scroll-area-scrollbar]]:hidden",
+      "[&>[data-slot=scroll-area-viewport]>div]:block!",
+      "[&>[data-slot=scroll-area-viewport]>div]:w-full",
+    );
+    expect(scrollArea?.parentElement).toHaveClass("min-w-0");
+    expect(projectName.closest("[data-slot=\"scroll-area-viewport\"] > div > div")).toHaveClass(
+      "w-full",
+      "min-w-0",
+    );
+  });
+
+  it("allows the project list flex item to shrink for scrolling", () => {
+    const { container } = renderSidebar(vi.fn().mockResolvedValue(true), {
+      projects: [project, secondProject],
+    });
+
+    const scrollArea = container.querySelector('[data-slot="scroll-area"]');
+    expect(scrollArea?.parentElement).toHaveClass("flex-1", "min-h-0");
   });
 
   it("separates focus styles for selected and unselected project cards", () => {

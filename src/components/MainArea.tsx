@@ -264,7 +264,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     <main className="flex-1 flex flex-col p-8 overflow-auto">
       {/* Project info area */}
       <div className="mb-4">
-        <h2 className="text-sm font-medium text-foreground">
+        <h2 className="min-w-0 truncate text-sm font-medium text-foreground" title={currentProject.name}>
           当前项目: {currentProject.name}
         </h2>
         <div className="mt-1 flex items-center justify-between gap-4">

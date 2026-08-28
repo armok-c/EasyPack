@@ -193,15 +193,21 @@ export function useEnvironment(options: UseEnvironmentOptions): UseEnvironmentRe
     setProgress((current) => {
       const previous = current[operation.environmentId];
       if (!previous || previous.operationId !== operationId) return current;
-      return {
-        ...current,
-        [operation.environmentId]: {
-          ...previous,
-          status,
-          percent: status === "success" ? 100 : previous.percent,
-          ...(status === "failed" ? { error: cause } : {}),
-        },
+      const next = { ...current };
+      if (operation.kind === "apply" && status === "success") {
+        for (const [environmentId, item] of Object.entries(next)) {
+          if (environmentId !== operation.environmentId && item.kind === "apply" && item.status === "success") {
+            delete next[environmentId];
+          }
+        }
+      }
+      next[operation.environmentId] = {
+        ...previous,
+        status,
+        percent: status === "success" ? 100 : previous.percent,
+        ...(status === "failed" ? { error: cause } : {}),
       };
+      return next;
     });
   }, [isCurrentScope]);
 
@@ -479,11 +485,28 @@ export function useEnvironment(options: UseEnvironmentOptions): UseEnvironmentRe
     (environmentId: string, name: string) =>
       perform(renderScope, async () => {
         const ref = requireProject();
+        const previousEnvironmentIds = new Set((stateForScope?.environments ?? []).map((environment) => environment.id));
         const next = await api.copy({ project: ref, environmentId, name });
-        if (isCurrentScope(renderScope)) setState(next);
+        if (isCurrentScope(renderScope)) {
+          setState(next);
+          const copiedEnvironment = next.environments.find((environment) => !previousEnvironmentIds.has(environment.id));
+          if (copiedEnvironment) {
+            setProgress((current) => ({
+              ...current,
+              [copiedEnvironment.id]: {
+                operationId: newOperationId("copy"),
+                kind: "copy",
+                completedFiles: copiedEnvironment.fileCount,
+                totalFiles: copiedEnvironment.fileCount,
+                percent: 100,
+                status: "success",
+              },
+            }));
+          }
+        }
         return next;
       }),
-    [api, isCurrentScope, perform, renderScope, requireProject],
+    [api, isCurrentScope, perform, renderScope, requireProject, stateForScope],
   );
 
   const deleteMany = useCallback(

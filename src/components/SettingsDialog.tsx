@@ -45,12 +45,8 @@ interface SettingsDialogProps {
   // Phase 15: 开机启动
   autostartEnabled: boolean;
   onAutostartEnabledChange: (enabled: boolean) => void;
-  // Phase 16: 版本管理
+  // 应用版本
   currentVersion: string;
-  updateAvailable: boolean;
-  latestVersion: string | null;
-  onOpenReleasePage: () => void;
-  onCheckNow: () => Promise<boolean>;
   // Phase 18: 快捷键设置面板入口
   onOpenShortcutPanel: () => void;
   // Phase 20: profile management
@@ -76,10 +72,6 @@ export function SettingsDialog({
   autostartEnabled,
   onAutostartEnabledChange,
   currentVersion,
-  updateAvailable,
-  latestVersion,
-  onOpenReleasePage,
-  onCheckNow,
   onOpenShortcutPanel,
   profileMetas,
   activeProfileId,
@@ -90,8 +82,6 @@ export function SettingsDialog({
   onImportProfile,
   onExportProfile,
 }: SettingsDialogProps) {
-  const [checkLabel, setCheckLabel] = useState("检查更新");
-  const [checking, setChecking] = useState(false);
   const [manageExpanded, setManageExpanded] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
   const [renameValue, setRenameValue] = useState("");
@@ -99,20 +89,6 @@ export function SettingsDialog({
   const [deletingProfile, setDeletingProfile] = useState(false);
   const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
   const [importingProfile, setImportingProfile] = useState(false);
-
-  async function handleCheckNow() {
-    if (checking) return;
-    setChecking(true);
-    try {
-      const ok = await onCheckNow();
-      if (!ok) {
-        setCheckLabel("检查失败");
-        setTimeout(() => setCheckLabel("检查更新"), 2000);
-      }
-    } finally {
-      setChecking(false);
-    }
-  }
 
   async function handleImport() {
     try {
@@ -179,14 +155,14 @@ export function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[380px]">
-        <DialogHeader>
+        <DialogHeader className="mb-2">
           <DialogTitle>设置</DialogTitle>
           <DialogDescription className="sr-only">
             管理应用设置和配置文件
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 space-y-6">
+        <div className="space-y-6 pb-4">
           {/* Section: 配置管理 */}
           <div>
             <div className="border-b border-white/10 pb-2 mb-4">
@@ -432,28 +408,10 @@ export function SettingsDialog({
           快捷键设置...
         </button>
 
-        {/* 版本号 + 更新提示 */}
+        {/* 版本号 */}
         <div className="border-t border-white/10 pt-3 mt-2">
-          {updateAvailable && latestVersion && (
-            <button
-              onClick={onOpenReleasePage}
-              className="w-full text-left px-3 py-2 mb-2 rounded-md border-l-2 border-blue-400 bg-blue-400/10 text-sm text-blue-300 hover:bg-blue-400/20 transition-colors cursor-pointer"
-            >
-              发现新版本 v{latestVersion}，点击下载
-            </button>
-          )}
           <p className="text-xs text-muted-foreground text-center">
-            v{currentVersion || "..."}{" "}
-            <button
-              onClick={handleCheckNow}
-              disabled={checking}
-              className={cn(
-                "text-blue-400 hover:text-blue-300 transition-colors",
-                checking && "opacity-50 pointer-events-none"
-              )}
-            >
-              {checkLabel}
-            </button>
+            v{currentVersion || "..."}
           </p>
         </div>
       </DialogContent>

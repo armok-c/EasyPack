@@ -321,11 +321,11 @@ export function Sidebar({
       </div>
 
       {/* Project list / empty state (per D-21, UI-SPEC Copywriting) */}
-      <div className="flex-1 px-4 py-2">
+      <div className="flex-1 min-h-0 min-w-0 px-4 py-2">
         {projects.length > 0 ? (
-          <ScrollArea className="h-full">
+          <ScrollArea className="h-full w-full min-w-0 [&>[data-slot=scroll-area-scrollbar]]:hidden [&>[data-slot=scroll-area-viewport]>div]:block! [&>[data-slot=scroll-area-viewport]>div]:w-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
-              <div className="flex flex-col gap-1">
+              <div className="flex w-full min-w-0 flex-col gap-1">
                 {projects.map((project, index) => (
                   <SortableProjectItem
                     key={project.id}

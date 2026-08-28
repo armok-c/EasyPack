@@ -109,7 +109,7 @@ export interface EnvironmentDetailResponse {
   current: EnvironmentFileContent;
 }
 
-export type EnvironmentOperationKind = "capture" | "apply" | "undo";
+export type EnvironmentOperationKind = "capture" | "apply" | "copy" | "undo";
 
 export interface EnvironmentProgressEvent {
   operationId: string;

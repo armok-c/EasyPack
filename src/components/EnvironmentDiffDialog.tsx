@@ -9,6 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   EnvironmentDetailResponse,
   EnvironmentFileContent,
@@ -104,7 +111,7 @@ function ReadOnlyMergeView({ snapshot, current }: { snapshot: EnvironmentFileCon
     };
   }, [current, snapshot]);
 
-  return <div ref={hostRef} className="min-w-[880px] [&_.cm-mergeView]:max-h-[52vh] [&_.cm-mergeView]:overflow-y-auto [&_.cm-mergeViewEditors]:min-w-[880px]" data-testid="environment-diff-view" />;
+  return <div ref={hostRef} className="min-w-[880px] [&_.cm-mergeView]:max-h-[52vh] [&_.cm-mergeView]:overflow-y-auto" data-testid="environment-diff-view" />;
 }
 
 export function EnvironmentDiffDialog({ open, environmentName, environmentId, paths, onOpenChange, onDetail }: EnvironmentDiffDialogProps) {
@@ -146,22 +153,24 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[1100px]">
         <DialogHeader>
-          <DialogTitle>查看环境：{environmentName}</DialogTitle>
+          <DialogTitle className="min-w-0 truncate pr-8" title={`查看环境：${environmentName}`}>查看环境：{environmentName}</DialogTitle>
         </DialogHeader>
         <DialogDescription className="sr-only">左右并排显示环境快照和项目当前文件，只读查看文件差异。</DialogDescription>
         <div className="space-y-3">
           <div className="flex min-w-0 items-center gap-3">
             <label htmlFor="environment-diff-file" className="shrink-0 text-xs text-muted-foreground">文件</label>
-            <select
-              id="environment-diff-file"
-              aria-label="选择文件"
-              className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-              value={selectedPath}
-              onChange={(event) => setSelectedPath(event.target.value)}
-              disabled={paths.length === 0}
-            >
-              {paths.length === 0 ? <option value="">没有受管文件</option> : paths.map((path) => <option key={path} value={path}>{path}</option>)}
-            </select>
+            <Select value={selectedPath} onValueChange={setSelectedPath} disabled={paths.length === 0}>
+              <SelectTrigger
+                id="environment-diff-file"
+                aria-label="选择文件"
+                className="min-w-0 flex-1"
+              >
+                <SelectValue placeholder="没有受管文件" />
+              </SelectTrigger>
+              <SelectContent>
+                {paths.filter(Boolean).map((path) => <SelectItem key={path} value={path}>{path}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div data-testid="environment-diff-scroll" className="min-w-0 overflow-x-auto rounded-md border border-border">
             <div className="min-w-[880px]">

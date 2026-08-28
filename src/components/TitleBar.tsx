@@ -12,8 +12,6 @@ interface TitleBarProps {
   // Phase 14: 边缘抽屉
   onDragWhileSnapped?: ((deltaX: number, deltaY: number) => void) | null;
   drawerSnapEdge?: string | null;
-  // Phase 16: 版本更新红点
-  updateAvailable?: boolean;
 }
 
 export function TitleBar({
@@ -22,7 +20,6 @@ export function TitleBar({
   floatVisible,
   onDragWhileSnapped,
   drawerSnapEdge,
-  updateAvailable = false,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
 
@@ -121,14 +118,11 @@ export function TitleBar({
           <PanelTop className="w-[14px] h-[14px]" />
         </button>
         <button
-          className="titlebar-button relative"
+          className="titlebar-button"
           onClick={onSettingsOpen}
           aria-label="设置"
         >
           <Settings className="w-[14px] h-[14px]" />
-          {updateAvailable && (
-            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
-          )}
         </button>
         <button
           className="titlebar-button"

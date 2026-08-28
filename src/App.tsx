@@ -15,13 +15,13 @@ import { useRecentCommands } from "@/hooks/useRecentCommands";
 import { useTray } from "@/hooks/useTray";
 import { useFloatWindow } from "@/hooks/useFloatWindow";
 import { useEdgeDrawer } from "@/hooks/useEdgeDrawer";
-import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { SnapIndicator } from "@/components/SnapIndicator";
 import { detectSnapEdge } from "@/lib/drawer-geometry";
 import { ensureMainWindowVisible } from "@/lib/window-visibility";
 import { requestProjectSwitch as startProjectSwitch } from "@/lib/project-switch";
 import type { CommandItem } from "@/lib/types";
 import type { SnapEdge, Rect, WindowInfo } from "@/lib/drawer-geometry";
+import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -122,6 +122,20 @@ function App() {
   const [drawerEnabled, setDrawerEnabled] = useState(false);
   // Phase 15: autostart settings state
   const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState("");
+  useEffect(() => {
+    let mounted = true;
+    void getVersion()
+      .then((version) => {
+        if (mounted) setCurrentVersion(version);
+      })
+      .catch(() => {
+        // Version display is optional when the app API is unavailable.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   // Phase 14: 拖拽中实时吸附预览状态 (D-04)
   const [snapPreviewEdge, setSnapPreviewEdge] = useState<SnapEdge | null>(null);
   const closeToTrayRef = useRef(closeToTray);
@@ -211,8 +225,6 @@ function App() {
 
   // Phase 12: recent commands tracking
   const { recentCommands, addRecentCommand } = useRecentCommands({ store, activeProfileId });
-  const { updateAvailable, latestVersion, currentVersion, openReleasePage, checkNow } = useUpdateCheck(!!store);
-
   // Phase 12: execute with recent command tracking
   const handleExecuteWithRecent = useCallback(async (shellCommand: string, cmdItem?: CommandItem) => {
     const success = cmdItem
@@ -566,7 +578,6 @@ function App() {
         floatVisible={floatVisible}
         onDragWhileSnapped={drawerEnabled ? handleDragWhileSnapped : null}
         drawerSnapEdge={snapEdge}
-        updateAvailable={updateAvailable}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
@@ -638,10 +649,6 @@ function App() {
         autostartEnabled={autostartEnabled}
         onAutostartEnabledChange={handleAutostartEnabledChange}
         currentVersion={currentVersion}
-        updateAvailable={updateAvailable}
-        latestVersion={latestVersion}
-        onOpenReleasePage={openReleasePage}
-        onCheckNow={checkNow}
         onOpenShortcutPanel={handleOpenShortcutPanel}
         profileMetas={profileMetas}
         activeProfileId={activeProfileId}

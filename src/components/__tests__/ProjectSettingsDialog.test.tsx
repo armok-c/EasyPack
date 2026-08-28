@@ -99,6 +99,30 @@ describe("ProjectSettingsDialog custom icon picker", () => {
 });
 
 describe("ProjectSettingsDialog color picker", () => {
+  it("keeps the long project name constrained in the preview", () => {
+    const longName = "这是一个非常长的项目名称用于测试预览省略显示";
+    renderSettings(vi.fn(), { ...project, name: longName });
+
+    const name = screen.getByText(longName);
+    expect(name).toHaveClass("flex-1", "min-w-0", "truncate");
+    expect(name).toHaveAttribute("title", longName);
+    expect(name.parentElement).toHaveClass("min-w-0");
+  });
+
+  it("keeps the body and preview spacing separate from the shared dialog padding", () => {
+    renderSettings();
+
+    const dialog = screen.getByRole("dialog");
+    const scrollWrapper = Array.from(dialog.children).find((child) => child.classList.contains("overflow-y-auto"));
+    expect(scrollWrapper).toBeDefined();
+
+    const body = scrollWrapper?.children[0];
+    const preview = scrollWrapper?.children[1];
+    expect(body).toHaveClass("space-y-4");
+    expect(body).not.toHaveClass("py-4");
+    expect(preview).toHaveClass("mt-4");
+  });
+
   it("keeps the native picker, text input, preview, and saved value synchronized", () => {
     const onSave = vi.fn();
     renderSettings(onSave);

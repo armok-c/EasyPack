@@ -169,7 +169,7 @@ export function ProjectSettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 space-y-4">
+        <div className="space-y-4">
           {/* Project directory binding */}
           <div className="space-y-2">
             <Label>项目目录</Label>
@@ -386,7 +386,7 @@ export function ProjectSettingsDialog({
         </div>
 
         {/* Preview section */}
-        <div className="border-t border-white/10 pt-4">
+        <div className="mt-4 border-t border-white/10 pt-4">
           <p className="text-xs text-muted-foreground mb-2">预览</p>
           <div
             className={cn(
@@ -403,7 +403,7 @@ export function ProjectSettingsDialog({
                 data-testid="project-color-preview"
               />
             )}
-            <div className="flex items-center gap-1.5 pl-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-2">
               {isFileIcon(selectedIcon) ? (
                 <img
                   src={convertFileSrc(getFilePath(selectedIcon))}
@@ -414,7 +414,7 @@ export function ProjectSettingsDialog({
               ) : (
                 <PreviewIcon className="size-3.5 text-muted-foreground flex-shrink-0" />
               )}
-              <span className="text-xs text-foreground truncate">
+              <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={project?.name ?? "项目名称"}>
                 {project?.name ?? "项目名称"}
               </span>
             </div>

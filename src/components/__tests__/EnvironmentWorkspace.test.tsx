@@ -104,6 +104,7 @@ describe("EnvironmentWorkspace", () => {
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText("开发")).toBeInTheDocument();
     expect(within(dialog).getByText("预发布")).toBeInTheDocument();
+    expect(dialog.querySelector(".max-h-40")).toHaveClass("mt-4");
     fireEvent.click(within(dialog).getByRole("button", { name: "确认捕获" }));
     await waitFor(() => expect(onCaptureMany).toHaveBeenCalledWith(["dev", "staging"]));
   });
@@ -162,16 +163,74 @@ describe("EnvironmentWorkspace", () => {
     expect(screen.getByText("更新处理中 25%")).toBeInTheDocument();
   });
 
-  it("moves progress below the row content on narrow layouts without a fixed minimum width", () => {
+  it("uses operation colors, prioritizes failed red, and shortens progress tracks", () => {
+    const colorsState: EnvironmentProjectState = {
+      ...state,
+      environments: [
+        { id: "apply", name: "应用环境", fileCount: 1 },
+        { id: "capture", name: "更新环境", fileCount: 1 },
+        { id: "copy", name: "复制环境", fileCount: 1 },
+        { id: "failed", name: "失败环境", fileCount: 1 },
+      ],
+    };
+    render(<EnvironmentWorkspace {...props({
+      state: colorsState,
+      progress: {
+        apply: { operationId: "apply-1", kind: "apply", completedFiles: 1, totalFiles: 4, percent: 25, status: "running" },
+        capture: { operationId: "capture-1", kind: "capture", completedFiles: 1, totalFiles: 1, percent: 100, status: "success" },
+        copy: { operationId: "copy-1", kind: "copy", completedFiles: 1, totalFiles: 1, percent: 100, status: "success" },
+        failed: { operationId: "failed-1", kind: "apply", completedFiles: 1, totalFiles: 2, percent: 50, status: "failed" },
+      },
+    })} />);
+
+    expect(screen.getByText("应用处理中 25%")).toHaveClass("text-right");
+    expect(screen.getByText("更新成功 100%")).toHaveClass("text-right");
+    expect(screen.getByText("复制成功 100%")).toHaveClass("text-right");
+    expect(screen.getByText("应用失败")).toHaveClass("text-right");
+    expect(screen.getByRole("progressbar", { name: "应用环境 应用进度" }).firstElementChild).toHaveClass("bg-green-400");
+    expect(screen.getByRole("progressbar", { name: "更新环境 更新进度" }).firstElementChild).toHaveClass("bg-cyan-400");
+    expect(screen.getByRole("progressbar", { name: "复制环境 复制进度" }).firstElementChild).toHaveClass("bg-blue-400");
+    expect(screen.getByRole("progressbar", { name: "失败环境 应用进度" }).firstElementChild).toHaveClass("bg-red-400");
+    expect(screen.getAllByRole("progressbar")).toHaveLength(4);
+    for (const progressbar of screen.getAllByRole("progressbar")) expect(progressbar).toHaveClass("w-2/3", "ml-auto");
+  });
+
+  it("gives names most of the row and orders status before file count", () => {
     render(<EnvironmentWorkspace {...props()} />);
     const row = screen.getByText("开发").closest("[data-environment-row]");
     expect(row).not.toBeNull();
-    expect(row).toHaveClass("min-w-0", "flex-wrap", "sm:flex-nowrap");
+    expect(row).toHaveClass("min-w-0", "items-center");
+    expect(row).not.toHaveClass("flex-wrap", "sm:flex-nowrap");
 
-    const progress = row?.querySelector("[data-progress-status]");
-    expect(progress).toHaveClass("order-last", "basis-full", "min-w-0", "sm:order-none", "sm:basis-auto", "sm:flex-1");
-    expect(progress).not.toHaveClass("min-w-[150px]");
-    expect(within(row as HTMLElement).getByText("1 个文件")).toHaveClass("whitespace-nowrap");
+    const columns = row?.querySelector(".grid");
+    expect(columns).toHaveClass(
+      "min-w-0",
+      "flex-1",
+      "grid-cols-[minmax(0,1fr)_minmax(5rem,9rem)_auto_auto]",
+      "gap-x-2",
+    );
+    expect(within(columns as HTMLElement).getByText("开发")).toHaveClass("min-w-0", "truncate");
+    expect(within(columns as HTMLElement).getByText("就绪")).toHaveClass("min-w-0", "text-right");
+    const readyProgress = columns?.querySelector("[data-ready-progress]");
+    expect(readyProgress).toHaveClass("h-1.5", "w-2/3", "ml-auto", "rounded-full", "bg-white");
+    expect(within(columns as HTMLElement).queryAllByRole("progressbar")).toHaveLength(0);
+    expect(within(columns as HTMLElement).getByText("文件：1")).toHaveClass("whitespace-nowrap");
+    const viewButton = within(columns as HTMLElement).getByRole("button", { name: "查看" });
+    expect(viewButton).toHaveClass("min-w-0", "size-7");
+    expect(viewButton).toHaveAttribute("aria-label", "查看");
+    expect(viewButton).toHaveAttribute("title", "查看");
+    expect(viewButton.textContent).toBe("");
+    expect(within(columns as HTMLElement).queryByText("查看")).not.toBeInTheDocument();
+    expect(Array.from(columns?.children ?? []).map((column) => column.textContent)).toEqual(["开发", "就绪", "文件：1", ""]);
+
+    const longName = "这是一个非常长的环境名称用于测试省略显示";
+    const { unmount } = render(<EnvironmentWorkspace {...props({
+      state: { ...state, environments: [{ id: "long", name: longName, fileCount: 2 }] },
+    })} />);
+    const name = screen.getByText(longName);
+    expect(name).toHaveClass("min-w-0", "truncate");
+    expect(name).toHaveAttribute("title", longName);
+    unmount();
   });
 
   it("keeps successful and failed progress states visible until the next operation", () => {
@@ -198,7 +257,7 @@ describe("EnvironmentWorkspace", () => {
     const row = screen.getByText("开发").closest("[data-environment-row]");
     expect(row).not.toBeNull();
     expect(row).toHaveClass("items-center", "px-3", "py-2");
-    expect(within(row as HTMLElement).getByText("1 个文件")).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText("文件：1")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
@@ -234,6 +293,9 @@ describe("EnvironmentWorkspace", () => {
     await waitFor(() => expect(onPlan).toHaveBeenCalledWith("dev"));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("覆盖")).toBeInTheDocument();
+    const footer = within(dialog).getByRole("button", { name: "取消" }).parentElement;
+    expect(footer).toHaveAttribute("data-slot", "dialog-footer");
+    expect(footer?.parentElement).toHaveAttribute("data-slot", "dialog-content");
     fireEvent.click(within(dialog).getByRole("button", { name: "确认应用" }));
     await waitFor(() => expect(onApply).toHaveBeenCalledWith("dev", "token-1"));
   });
@@ -252,6 +314,13 @@ describe("EnvironmentWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "复制" }));
     fireEvent.change(screen.getByPlaceholderText("环境名称"), { target: { value: "测试" } });
     fireEvent.click(screen.getByRole("radio", { name: "复制已有环境" }));
+    const createDialog = screen.getByRole("dialog");
+    const copySourceSelect = within(createDialog).getByRole("combobox", { name: "选择复制来源" });
+    expect(copySourceSelect).toHaveAttribute("data-slot", "select-trigger");
+    expect(copySourceSelect).toHaveClass("w-full");
+    expect(copySourceSelect).toHaveTextContent("开发");
+    const createFooter = within(createDialog).getByRole("button", { name: "取消" }).parentElement;
+    expect(createFooter).toHaveAttribute("data-slot", "dialog-footer");
     fireEvent.click(screen.getByRole("button", { name: "创建" }));
     await waitFor(() => expect(onCopy).toHaveBeenCalledWith("dev", "测试"));
   });
@@ -264,6 +333,9 @@ describe("EnvironmentWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "文件清单" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).queryByPlaceholderText("输入项目内相对路径")).not.toBeInTheDocument();
+    const footer = within(dialog).getByRole("button", { name: "取消" }).parentElement;
+    expect(footer).toHaveAttribute("data-slot", "dialog-footer");
+    expect(footer?.parentElement).toHaveAttribute("data-slot", "dialog-content");
 
     fireEvent.click(within(dialog).getByRole("button", { name: "选择文件" }));
     await waitFor(() => expect(openFileDialogMock).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: state.projectPath })));

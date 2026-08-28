@@ -16,6 +16,17 @@ function response(path: string, snapshot: EnvironmentDetailResponse["snapshot"] 
 }
 
 describe("EnvironmentDiffDialog", () => {
+  it("truncates a long title without colliding with the close button", async () => {
+    const longName = "这是一个非常长的环境名称用于测试标题省略显示";
+    const onDetail = vi.fn().mockResolvedValue(response(".env"));
+    render(<EnvironmentDiffDialog open environmentName={longName} environmentId="dev" paths={[".env"]} busy={false} onOpenChange={vi.fn()} onDetail={onDetail} />);
+
+    const title = screen.getByRole("heading", { name: `查看环境：${longName}` });
+    expect(title).toHaveClass("min-w-0", "truncate", "pr-8");
+    expect(title).toHaveAttribute("title", `查看环境：${longName}`);
+    await waitFor(() => expect(onDetail).toHaveBeenCalledWith("dev", ".env"));
+  });
+
   it("renders a read-only two-column merge view with line numbers and inline changes", async () => {
     const onDetail = vi.fn().mockResolvedValue(response(".env"));
     render(<EnvironmentDiffDialog open environmentName="开发" environmentId="dev" paths={[".env"]} busy={false} onOpenChange={vi.fn()} onDetail={onDetail} />);
@@ -26,8 +37,10 @@ describe("EnvironmentDiffDialog", () => {
     expect(document.querySelectorAll(".cm-editor")).toHaveLength(2);
     expect(document.querySelectorAll(".cm-content[contenteditable='false']")).toHaveLength(2);
     const horizontalScroll = screen.getByTestId("environment-diff-scroll");
+    const diffView = screen.getByTestId("environment-diff-view");
     expect(horizontalScroll).toHaveClass("overflow-x-auto");
-    expect(horizontalScroll.querySelector("[data-testid='environment-diff-view']")).toBeInTheDocument();
+    expect(diffView).toBeInTheDocument();
+    expect(diffView.className).not.toContain("cm-mergeViewEditors");
     expect(horizontalScroll.querySelector(".cm-mergeView")).toBeInTheDocument();
     expect(document.querySelectorAll("[class*='overflow-x-auto']")).toHaveLength(1);
     const editorContents = Array.from(document.querySelectorAll(".cm-content"));
@@ -55,7 +68,17 @@ describe("EnvironmentDiffDialog", () => {
     render(<EnvironmentDiffDialog open environmentName="开发" environmentId="dev" paths={[".env", "config"]} busy={false} onOpenChange={vi.fn()} onDetail={onDetail} />);
     await waitFor(() => expect(onDetail).toHaveBeenCalledWith("dev", ".env"));
 
-    fireEvent.change(screen.getByRole("combobox", { name: "选择文件" }), { target: { value: "config" } });
+    const trigger = screen.getByRole("combobox", { name: "选择文件" });
+    expect(trigger).toHaveAttribute("data-slot", "select-trigger");
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+    try {
+      fireEvent.click(trigger);
+      fireEvent.click(await screen.findByRole("option", { name: "config" }));
+    } finally {
+      if (originalScrollIntoView) Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: originalScrollIntoView });
+      else delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
     await waitFor(() => expect(onDetail).toHaveBeenCalledWith("dev", "config"));
     resolveSecond?.(response("config", { state: "text", content: "new\n" }, { state: "text", content: "newer\n" }));
     await waitFor(() => expect(Array.from(document.querySelectorAll(".cm-content")).some((element) => element.textContent?.includes("newer"))).toBe(true));
@@ -64,5 +87,14 @@ describe("EnvironmentDiffDialog", () => {
       expect(Array.from(document.querySelectorAll(".cm-content")).some((element) => element.textContent?.includes("newer"))).toBe(true);
       expect(Array.from(document.querySelectorAll(".cm-content")).some((element) => element.textContent?.includes("stale-current"))).toBe(false);
     });
+  });
+
+  it("disables the file selector and shows its empty placeholder when no files are managed", () => {
+    render(<EnvironmentDiffDialog open environmentName="开发" environmentId="dev" paths={[]} busy={false} onOpenChange={vi.fn()} />);
+
+    const trigger = screen.getByRole("combobox", { name: "选择文件" });
+    expect(trigger).toHaveAttribute("data-slot", "select-trigger");
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveTextContent("没有受管文件");
   });
 });

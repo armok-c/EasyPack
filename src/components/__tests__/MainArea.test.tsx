@@ -111,10 +111,16 @@ describe("MainArea - existing tests", () => {
   });
 
   it("displays project name and path when project is selected", () => {
-    render(<MainArea {...getDefaultProps()} />);
-    expect(
-      screen.getByText(`当前项目: ${mockProject.name}`)
-    ).toBeInTheDocument();
+    const longProjectName = "这是一个非常长的项目名称用于测试标题省略显示";
+    render(
+      <MainArea
+        {...getDefaultProps({ currentProject: { ...mockProject, name: longProjectName } })}
+      />,
+    );
+    const projectHeading = screen.getByText(`当前项目: ${longProjectName}`);
+    expect(projectHeading).toBeInTheDocument();
+    expect(projectHeading).toHaveClass("min-w-0", "truncate");
+    expect(projectHeading).toHaveAttribute("title", longProjectName);
     const projectPath = screen.getByText(mockProject.path);
     expect(projectPath).toBeInTheDocument();
     expect(projectPath).toHaveClass("truncate");
