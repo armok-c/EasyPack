@@ -77,6 +77,34 @@ describe("EnvironmentDiffDialog", () => {
     expect(selectorGroup).toHaveClass("w-full", "min-w-0", "justify-self-center");
   });
 
+  it("keeps the compact diff footer fixed and navigates files without cycling", async () => {
+    const paths = ["first.txt", "second.txt", "third.txt"];
+    const onDetail = vi.fn((_: string, path: string) => Promise.resolve(response(path)));
+    renderDialog(onDetail, paths);
+
+    const dialog = screen.getByRole("dialog");
+    const footer = screen.getByTestId("environment-diff-toolbar");
+    expect(footer.parentElement).toBe(dialog);
+    expect(footer).toHaveClass("mt-2", "pt-2", "gap-1");
+    expect(screen.getByRole("button", { name: "上一个文件" })).toHaveClass("h-7", "w-7", "p-0");
+    expect(screen.getByRole("button", { name: "下一个文件" })).toHaveClass("h-7", "w-7", "p-0");
+
+    const previous = screen.getByRole("button", { name: "上一个文件" });
+    const next = screen.getByRole("button", { name: "下一个文件" });
+    expect(previous).toBeDisabled();
+    expect(next).not.toBeDisabled();
+
+    fireEvent.click(next);
+    await waitFor(() => expect(onDetail).toHaveBeenCalledWith("dev", "second.txt"));
+    expect(previous).not.toBeDisabled();
+    expect(next).not.toBeDisabled();
+
+    fireEvent.click(next);
+    await waitFor(() => expect(onDetail).toHaveBeenCalledWith("dev", "third.txt"));
+    expect(previous).not.toBeDisabled();
+    expect(next).toBeDisabled();
+  });
+
   it("truncates long file paths in the selector and unified headers", async () => {
     const longPath = "nested/" + "very-long-file-name-".repeat(12) + "config.txt";
     const onDetail = vi.fn().mockResolvedValue(response(longPath));
@@ -88,10 +116,12 @@ describe("EnvironmentDiffDialog", () => {
     expect(trigger.className).toContain("*:data-[slot=select-value]:min-w-0");
     expect(trigger.className).toContain("*:data-[slot=select-value]:truncate");
 
-    const oldHeader = screen.getByText(`旧 · 项目当前文件 · ${longPath}`);
-    const newHeader = screen.getByText(`新 · 环境快照 · ${longPath}`);
-    expect(oldHeader).toHaveClass("min-w-0", "truncate");
-    expect(newHeader).toHaveClass("min-w-0", "truncate");
+    const pathHeader = screen.getByTestId("environment-diff-path-title");
+    expect(pathHeader).toHaveTextContent(longPath);
+    expect(pathHeader).toHaveClass("min-w-0", "flex-1", "truncate", "overflow-hidden");
+    expect(pathHeader).toHaveAttribute("title", longPath);
+    expect(screen.queryByText(`旧 · 项目当前文件 · ${longPath}`)).not.toBeInTheDocument();
+    expect(screen.queryByText(`新 · 环境快照 · ${longPath}`)).not.toBeInTheDocument();
 
     const originalScrollIntoView = Element.prototype.scrollIntoView;
     Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
@@ -127,6 +157,17 @@ describe("EnvironmentDiffDialog", () => {
     expect(document.querySelectorAll("[data-line-new-num]")).toHaveLength(1);
     expect(document.querySelector(".environment-diff-old-line-num")).toHaveClass("sticky");
     expect(document.querySelector(".environment-diff-new-line-num")).toHaveClass("sticky");
+    const hunkHeader = hunkHeaders()[0];
+    expect(hunkHeader.children).toHaveLength(1);
+    expect(hunkHeader.children[0]).toHaveAttribute("colspan", "3");
+    expect(hunkHeader.children[0]).toHaveClass("environment-diff-hunk-header");
+    const hunkLabel = screen.getByTestId("environment-diff-hunk-header-label");
+    expect(hunkLabel).toHaveTextContent("@@ -1,1 +1,1 @@");
+    expect(hunkLabel).toHaveClass("min-w-0", "truncate", "overflow-hidden");
+    expect(hunkLabel).toHaveAttribute("title", "@@ -1,1 +1,1 @@");
+    expect(hunkLabel.parentElement).toHaveClass("environment-diff-hunk-header-content", "min-w-0", "overflow-hidden");
+    expect(document.querySelector(".environment-diff-table-wrapper")).toHaveClass("environment-diff-table-wrapper");
+    expect(screen.queryByTestId("environment-diff-status")).not.toBeInTheDocument();
     expect(document.querySelectorAll("[contenteditable='true']")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /接收|拒绝|应用|回滚|暂存/ })).not.toBeInTheDocument();
     expect(onDetail).toHaveBeenCalledWith("dev", ".env");
@@ -145,11 +186,36 @@ describe("EnvironmentDiffDialog", () => {
       "line-15", "line-16", "line-17", "line-18", "changed-18", "line-19", "line-20",
     ]);
     expect(document.querySelectorAll("[data-state='gap']")).toHaveLength(1);
-    expect(screen.getByText("还有 9 行")).toBeInTheDocument();
+    expect(document.querySelector("[data-state='gap']")).toHaveClass("environment-diff-gap-marker");
+    const gapMarker = document.querySelector("[data-state='gap']") as HTMLElement;
+    expect(gapMarker.closest("tr")).toBe(hunkHeaders()[1]);
+    expect(within(gapMarker).getByRole("button", { name: "向上展开10行" })).toBeInTheDocument();
+    expect(within(gapMarker).getByRole("button", { name: "向下展开10行" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("还有");
     expect(document.body.textContent).not.toContain("line-8");
   });
 
-  it("expands gaps by three lines without moving or duplicating hunk headers", async () => {
+  it("keeps expanded middle gap rows before the header and the header before its hunk rows", async () => {
+    const oldContent = Array.from({ length: 30 }, (_, index) => `line-${index + 1}`).join("\n");
+    const snapshotContent = oldContent.replace("line-2", "changed-2").replace("line-25", "changed-25");
+    const onDetail = vi.fn().mockResolvedValue(response("order.txt", { state: "text", content: snapshotContent }, { state: "text", content: oldContent }));
+    renderDialog(onDetail, ["order.txt"]);
+
+    await waitFor(() => expect(hunkHeaders()).toHaveLength(2));
+    const middleGap = document.querySelector("[data-gap-index='1']") as HTMLElement;
+    fireEvent.click(within(middleGap).getByRole("button", { name: "向上展开10行" }));
+
+    const headers = hunkHeaders();
+    const secondHeader = headers[1];
+    expect(secondHeader.querySelector("[data-state='gap']")).toBe(middleGap);
+    expect(middleGap.closest("tr")).toBe(secondHeader);
+    expect(secondHeader.previousElementSibling).toHaveClass("environment-diff-line");
+    expect(secondHeader.previousElementSibling).toHaveTextContent("line-21");
+    expect(secondHeader.nextElementSibling).toHaveClass("environment-diff-line");
+    expect(secondHeader.nextElementSibling).toHaveTextContent("line-22");
+  });
+
+  it("expands gaps by ten lines without moving or duplicating hunk headers", async () => {
     const oldContent = Array.from({ length: 30 }, (_, index) => `line-${index + 1}`).join("\n");
     const snapshotContent = oldContent.replace("line-15", "changed-15");
     const onDetail = vi.fn().mockResolvedValue(response("expand.txt", { state: "text", content: snapshotContent }, { state: "text", content: oldContent }));
@@ -160,19 +226,19 @@ describe("EnvironmentDiffDialog", () => {
     const before = renderedLineTexts();
     expect(before).toContain("line-12");
     expect(before).not.toContain("line-1");
-    const expandUp = screen.getAllByRole("button", { name: "向上展开3行" })[0];
+    const expandUp = screen.getAllByRole("button", { name: "向上展开10行" })[0];
     fireEvent.click(expandUp);
-    expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-9", "line-10", "line-11"]));
+    expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-2", "line-3", "line-10", "line-11"]));
     expect(renderedLineTexts()).not.toContain("line-1");
     expect(hunkHeaders()).toHaveLength(1);
     expect(hunkHeaders()[0]).toBe(header);
-    fireEvent.click(screen.getAllByRole("button", { name: "向下展开3行" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "向下展开10行" })[0]);
     expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-1", "line-2", "line-3"]));
     expect(renderedLineTexts().indexOf("line-3")).toBeLessThan(renderedLineTexts().indexOf("line-9"));
     expect(hunkHeaders()).toHaveLength(1);
 
-    while (screen.queryAllByRole("button", { name: "向上展开3行" }).length > 0) {
-      fireEvent.click(screen.queryAllByRole("button", { name: "向上展开3行" })[0]);
+    while (screen.queryAllByRole("button", { name: "向上展开10行" }).length > 0) {
+      fireEvent.click(screen.queryAllByRole("button", { name: "向上展开10行" })[0]);
     }
     await waitFor(() => expect(renderedLineTexts()).toContain("line-30"));
     expect(hunkHeaders()).toHaveLength(1);
@@ -183,7 +249,12 @@ describe("EnvironmentDiffDialog", () => {
       ...Array.from({ length: 15 }, (_, index) => `line-${index + 16}`),
     ]);
     expect(renderedLineTexts().filter((line) => line === "line-8")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "展开当前文件全部内容" })).toBeDisabled();
+    const toggleAll = screen.getByRole("button", { name: "折叠当前文件全部内容" });
+    expect(toggleAll).not.toBeDisabled();
+    fireEvent.click(toggleAll);
+    expect(screen.getByRole("button", { name: "展开当前文件全部内容" })).toBeInTheDocument();
+    expect(renderedLineTexts()).not.toContain("line-1");
+    expect(document.querySelectorAll("[data-state='gap']").length).toBeGreaterThan(0);
   });
 
   it("keeps all multi-hunk headers in order after full expansion", async () => {
@@ -202,6 +273,9 @@ describe("EnvironmentDiffDialog", () => {
     expect(lines.filter((line) => line === "line-10")).toHaveLength(1);
     expect(lines.indexOf("line-5")).toBeLessThan(lines.indexOf("line-22"));
     expect(lines.indexOf("line-22")).toBeLessThan(lines.indexOf("line-25"));
+    fireEvent.click(screen.getByRole("button", { name: "折叠当前文件全部内容" }));
+    expect(screen.getByRole("button", { name: "展开当前文件全部内容" })).not.toBeDisabled();
+    expect(renderedLineTexts()).not.toContain("line-10");
   });
 
   it("expands an inter-hunk gap toward the correct boundary", async () => {
@@ -211,12 +285,14 @@ describe("EnvironmentDiffDialog", () => {
     renderDialog(onDetail, ["direction.txt"]);
 
     await waitFor(() => expect(hunkHeaders()).toHaveLength(2));
-    const middleGap = () => within(document.querySelector("[data-gap-index='1']") as HTMLElement);
-    fireEvent.click(middleGap().getByRole("button", { name: "向上展开3行" }));
-    expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-19", "line-20", "line-21"]));
+    const middleGapMarker = document.querySelector("[data-gap-index='1']") as HTMLElement;
+    expect(middleGapMarker.closest("tr")).toBe(hunkHeaders()[1]);
+    const middleGap = () => within(middleGapMarker);
+    fireEvent.click(middleGap().getByRole("button", { name: "向上展开10行" }));
+    expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-12", "line-19", "line-20", "line-21"]));
     expect(renderedLineTexts()).not.toEqual(expect.arrayContaining(["line-6", "line-7", "line-8"]));
 
-    fireEvent.click(middleGap().getByRole("button", { name: "向下展开3行" }));
+    fireEvent.click(middleGap().getByRole("button", { name: "向下展开10行" }));
     const lines = renderedLineTexts();
     expect(lines).toEqual(expect.arrayContaining(["line-6", "line-7", "line-8", "line-19", "line-20", "line-21"]));
     expect(lines.indexOf("line-8")).toBeLessThan(lines.indexOf("line-19"));
@@ -230,12 +306,14 @@ describe("EnvironmentDiffDialog", () => {
     renderDialog(onDetail, ["trailing-gap.txt"]);
 
     await waitFor(() => expect(hunkHeaders()).toHaveLength(2));
-    const trailingGap = () => within(document.querySelector("[data-gap-index='2']") as HTMLElement);
-    fireEvent.click(trailingGap().getByRole("button", { name: "向下展开3行" }));
-    expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-19", "line-20", "line-21"]));
+    const trailingGapMarker = document.querySelector("[data-gap-index='2']") as HTMLElement;
+    expect(trailingGapMarker.closest("tr")?.previousElementSibling).toHaveClass("environment-diff-line");
+    const trailingGap = () => within(trailingGapMarker);
+    fireEvent.click(trailingGap().getByRole("button", { name: "向下展开10行" }));
+    expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-19", "line-20", "line-21", "line-22", "line-23", "line-24"]));
     expect(renderedLineTexts()).not.toEqual(expect.arrayContaining(["line-28", "line-29", "line-30"]));
 
-    fireEvent.click(trailingGap().getByRole("button", { name: "向上展开3行" }));
+    fireEvent.click(trailingGap().getByRole("button", { name: "向上展开10行" }));
     const lines = renderedLineTexts();
     expect(lines).toEqual(expect.arrayContaining(["line-19", "line-20", "line-21", "line-28", "line-29", "line-30"]));
     expect(lines.indexOf("line-21")).toBeLessThan(lines.indexOf("line-28"));
@@ -278,10 +356,9 @@ describe("EnvironmentDiffDialog", () => {
     const onDetail = vi.fn().mockResolvedValue(response("empty.env", { state: "text", content: "" }, { state: "absent" }));
     renderDialog(onDetail, ["empty.env"]);
 
-    await waitFor(() => expect(screen.getByTestId("environment-diff-status")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("environment-diff-stats")).toBeInTheDocument());
     expect(screen.getByTestId("environment-diff-stats")).toHaveTextContent("+0/-0");
-    expect(screen.getByText("旧（项目当前文件）：文件不存在")).toBeInTheDocument();
-    expect(screen.getByText("新（环境快照）：文本文件")).toBeInTheDocument();
+    expect(screen.queryByTestId("environment-diff-status")).not.toBeInTheDocument();
     expect(screen.queryByTestId("environment-diff-view")).not.toBeInTheDocument();
     expect(screen.getByText("文件内容为空")).toBeInTheDocument();
   });
@@ -290,8 +367,8 @@ describe("EnvironmentDiffDialog", () => {
     const onDetail = vi.fn().mockResolvedValue(response("binary.dat", { state: "nonUtf8" }, { state: "absent" }));
     renderDialog(onDetail, ["binary.dat"]);
 
-    await waitFor(() => expect(screen.getByText("新（环境快照）：无法预览")).toBeInTheDocument());
-    expect(screen.getByText("旧（项目当前文件）：文件不存在")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("environment-diff-stats")).toBeInTheDocument());
+    expect(screen.queryByTestId("environment-diff-status")).not.toBeInTheDocument();
     expect(screen.getByTestId("environment-diff-stats")).toHaveTextContent("不可用/不可用");
     expect(screen.queryByTestId("environment-diff-view")).not.toBeInTheDocument();
     expect(screen.queryByText("A=1")).not.toBeInTheDocument();
@@ -334,7 +411,7 @@ describe("EnvironmentDiffDialog", () => {
     const props = { environmentName: "开发", environmentId: "dev", paths: ["reset.txt"], busy: false, onOpenChange: vi.fn(), onDetail };
     const { rerender } = render(<EnvironmentDiffDialog open {...props} />);
     await waitFor(() => expect(hunkHeaders()).toHaveLength(1));
-    fireEvent.click(screen.getAllByRole("button", { name: "向上展开3行" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "向上展开10行" })[0]);
     expect(renderedLineTexts()).toContain("line-11");
     expect(renderedLineTexts()).not.toContain("line-1");
 
@@ -344,7 +421,7 @@ describe("EnvironmentDiffDialog", () => {
     await waitFor(() => expect(onDetail).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(hunkHeaders()).toHaveLength(1));
     expect(renderedLineTexts()).not.toContain("line-1");
-    expect(screen.getByText("还有 11 行")).toBeInTheDocument();
+    expect(screen.queryByText(/还有 \d+ 行/)).not.toBeInTheDocument();
   });
 
   it("resets gap expansion when same-path detail is replaced", async () => {
@@ -354,14 +431,14 @@ describe("EnvironmentDiffDialog", () => {
     const props = { environmentName: "开发", environmentId: "dev", paths: ["same-path.txt"], busy: false, onOpenChange: vi.fn() };
     const { rerender } = render(<EnvironmentDiffDialog open {...props} onDetail={firstDetail} />);
     await waitFor(() => expect(hunkHeaders()).toHaveLength(1));
-    fireEvent.click(screen.getAllByRole("button", { name: "向上展开3行" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "向上展开10行" })[0]);
     expect(renderedLineTexts()).toContain("line-11");
 
     rerender(<EnvironmentDiffDialog open {...props} onDetail={secondDetail} />);
     await waitFor(() => expect(secondDetail).toHaveBeenCalledWith("dev", "same-path.txt"));
     await waitFor(() => expect(document.body.textContent).toContain("second-change"));
     expect(renderedLineTexts()).not.toContain("line-11");
-    expect(screen.getByText("还有 11 行")).toBeInTheDocument();
+    expect(screen.queryByText(/还有 \d+ 行/)).not.toBeInTheDocument();
   });
 
   it("disables the file selector and shows its empty placeholder when no files are managed", () => {

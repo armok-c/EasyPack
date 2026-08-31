@@ -1,8 +1,27 @@
 .environment-diff-shell {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 
+.environment-diff-toolbar {
+  flex-shrink: 0;
+}
+
+.environment-diff-view {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.environment-diff-code {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 .environment-diff-table-wrapper {
+  container-type: inline-size;
   max-height: 52vh;
   overflow-x: auto;
   overflow-y: auto;
@@ -91,29 +110,69 @@
 }
 
 .environment-diff-hunk-header {
-  padding: 5px 10px;
+  padding: 0;
   background: #1f2937;
   color: #93c5fd;
   text-align: left;
-  white-space: pre;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.environment-diff-hunk-header-content {
+  display: flex;
+  width: 100cqi;
+  min-width: 0;
+  max-width: 100cqi;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #1f2937;
+  padding: 5px 10px;
+}
+
+.environment-diff-hunk-header-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .environment-diff-gap-cell {
   padding: 0;
-  background: #1f2937;
+  border: 0;
+  background: transparent;
 }
 
 .environment-diff-gap-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 32px;
+  justify-content: flex-start;
+  min-height: 0;
   color: #9ca3af;
 }
 
-.environment-diff-gap-count {
-  min-width: 5rem;
-  text-align: center;
-  font-size: 11px;
+.environment-diff-gap-marker {
+  display: inline-flex;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #1f2937;
+  border-right: 1px solid #374151;
+}
+
+.environment-diff-gap-marker > button {
+  width: 2rem;
+  height: 1.125rem;
+  min-height: 1.125rem;
+  padding: 0;
+}
+
+.environment-diff-gap-marker > button svg {
+  width: 0.875rem;
+  height: 0.875rem;
 }

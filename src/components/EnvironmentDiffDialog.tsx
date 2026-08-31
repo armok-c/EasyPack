@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Maximize2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
 
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -19,7 +20,6 @@ import {
 import { buildEnvironmentDiff, type EnvironmentDiffGap, type EnvironmentDiffModel, type EnvironmentDiffRow } from "@/lib/environment-diff";
 import type {
   EnvironmentDetailResponse,
-  EnvironmentFileContent,
 } from "@/lib/environment-types";
 
 import "./environment-diff.css";
@@ -37,23 +37,7 @@ export interface EnvironmentDiffDialogProps {
 type GapExpansion = { up: number; down: number };
 type GapExpansionState = Record<number, GapExpansion>;
 
-const EXPANSION_STEP = 3;
-
-function stateLabel(file: EnvironmentFileContent): string {
-  if (file.state === "text") return "文本文件";
-  return file.state === "absent" ? "文件不存在" : "无法预览";
-}
-
-function DiffStatus({ model }: { model: EnvironmentDiffModel }) {
-  return (
-    <div data-testid="environment-diff-status" className="environment-diff-status flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-      <span>旧（项目当前文件）：{stateLabel(model.old)}</span>
-      <span>新（环境快照）：{stateLabel(model.new)}</span>
-      {model.changeKind === "unchanged" && <span className="text-emerald-200">内容无变化</span>}
-      {model.changeKind !== "unchanged" && model.changeKind !== "unavailable" && !model.hasContentChange && <span className="text-amber-200">文件状态已变化</span>}
-    </div>
-  );
-}
+const EXPANSION_STEP = 10;
 
 function DiffStats({ model }: { model: EnvironmentDiffModel }) {
   const additions = model.additions === null ? "不可用" : `+${model.additions}`;
@@ -104,7 +88,7 @@ function visibleGapRows(gap: EnvironmentDiffGap, expansion: GapExpansion) {
   };
 }
 
-function GapRow({
+function GapMarker({
   gap,
   expansion,
   onExpand,
@@ -117,66 +101,76 @@ function GapRow({
   if (hidden <= 0) return null;
 
   return (
-    <tr data-state="gap" data-gap-index={gap.index}>
+    <span data-state="gap" data-gap-index={gap.index} className="environment-diff-gap-marker">
+      <Button type="button" variant="ghost" size="icon" aria-label="向上展开10行" title="向上展开10行" onClick={() => onExpand("up")}>
+        <ChevronUp />
+      </Button>
+      <Button type="button" variant="ghost" size="icon" aria-label="向下展开10行" title="向下展开10行" onClick={() => onExpand("down")}>
+        <ChevronDown />
+      </Button>
+    </span>
+  );
+}
+
+function GapMarkerRow({
+  gap,
+  expansion,
+  onExpand,
+}: {
+  gap: EnvironmentDiffGap;
+  expansion: GapExpansion;
+  onExpand: (direction: "up" | "down") => void;
+}) {
+  if (visibleGapRows(gap, expansion).hidden <= 0) return null;
+  const marker = <GapMarker gap={gap} expansion={expansion} onExpand={onExpand} />;
+
+  return (
+    <tr>
       <td colSpan={3} className="environment-diff-gap-cell">
-        <div className="environment-diff-gap-actions">
-          <Button type="button" variant="ghost" size="icon" aria-label="向上展开3行" onClick={() => onExpand("up")}>
-            <ChevronUp />
-          </Button>
-          <span className="environment-diff-gap-count">还有 {hidden} 行</span>
-          <Button type="button" variant="ghost" size="icon" aria-label="向下展开3行" onClick={() => onExpand("down")}>
-            <ChevronDown />
-          </Button>
+        <div className="environment-diff-gap-actions">{marker}</div>
+      </td>
+    </tr>
+  );
+}
+
+function HunkHeader({
+  hunk,
+  gap,
+  expansion,
+  onExpand,
+}: {
+  hunk: EnvironmentDiffModel["hunks"][number];
+  gap: EnvironmentDiffGap;
+  expansion: GapExpansion;
+  onExpand: (direction: "up" | "down") => void;
+}) {
+  return (
+    <tr data-testid="environment-diff-hunk-header" data-hunk-index={hunk.index} data-state="hunk">
+      <td colSpan={3} className="environment-diff-hunk-header">
+        <div className="environment-diff-hunk-header-content min-w-0 overflow-hidden">
+          <GapMarker gap={gap} expansion={expansion} onExpand={onExpand} />
+          <span data-testid="environment-diff-hunk-header-label" className="environment-diff-hunk-header-label min-w-0 flex-1 truncate overflow-hidden" title={hunk.header}>
+            {hunk.header}
+          </span>
         </div>
       </td>
     </tr>
   );
 }
 
-function UnifiedDiff({ model }: { model: EnvironmentDiffModel }) {
-  const [gapExpansion, setGapExpansion] = useState<GapExpansionState>({});
-  useEffect(() => {
-    setGapExpansion({});
-  }, [model]);
-  const hasHiddenRows = model.gaps.some((gap) => gap.rows.length > 0);
-  const allExpanded = model.gaps.every((gap) => gap.rows.length === 0 || visibleGapRows(gap, gapExpansion[gap.index] ?? { up: 0, down: 0 }).hidden === 0);
-
+function UnifiedDiff({
+  model,
+  gapExpansion,
+  onExpandGap,
+}: {
+  model: EnvironmentDiffModel;
+  gapExpansion: GapExpansionState;
+  onExpandGap: (gap: EnvironmentDiffGap, direction: "up" | "down") => void;
+}) {
   if (!model.hasContentChange || model.hunks.length === 0) return null;
-
-  const expandGap = (gap: EnvironmentDiffGap, direction: "up" | "down") => {
-    setGapExpansion((previous) => {
-      const current = previous[gap.index] ?? { up: 0, down: 0 };
-      const visible = Math.min(gap.rows.length, current.up + current.down);
-      const amount = Math.min(EXPANSION_STEP, gap.rows.length - visible);
-      if (amount <= 0) return previous;
-      return {
-        ...previous,
-        [gap.index]: {
-          ...current,
-          [direction]: current[direction] + amount,
-        },
-      };
-    });
-  };
-
-  const expandAll = () => {
-    setGapExpansion(Object.fromEntries(model.gaps.map((gap) => [gap.index, { up: gap.rows.length, down: 0 }])));
-  };
 
   return (
     <div data-testid="environment-diff-view" className="environment-diff-view min-w-0">
-      <div className="environment-diff-actions flex items-center justify-end border-b border-border bg-card px-3 py-1.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="展开当前文件全部内容"
-          disabled={!hasHiddenRows || allExpanded}
-          onClick={expandAll}
-        >
-          <Maximize2 />
-        </Button>
-      </div>
       <div className="environment-diff-code">
         <div className="environment-diff-table-wrapper">
           <table className="environment-diff-table">
@@ -191,11 +185,8 @@ function UnifiedDiff({ model }: { model: EnvironmentDiffModel }) {
                 return (
                   <Fragment key={`hunk-group-${hunk.index}`}>
                     {visible.downRows.map((row, index) => <DiffLine key={lineKey(row, index)} row={row} index={index} />)}
-                    <GapRow gap={gap} expansion={expansion} onExpand={(direction) => expandGap(gap, direction)} />
                     {visible.upRows.map((row, index) => <DiffLine key={lineKey(row, visible.downRows.length + index)} row={row} index={visible.downRows.length + index} />)}
-                    <tr data-testid="environment-diff-hunk-header" data-hunk-index={hunk.index} data-state="hunk">
-                      <td colSpan={3} className="environment-diff-hunk-header">{hunk.header}</td>
-                    </tr>
+                    <HunkHeader hunk={hunk} gap={gap} expansion={expansion} onExpand={(direction) => onExpandGap(gap, direction)} />
                     {hunk.rows.map((row, index) => <DiffLine key={lineKey(row, index)} row={row} index={index} />)}
                   </Fragment>
                 );
@@ -207,7 +198,7 @@ function UnifiedDiff({ model }: { model: EnvironmentDiffModel }) {
                 return (
                   <Fragment key={`tail-gap-${gap.index}`}>
                     {visible.downRows.map((row, index) => <DiffLine key={lineKey(row, index)} row={row} index={index} />)}
-                    <GapRow gap={gap} expansion={expansion} onExpand={(direction) => expandGap(gap, direction)} />
+                    <GapMarkerRow gap={gap} expansion={expansion} onExpand={(direction) => onExpandGap(gap, direction)} />
                     {visible.upRows.map((row, index) => <DiffLine key={lineKey(row, visible.downRows.length + index)} row={row} index={visible.downRows.length + index} />)}
                   </Fragment>
                 );
@@ -220,11 +211,18 @@ function UnifiedDiff({ model }: { model: EnvironmentDiffModel }) {
   );
 }
 
-function DiffContent({ model }: { model: EnvironmentDiffModel }) {
+function DiffContent({
+  model,
+  gapExpansion,
+  onExpandGap,
+}: {
+  model: EnvironmentDiffModel;
+  gapExpansion: GapExpansionState;
+  onExpandGap: (gap: EnvironmentDiffGap, direction: "up" | "down") => void;
+}) {
   return (
     <>
-      <DiffStatus model={model} />
-      <UnifiedDiff model={model} />
+      <UnifiedDiff model={model} gapExpansion={gapExpansion} onExpandGap={onExpandGap} />
       {model.available && !model.hasContentChange && (
         <p data-testid="environment-diff-empty" className="px-3 py-6 text-center text-sm text-muted-foreground">
           {model.changeKind === "unchanged" ? "内容无变化" : "文件内容为空"}
@@ -270,6 +268,38 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
     () => detail ? buildEnvironmentDiff(detail.path, detail.current, detail.snapshot) : null,
     [detail],
   );
+  const [gapExpansion, setGapExpansion] = useState<GapExpansionState>({});
+  useEffect(() => {
+    setGapExpansion({});
+  }, [model]);
+
+  const hasHiddenRows = model?.gaps.some((gap) => gap.rows.length > 0) ?? false;
+  const allExpanded = model?.gaps.every((gap) => gap.rows.length === 0 || visibleGapRows(gap, gapExpansion[gap.index] ?? { up: 0, down: 0 }).hidden === 0) ?? false;
+  const expandGap = (gap: EnvironmentDiffGap, direction: "up" | "down") => {
+    setGapExpansion((previous) => {
+      const current = previous[gap.index] ?? { up: 0, down: 0 };
+      const visible = Math.min(gap.rows.length, current.up + current.down);
+      const amount = Math.min(EXPANSION_STEP, gap.rows.length - visible);
+      if (amount <= 0) return previous;
+      return {
+        ...previous,
+        [gap.index]: {
+          ...current,
+          [direction]: current[direction] + amount,
+        },
+      };
+    });
+  };
+  const expandAll = () => {
+    if (model) setGapExpansion(Object.fromEntries(model.gaps.map((gap) => [gap.index, { up: gap.rows.length, down: 0 }])));
+  };
+  const collapseAll = () => setGapExpansion({});
+  const toggleAll = () => (allExpanded ? collapseAll() : expandAll());
+  const selectedIndex = paths.indexOf(selectedPath);
+  const goToPath = (index: number) => {
+    const path = paths[index];
+    if (path) setSelectedPath(path);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -294,20 +324,32 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
           <div aria-hidden="true" className="min-w-0" />
         </DialogHeader>
         <DialogDescription className="sr-only">单栏显示项目当前文件到环境快照的只读差异。</DialogDescription>
-        <div className="space-y-3">
+        <div className="min-h-0 flex-1">
           <div data-testid="environment-diff-scroll" className="environment-diff-shell min-w-0 overflow-hidden rounded-md border border-border">
             <div className="min-w-0">
               <div className="environment-diff-header flex min-w-0 items-center gap-3 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground">
-                <span className="min-w-0 flex-1 truncate">旧 · 项目当前文件 · {selectedPath || "未选择文件"}</span>
-                <span className="min-w-0 flex-1 truncate">新 · 环境快照 · {selectedPath || "未选择文件"}</span>
+                <span data-testid="environment-diff-path-title" className="min-w-0 flex-1 truncate overflow-hidden" title={selectedPath || undefined}>{selectedPath || "未选择文件"}</span>
                 {model && <DiffStats model={model} />}
               </div>
               {!onDetail || !selectedPath ? <p className="p-6 text-center text-sm text-muted-foreground">无法读取文件详情</p> : loading ? <p className="p-6 text-center text-sm text-muted-foreground">正在读取文件...</p> : !detail || !model ? <p className="p-6 text-center text-sm text-red-300">无法读取文件详情</p> : (
-                <DiffContent key={`${detail.environmentId}:${detail.path}`} model={model} />
+                <DiffContent key={`${detail.environmentId}:${detail.path}`} model={model} gapExpansion={gapExpansion} onExpandGap={expandGap} />
               )}
             </div>
           </div>
         </div>
+        <DialogFooter data-testid="environment-diff-toolbar" className="environment-diff-toolbar mt-2 justify-between gap-1 border-border px-0 pt-2">
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label="上一个文件" title="上一个文件" disabled={selectedIndex <= 0} onClick={() => goToPath(selectedIndex - 1)}>
+              <ChevronLeft />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label="下一个文件" title="下一个文件" disabled={selectedIndex < 0 || selectedIndex >= paths.length - 1} onClick={() => goToPath(selectedIndex + 1)}>
+              <ChevronRight />
+            </Button>
+          </div>
+          <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label={allExpanded ? "折叠当前文件全部内容" : "展开当前文件全部内容"} title={allExpanded ? "折叠当前文件全部内容" : "展开当前文件全部内容"} disabled={!hasHiddenRows} onClick={toggleAll}>
+            {allExpanded ? <Minimize2 /> : <Maximize2 />}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
