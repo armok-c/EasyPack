@@ -102,10 +102,10 @@ function GapMarker({
 
   return (
     <span data-state="gap" data-gap-index={gap.index} className="environment-diff-gap-marker">
-      <Button type="button" variant="ghost" size="icon" aria-label="向上展开10行" title="向上展开10行" onClick={() => onExpand("up")}>
+      <Button type="button" variant="ghost" size="icon" aria-label="向上展开10行" onClick={() => onExpand("up")}>
         <ChevronUp />
       </Button>
-      <Button type="button" variant="ghost" size="icon" aria-label="向下展开10行" title="向下展开10行" onClick={() => onExpand("down")}>
+      <Button type="button" variant="ghost" size="icon" aria-label="向下展开10行" onClick={() => onExpand("down")}>
         <ChevronDown />
       </Button>
     </span>
@@ -149,7 +149,7 @@ function HunkHeader({
       <td colSpan={3} className="environment-diff-hunk-header">
         <div className="environment-diff-hunk-header-content min-w-0 overflow-hidden">
           <GapMarker gap={gap} expansion={expansion} onExpand={onExpand} />
-          <span data-testid="environment-diff-hunk-header-label" className="environment-diff-hunk-header-label min-w-0 flex-1 truncate overflow-hidden" title={hunk.header}>
+          <span data-testid="environment-diff-hunk-header-label" className="environment-diff-hunk-header-label min-w-0 flex-1 truncate overflow-hidden">
             {hunk.header}
           </span>
         </div>
@@ -303,7 +303,7 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1100px] h-[calc(100vh-40px)] max-h-[calc(100vh-40px)]">
+      <DialogContent className="max-w-[1100px] h-[calc(100vh-40px)] max-h-[calc(100vh-40px)] pb-3">
         <DialogHeader className="grid min-w-0 grid-cols-[minmax(0,1fr)_25%_minmax(0,1fr)] items-center gap-0 pr-8">
           <DialogTitle className="min-w-0 text-base leading-normal break-words">查看环境：{environmentName}</DialogTitle>
           <div data-testid="environment-diff-file-selector" className="flex w-full min-w-0 items-center gap-3 justify-self-center">
@@ -328,7 +328,7 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
           <div data-testid="environment-diff-scroll" className="environment-diff-shell min-w-0 overflow-hidden rounded-md border border-border">
             <div className="min-w-0">
               <div className="environment-diff-header flex min-w-0 items-center gap-3 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground">
-                <span data-testid="environment-diff-path-title" className="min-w-0 flex-1 truncate overflow-hidden" title={selectedPath || undefined}>{selectedPath || "未选择文件"}</span>
+                <span data-testid="environment-diff-path-title" className="min-w-0 flex-1 truncate overflow-hidden">{selectedPath || "未选择文件"}</span>
                 {model && <DiffStats model={model} />}
               </div>
               {!onDetail || !selectedPath ? <p className="p-6 text-center text-sm text-muted-foreground">无法读取文件详情</p> : loading ? <p className="p-6 text-center text-sm text-muted-foreground">正在读取文件...</p> : !detail || !model ? <p className="p-6 text-center text-sm text-red-300">无法读取文件详情</p> : (
@@ -339,14 +339,14 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
         </div>
         <DialogFooter data-testid="environment-diff-toolbar" className="environment-diff-toolbar mt-2 justify-between gap-1 border-border px-0 pt-2">
           <div className="flex items-center gap-1">
-            <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label="上一个文件" title="上一个文件" disabled={selectedIndex <= 0} onClick={() => goToPath(selectedIndex - 1)}>
+            <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label="上一个文件" disabled={selectedIndex <= 0} onClick={() => goToPath(selectedIndex - 1)}>
               <ChevronLeft />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label="下一个文件" title="下一个文件" disabled={selectedIndex < 0 || selectedIndex >= paths.length - 1} onClick={() => goToPath(selectedIndex + 1)}>
+            <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label="下一个文件" disabled={selectedIndex < 0 || selectedIndex >= paths.length - 1} onClick={() => goToPath(selectedIndex + 1)}>
               <ChevronRight />
             </Button>
           </div>
-          <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label={allExpanded ? "折叠当前文件全部内容" : "展开当前文件全部内容"} title={allExpanded ? "折叠当前文件全部内容" : "展开当前文件全部内容"} disabled={!hasHiddenRows} onClick={toggleAll}>
+          <Button type="button" variant="ghost" size="icon" className="environment-diff-toolbar-button h-7 w-7 p-0" aria-label={allExpanded ? "折叠当前文件全部内容" : "展开当前文件全部内容"} disabled={!hasHiddenRows} onClick={toggleAll}>
             {allExpanded ? <Minimize2 /> : <Maximize2 />}
           </Button>
         </DialogFooter>

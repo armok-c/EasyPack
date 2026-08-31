@@ -159,7 +159,13 @@ describe("CommandCard", () => {
 
     const name = screen.getByText(longName);
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("h-24", "p-3");
+    expect(button).toHaveClass(
+      "h-24",
+      "justify-start",
+      "pt-5",
+      "px-3",
+      "pb-3"
+    );
     expect(button.querySelector("svg")).toHaveClass("shrink-0");
     expect(name).toHaveClass("h-8", "w-full", "min-w-0", "shrink-0", "line-clamp-2", "text-center");
     expect(name).not.toHaveClass("truncate");

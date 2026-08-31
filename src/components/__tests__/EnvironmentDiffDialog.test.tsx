@@ -54,7 +54,7 @@ describe("EnvironmentDiffDialog", () => {
   it("sets the dialog height to 40px less than the viewport", () => {
     renderDialog(undefined);
 
-    expect(screen.getByRole("dialog")).toHaveClass("h-[calc(100vh-40px)]", "max-h-[calc(100vh-40px)]");
+    expect(screen.getByRole("dialog")).toHaveClass("h-[calc(100vh-40px)]", "max-h-[calc(100vh-40px)]", "pb-3");
     expect(screen.getByRole("dialog")).not.toHaveClass("min-h-[520px]");
   });
 
@@ -91,6 +91,9 @@ describe("EnvironmentDiffDialog", () => {
 
     const previous = screen.getByRole("button", { name: "上一个文件" });
     const next = screen.getByRole("button", { name: "下一个文件" });
+    expect(previous).not.toHaveAttribute("title");
+    expect(next).not.toHaveAttribute("title");
+    expect(screen.getByRole("button", { name: "展开当前文件全部内容" })).not.toHaveAttribute("title");
     expect(previous).toBeDisabled();
     expect(next).not.toBeDisabled();
 
@@ -119,7 +122,7 @@ describe("EnvironmentDiffDialog", () => {
     const pathHeader = screen.getByTestId("environment-diff-path-title");
     expect(pathHeader).toHaveTextContent(longPath);
     expect(pathHeader).toHaveClass("min-w-0", "flex-1", "truncate", "overflow-hidden");
-    expect(pathHeader).toHaveAttribute("title", longPath);
+    expect(pathHeader).not.toHaveAttribute("title");
     expect(screen.queryByText(`旧 · 项目当前文件 · ${longPath}`)).not.toBeInTheDocument();
     expect(screen.queryByText(`新 · 环境快照 · ${longPath}`)).not.toBeInTheDocument();
 
@@ -164,7 +167,7 @@ describe("EnvironmentDiffDialog", () => {
     const hunkLabel = screen.getByTestId("environment-diff-hunk-header-label");
     expect(hunkLabel).toHaveTextContent("@@ -1,1 +1,1 @@");
     expect(hunkLabel).toHaveClass("min-w-0", "truncate", "overflow-hidden");
-    expect(hunkLabel).toHaveAttribute("title", "@@ -1,1 +1,1 @@");
+    expect(hunkLabel).not.toHaveAttribute("title");
     expect(hunkLabel.parentElement).toHaveClass("environment-diff-hunk-header-content", "min-w-0", "overflow-hidden");
     expect(document.querySelector(".environment-diff-table-wrapper")).toHaveClass("environment-diff-table-wrapper");
     expect(screen.queryByTestId("environment-diff-status")).not.toBeInTheDocument();
@@ -191,6 +194,8 @@ describe("EnvironmentDiffDialog", () => {
     expect(gapMarker.closest("tr")).toBe(hunkHeaders()[1]);
     expect(within(gapMarker).getByRole("button", { name: "向上展开10行" })).toBeInTheDocument();
     expect(within(gapMarker).getByRole("button", { name: "向下展开10行" })).toBeInTheDocument();
+    expect(within(gapMarker).getByRole("button", { name: "向上展开10行" })).not.toHaveAttribute("title");
+    expect(within(gapMarker).getByRole("button", { name: "向下展开10行" })).not.toHaveAttribute("title");
     expect(document.body.textContent).not.toContain("还有");
     expect(document.body.textContent).not.toContain("line-8");
   });

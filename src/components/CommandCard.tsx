@@ -76,7 +76,7 @@ export function CommandCard({
       disabled={disabled}
       tabIndex={tabIndex}
       className={cn(
-        "group relative flex h-24 min-w-0 flex-col items-center justify-center gap-2 p-3 rounded-xl",
+        "group relative flex h-24 min-w-0 flex-col items-center justify-start gap-2 pt-5 px-3 pb-3 rounded-xl",
         "bg-white/5 border border-white/10",
         "cursor-pointer select-none",
         "text-xs text-card-foreground",
