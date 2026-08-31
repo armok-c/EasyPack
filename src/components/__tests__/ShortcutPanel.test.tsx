@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ShortcutPanel } from "@/components/ShortcutPanel";
@@ -55,6 +55,39 @@ describe("ShortcutPanel recording", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onRecordingChange).toHaveBeenLastCalledWith(false);
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("shows a bottom cancel button during recording without clearing the binding", () => {
+    const onClearBinding = vi.fn().mockResolvedValue(undefined);
+    const { onRecordingChange } = renderPanel({
+      bindings: { [action.id]: "Ctrl+P" },
+      onClearBinding,
+    });
+
+    expect(screen.queryByRole("button", { name: "取消录入" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "更换打开项目快捷键" }));
+
+    const cancelButton = screen.getByRole("button", { name: "取消录入" });
+    expect(cancelButton).toBeInTheDocument();
+    fireEvent.click(cancelButton);
+
+    expect(onRecordingChange).toHaveBeenLastCalledWith(false);
+    expect(onClearBinding).not.toHaveBeenCalled();
+    expect(screen.getByText("Ctrl+P")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "取消录入" })).not.toBeInTheDocument();
+  });
+
+  it("records a standalone F8 shortcut and exits recording", async () => {
+    const onSetBinding = vi.fn().mockResolvedValue(null);
+    const { onRecordingChange } = renderPanel({ onSetBinding });
+
+    fireEvent.click(screen.getByRole("button", { name: "未设置" }));
+    fireEvent.keyDown(document, { key: "F8" });
+
+    await waitFor(() => {
+      expect(onSetBinding).toHaveBeenCalledWith(action.id, "F8");
+      expect(onRecordingChange).toHaveBeenLastCalledWith(false);
+    });
   });
 
   it("keeps clear and replace controls keyboard-focusable", () => {

@@ -88,6 +88,35 @@ function visibleGapRows(gap: EnvironmentDiffGap, expansion: GapExpansion) {
   };
 }
 
+function hunkHeaderText(
+  hunk: EnvironmentDiffModel["hunks"][number],
+  prefixLength: number,
+  suffixLength: number,
+): string {
+  const oldLines = hunk.oldLines + prefixLength + suffixLength;
+  const newLines = hunk.newLines + prefixLength + suffixLength;
+  const oldStart = oldLines === 0 ? hunk.oldStart - 1 : hunk.oldStart - prefixLength;
+  const newStart = newLines === 0 ? hunk.newStart - 1 : hunk.newStart - prefixLength;
+  return `@@ -${oldStart},${oldLines} +${newStart},${newLines} @@`;
+}
+
+function hunkBoundaryLengths(
+  model: EnvironmentDiffModel,
+  hunkIndex: number,
+  gapExpansion: GapExpansionState,
+): { prefixLength: number; suffixLength: number } {
+  const precedingGap = model.gaps[hunkIndex];
+  const preceding = visibleGapRows(precedingGap, gapExpansion[precedingGap.index] ?? { up: 0, down: 0 });
+  const followingGap = model.gaps[hunkIndex + 1];
+  const following = followingGap
+    ? visibleGapRows(followingGap, gapExpansion[followingGap.index] ?? { up: 0, down: 0 })
+    : { upRows: [], downRows: [], hidden: 0 };
+  return {
+    prefixLength: preceding.upRows.length + (hunkIndex === 0 && preceding.hidden === 0 ? preceding.downRows.length : 0),
+    suffixLength: following.downRows.length + (hunkIndex === model.hunks.length - 1 && following.hidden === 0 ? following.upRows.length : 0),
+  };
+}
+
 function GapMarker({
   gap,
   expansion,
@@ -137,21 +166,31 @@ function HunkHeader({
   hunk,
   gap,
   expansion,
+  prefixLength,
+  suffixLength,
   onExpand,
 }: {
   hunk: EnvironmentDiffModel["hunks"][number];
   gap: EnvironmentDiffGap;
   expansion: GapExpansion;
+  prefixLength: number;
+  suffixLength: number;
   onExpand: (direction: "up" | "down") => void;
 }) {
   return (
     <tr data-testid="environment-diff-hunk-header" data-hunk-index={hunk.index} data-state="hunk">
-      <td colSpan={3} className="environment-diff-hunk-header">
+      <td colSpan={2} className="environment-diff-hunk-header environment-diff-hunk-header-controls">
+        <GapMarker gap={gap} expansion={expansion} onExpand={onExpand} />
+      </td>
+      <td className="environment-diff-hunk-header">
         <div className="environment-diff-hunk-header-content min-w-0 overflow-hidden">
-          <GapMarker gap={gap} expansion={expansion} onExpand={onExpand} />
-          <span data-testid="environment-diff-hunk-header-label" className="environment-diff-hunk-header-label min-w-0 flex-1 truncate overflow-hidden">
-            {hunk.header}
+          <span data-testid="environment-diff-hunk-header-range" className="environment-diff-hunk-header-range shrink-0 whitespace-nowrap">
+            {hunkHeaderText(hunk, prefixLength, suffixLength)}
           </span>
+          {hunk.context && <>
+            {" "}
+            <span data-testid="environment-diff-hunk-header-context" className="environment-diff-hunk-header-context min-w-0 flex-1 truncate">{hunk.context}</span>
+          </>}
         </div>
       </td>
     </tr>
@@ -170,7 +209,7 @@ function UnifiedDiff({
   if (!model.hasContentChange || model.hunks.length === 0) return null;
 
   return (
-    <div data-testid="environment-diff-view" className="environment-diff-view min-w-0">
+    <div data-testid="environment-diff-view" className="environment-diff-view min-w-0 flex-1">
       <div className="environment-diff-code">
         <div className="environment-diff-table-wrapper">
           <table className="environment-diff-table">
@@ -182,11 +221,12 @@ function UnifiedDiff({
                 const gap = model.gaps[hunkIndex];
                 const expansion = gapExpansion[gap.index] ?? { up: 0, down: 0 };
                 const visible = visibleGapRows(gap, expansion);
+                const { prefixLength, suffixLength } = hunkBoundaryLengths(model, hunkIndex, gapExpansion);
                 return (
                   <Fragment key={`hunk-group-${hunk.index}`}>
                     {visible.downRows.map((row, index) => <DiffLine key={lineKey(row, index)} row={row} index={index} />)}
                     {visible.upRows.map((row, index) => <DiffLine key={lineKey(row, visible.downRows.length + index)} row={row} index={visible.downRows.length + index} />)}
-                    <HunkHeader hunk={hunk} gap={gap} expansion={expansion} onExpand={(direction) => onExpandGap(gap, direction)} />
+                    <HunkHeader hunk={hunk} gap={gap} expansion={expansion} prefixLength={prefixLength} suffixLength={suffixLength} onExpand={(direction) => onExpandGap(gap, direction)} />
                     {hunk.rows.map((row, index) => <DiffLine key={lineKey(row, index)} row={row} index={index} />)}
                   </Fragment>
                 );
@@ -324,10 +364,10 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
           <div aria-hidden="true" className="min-w-0" />
         </DialogHeader>
         <DialogDescription className="sr-only">单栏显示项目当前文件到环境快照的只读差异。</DialogDescription>
-        <div className="min-h-0 flex-1">
-          <div data-testid="environment-diff-scroll" className="environment-diff-shell min-w-0 overflow-hidden rounded-md border border-border">
-            <div className="min-w-0">
-              <div className="environment-diff-header flex min-w-0 items-center gap-3 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground">
+        <div className="flex h-full min-h-0 min-w-0 flex-col">
+          <div data-testid="environment-diff-scroll" className="environment-diff-shell min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-border">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="environment-diff-header flex min-w-0 shrink-0 items-center gap-3 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground">
                 <span data-testid="environment-diff-path-title" className="min-w-0 flex-1 truncate overflow-hidden">{selectedPath || "未选择文件"}</span>
                 {model && <DiffStats model={model} />}
               </div>

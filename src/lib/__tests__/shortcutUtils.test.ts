@@ -17,6 +17,11 @@ describe("keyboardEventToShortcut", () => {
     expect(keyboardEventToShortcut(e)).toBe("Alt+F5");
   });
 
+  it("converts a standalone function key", () => {
+    const e = { ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, key: "F8" };
+    expect(keyboardEventToShortcut(e)).toBe("F8");
+  });
+
   it("rejects modifier-only combo (just Ctrl)", () => {
     const e = { ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, key: "Control" };
     expect(keyboardEventToShortcut(e)).toBeNull();

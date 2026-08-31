@@ -19,6 +19,7 @@ describe("buildEnvironmentDiff", () => {
     expect(model.deletions).toBe(1);
     expect(model.hunks).toHaveLength(1);
     expect(model.hunks[0].header).toBe("@@ -1,1 +1,1 @@");
+    expect(model.hunks[0].context).toBe("");
     expect(model.hunks[0].rows.map((row) => [row.kind, row.oldLineNumber, row.newLineNumber, row.text])).toEqual([
       ["deletion", 1, null, "A=1"],
       ["addition", null, 1, "A=2"],
@@ -42,12 +43,14 @@ describe("buildEnvironmentDiff", () => {
     expect(created.additions).toBe(2);
     expect(created.deletions).toBe(0);
     expect(created.hunks[0].header).toBe("@@ -0,0 +1,2 @@");
+    expect(created.hunks[0].context).toBe("");
     expect(created.hunks[0].rows.every((row) => row.kind === "addition")).toBe(true);
     expect(created.hunks[0].rows.map((row) => row.newLineNumber)).toEqual([1, 2]);
 
     expect(deleted.additions).toBe(0);
     expect(deleted.deletions).toBe(2);
     expect(deleted.hunks[0].header).toBe("@@ -1,2 +0,0 @@");
+    expect(deleted.hunks[0].context).toBe("");
     expect(deleted.hunks[0].rows.every((row) => row.kind === "deletion")).toBe(true);
     expect(deleted.hunks[0].rows.map((row) => row.oldLineNumber)).toEqual([1, 2]);
   });
@@ -149,6 +152,33 @@ describe("buildEnvironmentDiff", () => {
       ["deletion", "one", "crlf"],
       ["addition", "one", "lf"],
     ]);
+  });
+
+  it("derives each hunk context from the nearest eligible current line", () => {
+    const current = [
+      "# file",
+      "  ignored",
+      "function build() {",
+      "  return one;",
+      "  return two;",
+      "  return three;",
+      "  return four;",
+      "  return five;",
+      "tail",
+    ].join("\n");
+    const snapshot = current.replace("  return four;", "  return changed;");
+    const model = buildEnvironmentDiff("context.txt", text(current), text(snapshot));
+
+    expect(model.hunks).toHaveLength(1);
+    expect(model.hunks[0].context).toBe("function build() {");
+  });
+
+  it("does not generate context for a new file and leaves context empty when no line qualifies", () => {
+    const created = buildEnvironmentDiff("created.txt", { state: "absent" }, text("A=1\nB=2\n"));
+    const noContext = buildEnvironmentDiff("no-context.txt", text("  old\n# note\n"), text("  new\n# note\n"));
+
+    expect(created.hunks[0].context).toBe("");
+    expect(noContext.hunks[0].context).toBe("");
   });
 
   it("keeps permanent three-line hunks and complete hidden gaps in order", () => {

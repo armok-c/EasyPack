@@ -15,9 +15,9 @@ interface KeyboardEventLike {
 
 /**
  * Convert a browser KeyboardEvent to a Tauri Accelerator shortcut string.
- * Returns null if the combo is invalid (no modifier, modifier-only, or >3 keys).
+ * Returns null if the combo is invalid (no modifier except F1-F12, modifier-only, or >3 keys).
  *
- * Rules per D-06: must include at least one modifier (Ctrl/Alt/Shift).
+ * Rules per D-06: must include at least one modifier (Ctrl/Alt/Shift), except standalone F1-F12.
  * Rules per D-07: 2-3 key combo max.
  */
 export function keyboardEventToShortcut(e: KeyboardEventLike): string | null {
@@ -29,7 +29,8 @@ export function keyboardEventToShortcut(e: KeyboardEventLike): string | null {
   const MODIFIER_KEYS = ["Control", "Alt", "Shift", "Meta"];
   if (MODIFIER_KEYS.includes(e.key)) return null; // modifier-only
 
-  if (parts.length === 0) return null; // no modifier (D-06)
+  const isStandaloneFunctionKey = /^F(?:[1-9]|1[0-2])$/.test(e.key);
+  if (parts.length === 0 && !isStandaloneFunctionKey) return null; // no modifier (D-06)
 
   const KEY_MAP: Record<string, string> = {
     ArrowUp: "Up",

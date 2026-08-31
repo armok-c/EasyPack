@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import "@testing-library/jest-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EnvironmentDiffDialog } from "@/components/EnvironmentDiffDialog";
 import type { EnvironmentDetailResponse } from "@/lib/environment-types";
+
+const environmentDiffStyles = readFileSync(resolve(process.cwd(), "src/components/environment-diff.css"), "utf8");
 
 function response(
   path: string,
@@ -75,6 +79,29 @@ describe("EnvironmentDiffDialog", () => {
     expect(title).toHaveClass("min-w-0", "text-base", "leading-normal", "break-words");
     expect(title).not.toHaveClass("truncate");
     expect(selectorGroup).toHaveClass("w-full", "min-w-0", "justify-self-center");
+  });
+
+  it("fills the dialog middle area while keeping scrolling on the table wrapper", async () => {
+    const onDetail = vi.fn().mockResolvedValue(response(".env"));
+    renderDialog(onDetail);
+
+    const shell = screen.getByTestId("environment-diff-scroll");
+    expect(shell.parentElement).toHaveClass("flex", "h-full", "min-h-0", "min-w-0", "flex-col");
+    expect(shell).toHaveClass("min-h-0", "min-w-0", "flex-1");
+
+    await waitFor(() => expect(screen.getByTestId("environment-diff-view")).toBeInTheDocument());
+    const view = screen.getByTestId("environment-diff-view");
+    const code = view.querySelector(".environment-diff-code");
+    const wrapper = view.querySelector(".environment-diff-table-wrapper");
+    const header = screen.getByTestId("environment-diff-path-title").parentElement;
+    expect(view).toHaveClass("min-w-0", "flex-1");
+    expect(header).toHaveClass("environment-diff-header", "shrink-0");
+    expect(code).toHaveClass("environment-diff-code");
+    expect(wrapper).toHaveClass("environment-diff-table-wrapper");
+    expect(environmentDiffStyles).not.toContain("max-height: 52vh");
+    expect(environmentDiffStyles).not.toContain("container-type");
+    expect(environmentDiffStyles).not.toContain("100cqi");
+    expect(environmentDiffStyles).toContain("flex: 1 1 auto;");
   });
 
   it("keeps the compact diff footer fixed and navigates files without cycling", async () => {
@@ -161,14 +188,18 @@ describe("EnvironmentDiffDialog", () => {
     expect(document.querySelector(".environment-diff-old-line-num")).toHaveClass("sticky");
     expect(document.querySelector(".environment-diff-new-line-num")).toHaveClass("sticky");
     const hunkHeader = hunkHeaders()[0];
-    expect(hunkHeader.children).toHaveLength(1);
-    expect(hunkHeader.children[0]).toHaveAttribute("colspan", "3");
+    expect(hunkHeader.children).toHaveLength(2);
+    expect(hunkHeader.children[0]).toHaveAttribute("colspan", "2");
     expect(hunkHeader.children[0]).toHaveClass("environment-diff-hunk-header");
-    const hunkLabel = screen.getByTestId("environment-diff-hunk-header-label");
-    expect(hunkLabel).toHaveTextContent("@@ -1,1 +1,1 @@");
-    expect(hunkLabel).toHaveClass("min-w-0", "truncate", "overflow-hidden");
-    expect(hunkLabel).not.toHaveAttribute("title");
-    expect(hunkLabel.parentElement).toHaveClass("environment-diff-hunk-header-content", "min-w-0", "overflow-hidden");
+    expect(hunkHeader.children[1]).not.toHaveAttribute("colspan");
+    expect(hunkHeader.children[1]).toHaveClass("environment-diff-hunk-header");
+    const hunkRange = screen.getByTestId("environment-diff-hunk-header-range");
+    expect(hunkRange).toHaveTextContent("@@ -1,1 +1,1 @@");
+    expect(hunkRange).toHaveClass("shrink-0", "whitespace-nowrap");
+    expect(hunkRange).not.toHaveClass("truncate");
+    expect(hunkRange).not.toHaveAttribute("title");
+    expect(screen.queryByTestId("environment-diff-hunk-header-context")).not.toBeInTheDocument();
+    expect(hunkRange.parentElement).toHaveClass("environment-diff-hunk-header-content", "min-w-0", "overflow-hidden");
     expect(document.querySelector(".environment-diff-table-wrapper")).toHaveClass("environment-diff-table-wrapper");
     expect(screen.queryByTestId("environment-diff-status")).not.toBeInTheDocument();
     expect(document.querySelectorAll("[contenteditable='true']")).toHaveLength(0);
@@ -183,7 +214,10 @@ describe("EnvironmentDiffDialog", () => {
     renderDialog(onDetail, ["multi.txt"]);
 
     await waitFor(() => expect(hunkHeaders()).toHaveLength(2));
-    expect(hunkHeaders().map((header) => header.textContent)).toEqual(["@@ -1,5 +1,5 @@", "@@ -15,6 +15,6 @@"]);
+    expect(hunkHeaders().map((header) => header.textContent)).toEqual(["@@ -1,5 +1,5 @@ line-1", "@@ -15,6 +15,6 @@ line-17"]);
+    expect(screen.getAllByTestId("environment-diff-hunk-header-context").map((context) => context.textContent)).toEqual(["line-1", "line-17"]);
+    expect(screen.getAllByTestId("environment-diff-hunk-header-range").every((range) => range.classList.contains("shrink-0"))).toBe(true);
+    expect(screen.getAllByTestId("environment-diff-hunk-header-context").every((context) => context.classList.contains("min-w-0") && context.classList.contains("flex-1") && context.classList.contains("truncate"))).toBe(true);
     expect(renderedLineTexts()).toEqual([
       "line-1", "line-2", "changed-2", "line-3", "line-4", "line-5",
       "line-15", "line-16", "line-17", "line-18", "changed-18", "line-19", "line-20",
@@ -218,6 +252,7 @@ describe("EnvironmentDiffDialog", () => {
     expect(secondHeader.previousElementSibling).toHaveTextContent("line-21");
     expect(secondHeader.nextElementSibling).toHaveClass("environment-diff-line");
     expect(secondHeader.nextElementSibling).toHaveTextContent("line-22");
+    expect(secondHeader).toHaveTextContent("@@ -12,17 +12,17 @@ line-24");
   });
 
   it("expands gaps by ten lines without moving or duplicating hunk headers", async () => {
@@ -247,7 +282,7 @@ describe("EnvironmentDiffDialog", () => {
     }
     await waitFor(() => expect(renderedLineTexts()).toContain("line-30"));
     expect(hunkHeaders()).toHaveLength(1);
-    expect(hunkHeaders()[0].textContent).toBe("@@ -12,7 +12,7 @@");
+    expect(hunkHeaders()[0].textContent).toBe("@@ -1,30 +1,30 @@ line-14");
     expect(renderedLineTexts()).toEqual([
       ...Array.from({ length: 14 }, (_, index) => `line-${index + 1}`),
       "line-15", "changed-15",
@@ -272,7 +307,7 @@ describe("EnvironmentDiffDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "展开当前文件全部内容" }));
     await waitFor(() => expect(screen.getByText("line-30")).toBeInTheDocument());
     const headers = hunkHeaders();
-    expect(headers.map((header) => header.textContent)).toEqual(["@@ -1,5 +1,5 @@", "@@ -22,7 +22,7 @@"]);
+    expect(headers.map((header) => header.textContent)).toEqual(["@@ -1,5 +1,5 @@ line-1", "@@ -6,25 +6,25 @@ line-24"]);
     expect(headers[0].compareDocumentPosition(headers[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const lines = renderedLineTexts();
     expect(lines.filter((line) => line === "line-10")).toHaveLength(1);
@@ -281,6 +316,18 @@ describe("EnvironmentDiffDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "折叠当前文件全部内容" }));
     expect(screen.getByRole("button", { name: "展开当前文件全部内容" })).not.toBeDisabled();
     expect(renderedLineTexts()).not.toContain("line-10");
+  });
+
+  it("extends a single hunk range through the end of a 110-line file", async () => {
+    const oldContent = Array.from({ length: 110 }, (_, index) => `line-${index + 1}`).join("\n");
+    const snapshotContent = oldContent.replace("line-55", "changed-55");
+    const onDetail = vi.fn().mockResolvedValue(response("long.txt", { state: "text", content: snapshotContent }, { state: "text", content: oldContent }));
+    renderDialog(onDetail, ["long.txt"]);
+
+    await waitFor(() => expect(hunkHeaders()).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "展开当前文件全部内容" }));
+    await waitFor(() => expect(screen.getByText("line-110")).toBeInTheDocument());
+    expect(hunkHeaders()[0]).toHaveTextContent("@@ -1,110 +1,110 @@ line-54");
   });
 
   it("expands an inter-hunk gap toward the correct boundary", async () => {
@@ -296,12 +343,14 @@ describe("EnvironmentDiffDialog", () => {
     fireEvent.click(middleGap().getByRole("button", { name: "向上展开10行" }));
     expect(renderedLineTexts()).toEqual(expect.arrayContaining(["line-12", "line-19", "line-20", "line-21"]));
     expect(renderedLineTexts()).not.toEqual(expect.arrayContaining(["line-6", "line-7", "line-8"]));
+    expect(hunkHeaders().map((header) => header.textContent)).toEqual(["@@ -1,5 +1,5 @@ line-1", "@@ -12,17 +12,17 @@ line-24"]);
 
     fireEvent.click(middleGap().getByRole("button", { name: "向下展开10行" }));
     const lines = renderedLineTexts();
     expect(lines).toEqual(expect.arrayContaining(["line-6", "line-7", "line-8", "line-19", "line-20", "line-21"]));
     expect(lines.indexOf("line-8")).toBeLessThan(lines.indexOf("line-19"));
     expect(new Set(lines).size).toBe(lines.length);
+    expect(hunkHeaders().map((header) => header.textContent)).toEqual(["@@ -1,11 +1,11 @@ line-1", "@@ -12,17 +12,17 @@ line-24"]);
   });
 
   it("uses the same expansion direction for a trailing gap", async () => {
@@ -323,6 +372,41 @@ describe("EnvironmentDiffDialog", () => {
     expect(lines).toEqual(expect.arrayContaining(["line-19", "line-20", "line-21", "line-28", "line-29", "line-30"]));
     expect(lines.indexOf("line-21")).toBeLessThan(lines.indexOf("line-28"));
     expect(new Set(lines).size).toBe(lines.length);
+  });
+
+  it("does not count a partial head-gap down expansion in a discontinuous range", async () => {
+    const oldContent = Array.from({ length: 30 }, (_, index) => `line-${index + 1}`).join("\n");
+    const snapshotContent = oldContent.replace("line-25", "changed-25");
+    const onDetail = vi.fn().mockResolvedValue(response("head-gap.txt", { state: "text", content: snapshotContent }, { state: "text", content: oldContent }));
+    renderDialog(onDetail, ["head-gap.txt"]);
+
+    await waitFor(() => expect(hunkHeaders()).toHaveLength(1));
+    const headGap = document.querySelector("[data-gap-index='0']") as HTMLElement;
+    expect(hunkHeaders()[0]).toHaveTextContent("@@ -22,7 +22,7 @@ line-24");
+    fireEvent.click(within(headGap).getByRole("button", { name: "向下展开10行" }));
+    expect(hunkHeaders()[0]).toHaveTextContent("@@ -22,7 +22,7 @@ line-24");
+    for (let expansion = 0; expansion < 2; expansion += 1) {
+      fireEvent.click(within(headGap).getByRole("button", { name: "向下展开10行" }));
+    }
+    expect(document.querySelector("[data-gap-index='0']")).not.toBeInTheDocument();
+    expect(hunkHeaders()[0]).toHaveTextContent("@@ -1,28 +1,28 @@ line-24");
+  });
+
+  it("assigns trailing-gap down expansion to the last hunk range", async () => {
+    const oldContent = Array.from({ length: 30 }, (_, index) => `line-${index + 1}`).join("\n");
+    const snapshotContent = oldContent.replace("line-2", "changed-2");
+    const onDetail = vi.fn().mockResolvedValue(response("tail-gap.txt", { state: "text", content: snapshotContent }, { state: "text", content: oldContent }));
+    renderDialog(onDetail, ["tail-gap.txt"]);
+
+    await waitFor(() => expect(hunkHeaders()).toHaveLength(1));
+    const tailGap = document.querySelector("[data-gap-index='1']") as HTMLElement;
+    expect(hunkHeaders()[0]).toHaveTextContent("@@ -1,5 +1,5 @@ line-1");
+    fireEvent.click(within(tailGap).getByRole("button", { name: "向下展开10行" }));
+    expect(hunkHeaders()[0]).toHaveTextContent("@@ -1,15 +1,15 @@ line-1");
+    for (let expansion = 0; expansion < 2; expansion += 1) {
+      fireEvent.click(within(tailGap).getByRole("button", { name: "向上展开10行" }));
+    }
+    expect(hunkHeaders()[0]).toHaveTextContent("@@ -1,30 +1,30 @@ line-1");
   });
 
   it("renders a head insertion as one new-side row", async () => {

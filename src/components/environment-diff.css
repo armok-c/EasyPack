@@ -10,19 +10,22 @@
 
 .environment-diff-view {
   display: flex;
+  flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
 }
 
 .environment-diff-code {
+  display: flex;
   min-height: 0;
   flex: 1 1 auto;
+  flex-direction: column;
   overflow: hidden;
 }
 
 .environment-diff-table-wrapper {
-  container-type: inline-size;
-  max-height: 52vh;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-x: auto;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -118,24 +121,18 @@
   white-space: normal;
 }
 
+.environment-diff-hunk-header-controls {
+  white-space: nowrap;
+}
+
 .environment-diff-hunk-header-content {
   display: flex;
-  width: 100cqi;
   min-width: 0;
-  max-width: 100cqi;
   align-items: center;
   box-sizing: border-box;
   overflow: hidden;
   background: #1f2937;
   padding: 5px 10px;
-}
-
-.environment-diff-hunk-header-label {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .environment-diff-gap-cell {

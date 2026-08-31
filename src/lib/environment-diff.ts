@@ -27,6 +27,7 @@ export interface EnvironmentDiffHunk {
   newStart: number;
   newLines: number;
   header: string;
+  context: string;
   rows: EnvironmentDiffRow[];
 }
 
@@ -203,6 +204,32 @@ function hunkHeader(source: StructuredPatchHunk): string {
   return `@@ -${oldStart},${source.oldLines} +${newStart},${source.newLines} @@`;
 }
 
+function contentLines(content: string): string[] {
+  const lines = content.split(/\r?\n/);
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+function hunkContext(
+  source: StructuredPatchHunk,
+  rows: EnvironmentDiffRow[],
+  current: EnvironmentFileContent,
+  oldContent: string,
+): string {
+  if (current.state === "absent") return "";
+  let leadingContextOldCount = 0;
+  for (const row of rows) {
+    if (row.kind !== "context") break;
+    if (row.oldLineNumber !== null) leadingContextOldCount += 1;
+  }
+  const lastOldLineBeforeChange = source.oldStart + leadingContextOldCount - 1;
+  const lines = contentLines(oldContent);
+  for (let index = Math.min(lastOldLineBeforeChange - 1, lines.length - 1); index >= 0; index -= 1) {
+    if (/^[A-Za-z_$]/.test(lines[index])) return lines[index];
+  }
+  return "";
+}
+
 /** Build the one authoritative current(old) -> snapshot(new) diff model. */
 export function buildEnvironmentDiff(
   path: string,
@@ -251,6 +278,7 @@ export function buildEnvironmentDiff(
       newStart: parsed.source.newStart,
       newLines: parsed.source.newLines,
       header: hunkHeader(parsed.source),
+      context: hunkContext(parsed.source, parsed.rows, current, oldContent),
       rows: rows.slice(range[0], range[1]),
     });
   }

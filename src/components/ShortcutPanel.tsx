@@ -385,6 +385,15 @@ export function ShortcutPanel({
               <RotateCcw className="size-3" />
               重置所有快捷键
             </button>
+            {recordingId !== null && (
+              <button
+                onClick={stopRecording}
+                className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="size-3" />
+                取消录入
+              </button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
