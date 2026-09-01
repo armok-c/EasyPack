@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="EasyPack.png" alt="EasyPack 项目图标" width="96">
+
 # EasyPack
 
 **Windows 开发者的项目指令与环境切换工具**
