@@ -133,6 +133,100 @@ describe("useProject - Phase 22 simplified contract", () => {
   });
 });
 
+describe("useProject - missing project directory errors", () => {
+  const testProject = {
+    id: "test/missing-directory-project",
+    name: "missing-directory-project",
+    path: "C:\\test\\missing-directory-project",
+    addedAt: 1000,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "projects") return Promise.resolve([testProject]);
+      if (key === "selectedProjectId") return Promise.resolve(testProject.id);
+      return Promise.resolve(undefined);
+    });
+    mockStore.set.mockResolvedValue(undefined);
+    mockStore.delete.mockResolvedValue(undefined);
+    mockStore.keys.mockResolvedValue([]);
+    mockStore.save.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  async function initHook() {
+    const { result } = renderHook(() => useProject());
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+    return result;
+  }
+
+  it("shows the exact missing-directory message for all execution paths", async () => {
+    const result = await initHook();
+    mockToastError.mockClear();
+    mockInvoke.mockRejectedValue("项目目录不存在");
+
+    await act(async () => {
+      await result.current.openFolder(testProject.path);
+      expect(await result.current.executeCommand("echo hello")).toBe(false);
+      expect(await result.current.executeScriptCommand({
+        id: "script-command",
+        name: "Script",
+        command: "echo hello",
+        icon: "Terminal",
+        type: "custom",
+        scope: "project",
+        addedAt: 1000,
+        scriptLines: "echo hello\necho world",
+        executionMode: "strict",
+      })).toBe(false);
+    });
+
+    expect(mockToastError).toHaveBeenCalledTimes(3);
+    expect(mockToastError.mock.calls).toEqual([
+      ["项目目录不存在"],
+      ["项目目录不存在"],
+      ["项目目录不存在"],
+    ]);
+  });
+
+  it("keeps the existing message for errors other than a missing directory", async () => {
+    const result = await initHook();
+    mockToastError.mockClear();
+    mockInvoke.mockRejectedValue("backend failed");
+
+    await act(async () => {
+      await result.current.openFolder(testProject.path);
+      await result.current.executeCommand("echo hello");
+      await result.current.executeScriptCommand({
+        id: "script-command",
+        name: "Script",
+        command: "echo hello",
+        icon: "Terminal",
+        type: "custom",
+        scope: "project",
+        addedAt: 1000,
+        scriptLines: "echo hello",
+        executionMode: "strict",
+      });
+    });
+
+    expect(mockToastError.mock.calls).toEqual([
+      ["无法打开文件夹", { description: "路径无效或文件夹不存在" }],
+      ["命令执行失败：backend failed。请检查项目路径和命令是否正确。"],
+      ["脚本执行失败：backend failed。请检查脚本内容是否正确。"],
+    ]);
+  });
+});
+
 describe("useProject - command CRUD", () => {
   const testProjectForCrud = {
     id: "test/crud-project",

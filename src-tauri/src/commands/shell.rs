@@ -6,6 +6,14 @@ use std::process::Command as StdCommand;
 const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
 const DETACHED_PROCESS: u32 = 0x00000008;
 const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+const MISSING_PROJECT_DIRECTORY_ERROR: &str = "项目目录不存在";
+
+fn validate_project_directory(project_path: &str) -> Result<(), String> {
+    if !Path::new(project_path).is_dir() {
+        return Err(MISSING_PROJECT_DIRECTORY_ERROR.to_string());
+    }
+    Ok(())
+}
 
 /// spawn cmd.exe 并尝试脱离 Job Object。
 /// 若父进程的 Job Object 不允许 breakaway (ERROR_ACCESS_DENIED)，回退到普通 spawn。
@@ -56,6 +64,7 @@ pub async fn execute_command(project_path: String, shell_command: String) -> Res
     if shell_command.contains('"') {
         return Err("Invalid shell command: contains double quote".to_string());
     }
+    validate_project_directory(&project_path)?;
     let args = build_cmd_start_args(&project_path, &shell_command);
     spawn_detached(&args).map_err(|e| format!("Failed to execute command: {}", e))?;
 
@@ -69,6 +78,7 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     if path.contains('"') {
         return Err("Invalid path: contains double quote".to_string());
     }
+    validate_project_directory(&path)?;
     StdCommand::new("explorer.exe")
         .raw_arg(format!("\"{}\"", path))
         .spawn()
@@ -216,6 +226,7 @@ pub async fn execute_script(
     if script_content.len() > 1_048_576 {
         return Err("Script content exceeds 1MB limit".to_string());
     }
+    validate_project_directory(&project_path)?;
     let content = build_bat_content(&project_path, &script_content, is_batch_script, strict);
 
     // Create temp .bat file with "easypack-" prefix (per D-09)
@@ -537,6 +548,44 @@ mod tests {
         ));
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("double quote"));
+    }
+
+    #[test]
+    fn test_execute_command_rejects_missing_project_directory() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let missing_path = temp_dir.path().join("missing-project");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(execute_command(
+            missing_path.to_string_lossy().into_owned(),
+            "echo hello".to_string(),
+        ));
+
+        assert_eq!(result.unwrap_err(), MISSING_PROJECT_DIRECTORY_ERROR);
+    }
+
+    #[test]
+    fn test_open_folder_rejects_missing_project_directory() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let missing_path = temp_dir.path().join("missing-project");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(open_folder(missing_path.to_string_lossy().into_owned()));
+
+        assert_eq!(result.unwrap_err(), MISSING_PROJECT_DIRECTORY_ERROR);
+    }
+
+    #[test]
+    fn test_execute_script_rejects_missing_project_directory_before_temp_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let missing_path = temp_dir.path().join("missing-project");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(execute_script(
+            missing_path.to_string_lossy().into_owned(),
+            "echo hello".to_string(),
+            false,
+            true,
+        ));
+
+        assert_eq!(result.unwrap_err(), MISSING_PROJECT_DIRECTORY_ERROR);
     }
 
     // --- Phase 17: build_bat_content tests ---

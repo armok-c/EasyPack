@@ -140,6 +140,10 @@ function errorDetail(error: unknown): string {
   return "未知错误";
 }
 
+function isMissingProjectDirectoryError(error: unknown): boolean {
+  return errorDetail(error) === "项目目录不存在";
+}
+
 function errorWithRollback(cause: unknown, rollbackErrors: unknown[]): Error {
   const causeMessage = errorDetail(cause);
   if (rollbackErrors.length === 0) {
@@ -921,9 +925,13 @@ export function useProject() {
         toast.success(`已执行: ${shellCommand}`);
         return true;
       } catch (error) {
-        toast.error(
-          `命令执行失败：${error}。请检查项目路径和命令是否正确。`
-        );
+        if (isMissingProjectDirectoryError(error)) {
+          toast.error("项目目录不存在");
+        } else {
+          toast.error(
+            `命令执行失败：${error}。请检查项目路径和命令是否正确。`
+          );
+        }
         return false;
       }
     },
@@ -947,9 +955,13 @@ export function useProject() {
           toast.success(`已执行脚本: ${cmd.name}`);
           return true;
         } catch (error) {
-          toast.error(
-            `脚本执行失败：${error}。请检查脚本内容是否正确。`
-          );
+          if (isMissingProjectDirectoryError(error)) {
+            toast.error("项目目录不存在");
+          } else {
+            toast.error(
+              `脚本执行失败：${error}。请检查脚本内容是否正确。`
+            );
+          }
           return false;
         }
       }
@@ -1292,9 +1304,13 @@ export function useProject() {
     try {
       await invoke("open_folder", { path });
     } catch (error) {
-      toast.error("无法打开文件夹", {
-        description: "路径无效或文件夹不存在",
-      });
+      if (isMissingProjectDirectoryError(error)) {
+        toast.error("项目目录不存在");
+      } else {
+        toast.error("无法打开文件夹", {
+          description: "路径无效或文件夹不存在",
+        });
+      }
     }
   }, []);
 
