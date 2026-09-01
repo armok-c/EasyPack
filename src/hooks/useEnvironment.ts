@@ -58,6 +58,7 @@ export interface UseEnvironmentResult {
   capture: CaptureAction;
   captureMany: (environmentIds: string[]) => Promise<EnvironmentBatchResult>;
   detail: (environmentId: string, path: string) => Promise<EnvironmentDetailResponse>;
+  openCurrentFile: (environmentId: string, path: string) => Promise<void>;
   copy: (environmentId: string, name: string) => Promise<EnvironmentProjectState>;
   deleteEnvironment: DeleteAction;
   deleteMany: (environmentIds: string[]) => Promise<EnvironmentBatchResult>;
@@ -481,6 +482,15 @@ export function useEnvironment(options: UseEnvironmentOptions): UseEnvironmentRe
     [api, perform, renderScope, requireProject],
   );
 
+  const openCurrentFile = useCallback(
+    async (environmentId: string, path: string): Promise<void> => {
+      if (!isCurrentScope(renderScope)) throw new Error("项目已切换，已取消这次环境操作");
+      const ref = requireProject();
+      await api.openCurrentFile({ project: ref, environmentId, path });
+    },
+    [api, isCurrentScope, renderScope, requireProject],
+  );
+
   const copy = useCallback(
     (environmentId: string, name: string) =>
       perform(renderScope, async () => {
@@ -654,6 +664,7 @@ export function useEnvironment(options: UseEnvironmentOptions): UseEnvironmentRe
     capture,
     captureMany,
     detail,
+    openCurrentFile,
     copy,
     deleteEnvironment,
     deleteMany,

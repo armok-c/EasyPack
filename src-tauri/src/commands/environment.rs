@@ -1466,6 +1466,46 @@ impl EnvironmentStore {
         })
     }
 
+    pub fn current_file_path(&self, request: &EnvironmentDetailRequest) -> Result<PathBuf, String> {
+        self.with_lock(&request.project, |store| {
+            store.ensure_ready(&request.project)?;
+            let manifest = store.load_manifest(&request.project)?;
+            let path = request.path.replace('\\', "/");
+            validate_relative_path(&path)?;
+            if !manifest
+                .managed_paths
+                .iter()
+                .any(|managed| managed == &path)
+            {
+                return Err("文件不属于受管清单".to_string());
+            }
+            let environment = find_environment(&manifest, &request.environment_id)?;
+            let entry = environment
+                .entries
+                .get(&path)
+                .ok_or_else(|| "环境快照缺少受管文件".to_string())?;
+            if entry.path != path {
+                return Err("环境快照路径不一致".to_string());
+            }
+            let root = store.project_root(&request.project, &manifest)?;
+            let full = resolve_safe_path(&root, &path)?;
+            match fs::symlink_metadata(&full) {
+                Ok(metadata) if metadata.is_dir() => Err(format!("受管路径不是普通文件: {}", path)),
+                Ok(metadata) if is_reparse_metadata(&metadata) => {
+                    Err(format!("受管路径包含重解析点: {}", path))
+                }
+                Ok(metadata) if !metadata.is_file() => {
+                    Err(format!("受管路径不是普通文件: {}", path))
+                }
+                Ok(_) => Ok(full),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    Err(format!("受管文件不存在: {}", path))
+                }
+                Err(error) => Err(io_error(error)),
+            }
+        })
+    }
+
     pub fn copy_environment(
         &self,
         request: &EnvironmentRequest,
@@ -3613,6 +3653,15 @@ pub fn environment_detail(
     from_app(&app)?.environment_detail(&request)
 }
 
+#[tauri::command]
+pub fn environment_open_current_file(
+    app: tauri::AppHandle,
+    request: EnvironmentDetailRequest,
+) -> Result<(), String> {
+    let path = from_app(&app)?.current_file_path(&request)?;
+    crate::commands::shell::open_file_with_default_program(&path)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyEnvironmentRequest {
@@ -4268,6 +4317,34 @@ mod tests {
             path: "a.env".into(),
         });
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn current_file_path_validates_managed_existing_regular_files_without_spawning() {
+        let _guard = test_lock();
+        let dir = tempdir().unwrap();
+        let (store, project, state) = create(dir.path());
+        let environment_id = state.environments[0].id.clone();
+        let request = |path: &str| EnvironmentDetailRequest {
+            project: project.clone(),
+            environment_id: environment_id.clone(),
+            path: path.to_string(),
+        };
+
+        let resolved = store.current_file_path(&request("a.env")).unwrap();
+        assert_eq!(
+            resolved,
+            fs::canonicalize(dir.path()).unwrap().join("a.env")
+        );
+        assert!(store.current_file_path(&request("missing.env")).is_err());
+        assert!(store.current_file_path(&request("../a.env")).is_err());
+        assert!(store.current_file_path(&request("unmanaged.env")).is_err());
+
+        fs::remove_file(dir.path().join("a.env")).unwrap();
+        fs::create_dir(dir.path().join("a.env")).unwrap();
+        let result = store.current_file_path(&request("a.env"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("普通文件"));
     }
 
     #[test]

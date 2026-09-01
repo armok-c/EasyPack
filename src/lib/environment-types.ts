@@ -262,6 +262,7 @@ export interface EnvironmentApi {
   create(request: CreateEnvironmentRequest): Promise<EnvironmentProjectState>;
   capture(request: EnvironmentRequest): Promise<EnvironmentProjectState>;
   detail(request: EnvironmentDetailRequest): Promise<EnvironmentDetailResponse>;
+  openCurrentFile(request: EnvironmentDetailRequest): Promise<void>;
   copy(request: CopyEnvironmentRequest): Promise<EnvironmentProjectState>;
   deleteEnvironment(request: EnvironmentRequest): Promise<EnvironmentProjectState>;
   migrateManifest(request: MigrateManifestRequest): Promise<EnvironmentProjectState>;
@@ -302,6 +303,7 @@ export function createEnvironmentApi(
     create: (request) => call("environment_create", { request }),
     capture: (request) => call("environment_capture", { request }),
     detail: (request) => call("environment_detail", { request }),
+    openCurrentFile: (request) => call("environment_open_current_file", { request }),
     copy: (request) => call("environment_copy", { request }),
     deleteEnvironment: (request) => call("environment_delete", { request }),
     migrateManifest: (request) => call("environment_migrate_manifest", { request }),

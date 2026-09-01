@@ -1,4 +1,5 @@
 use std::os::windows::process::CommandExt;
+use std::path::Path;
 use std::process::Command as StdCommand;
 
 // 子进程脱离父进程的 Job Object，避免 tauri dev 重启时终端被一并杀死
@@ -73,6 +74,57 @@ pub async fn open_folder(path: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("Failed to open folder: {}", e))?;
     Ok(())
+}
+
+/// 使用 Windows 文件关联打开文件，不经过 cmd.exe 或 start 命令。
+pub fn open_file_with_default_program(path: &Path) -> Result<(), String> {
+    let path = path
+        .to_str()
+        .ok_or_else(|| "文件路径不是有效的 Windows 路径".to_string())?;
+    if path.contains('"') {
+        return Err("Invalid file path: contains double quote".to_string());
+    }
+    let path = strip_extended_path_prefix(path);
+    use std::os::windows::ffi::OsStrExt;
+
+    #[link(name = "shell32")]
+    extern "system" {
+        fn ShellExecuteW(
+            hwnd: *mut std::ffi::c_void,
+            operation: *const u16,
+            file: *const u16,
+            parameters: *const u16,
+            directory: *const u16,
+            show_command: i32,
+        ) -> isize;
+    }
+
+    let operation: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
+    let file: Vec<u16> = std::ffi::OsStr::new(&path)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        )
+    };
+    if result <= 32 {
+        return Err(format!("Windows Shell 打开文件失败（返回码 {}）", result));
+    }
+    Ok(())
+}
+
+fn strip_extended_path_prefix(path: &str) -> String {
+    if let Some(path) = path.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{}", path);
+    }
+    path.strip_prefix(r"\\?\").unwrap_or(path).to_string()
 }
 
 // --- Phase 17: Multi-line script support ---
@@ -313,6 +365,30 @@ pub fn delete_file_content(project_path: String, file_name: String) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_strip_extended_path_prefix_drive_path() {
+        assert_eq!(
+            strip_extended_path_prefix(r"\\?\C:\Projects\EasyPack\config.env"),
+            r"C:\Projects\EasyPack\config.env"
+        );
+    }
+
+    #[test]
+    fn test_strip_extended_path_prefix_unc_path() {
+        assert_eq!(
+            strip_extended_path_prefix(r"\\?\UNC\server\share\config.env"),
+            r"\\server\share\config.env"
+        );
+    }
+
+    #[test]
+    fn test_strip_extended_path_prefix_keeps_normal_path() {
+        assert_eq!(
+            strip_extended_path_prefix(r"D:\Projects\EasyPack\config.env"),
+            r"D:\Projects\EasyPack\config.env"
+        );
+    }
 
     #[test]
     fn test_build_cmd_start_args_basic() {

@@ -78,7 +78,7 @@ describe("EnvironmentWorkspace", () => {
     ],
   };
 
-  it("keeps file list, creation, and selection count on the first row", () => {
+  it("keeps file list, creation, and compact stats on the first row", () => {
     const { container } = render(<EnvironmentWorkspace {...props()} />);
 
     const firstRow = screen.getByRole("button", { name: "文件清单" }).parentElement as HTMLElement;
@@ -92,8 +92,26 @@ describe("EnvironmentWorkspace", () => {
     expect(list).not.toContainElement(screen.getByRole("button", { name: "文件清单" }));
     expect(within(firstRow).getByRole("button", { name: "新建" })).toBeInTheDocument();
     expect(within(firstRow).queryByRole("button", { name: "捕获更新" })).not.toBeInTheDocument();
-    expect(within(firstRow).getByText("已选 0 个")).toHaveClass("ml-auto");
+    expect(within(firstRow).getByText("已选 0 个").parentElement).toHaveClass("ml-auto");
+    expect(within(firstRow).getByText("已选 0 个").parentElement).toHaveClass("flex", "items-center", "gap-2");
+    expect(within(firstRow).getByText("已选 0 个")).toHaveClass("rounded-md", "bg-muted/40", "px-2", "py-1");
+    expect(within(firstRow).getByText("文件 1 个")).toHaveClass("rounded-md", "bg-muted/40", "px-2", "py-1");
     expect(within(secondRow).queryByText("已选 0 个")).not.toBeInTheDocument();
+  });
+
+  it("uses the project managed file count instead of summing environment file counts", () => {
+    const countState: EnvironmentProjectState = {
+      ...manyState,
+      managedPaths: [".env", "local.env"],
+      environments: manyState.environments.map((environment) => ({ ...environment, fileCount: 99 })),
+    };
+    const { rerender } = render(<EnvironmentWorkspace {...props({ state: countState })} />);
+
+    expect(screen.getByText("文件 2 个")).toBeInTheDocument();
+    expect(screen.queryByText(/文件：/)).not.toBeInTheDocument();
+
+    rerender(<EnvironmentWorkspace {...props({ state: { ...countState, managedPaths: [] } })} />);
+    expect(screen.getByText("文件 0 个")).toBeInTheDocument();
   });
 
   it("selects every environment when inverting an empty selection", () => {
@@ -230,6 +248,11 @@ describe("EnvironmentWorkspace", () => {
     }, onCaptureMany })} />);
     await waitFor(() => expect(devRow.querySelector("[data-progress-status]")).toHaveAttribute("data-progress-status", "running"));
     expect(stagingRow.querySelector("[data-progress-status]")).toHaveAttribute("data-progress-status", "waiting");
+    const waitingProgress = stagingRow.querySelector("[data-waiting-progress]");
+    expect(waitingProgress).toHaveTextContent("等待中");
+    expect(waitingProgress).toHaveClass("relative", "h-5", "w-full", "ml-auto", "bg-muted/70", "text-muted-foreground");
+    expect(waitingProgress).not.toHaveAttribute("aria-valuenow");
+    expect(stagingRow.querySelectorAll("[role=progressbar]")).toHaveLength(0);
     resolveBatch?.({ results: [], state: manyState });
     await waitFor(() => expect(onCaptureMany).toHaveBeenCalledOnce());
   });
@@ -268,14 +291,16 @@ describe("EnvironmentWorkspace", () => {
 
   it("renders persisted per-environment progress without exposing it during planning", async () => {
     const progress = {
-      dev: { operationId: "capture-1", kind: "capture" as const, completedFiles: 1, totalFiles: 4, percent: 25, status: "running" as const },
+      dev: { operationId: "capture-1", kind: "capture" as const, completedFiles: 4, totalFiles: 4, percent: 100, status: "running" as const },
     };
     render(<EnvironmentWorkspace {...props({ progress })} />);
-    expect(screen.getByRole("progressbar", { name: "开发 更新进度" })).toHaveAttribute("aria-valuenow", "25");
-    expect(screen.getByText("更新处理中 25%")).toBeInTheDocument();
+    const progressbar = screen.getByRole("progressbar", { name: "开发 更新进度" });
+    expect(progressbar).toHaveAttribute("aria-valuenow", "100");
+    expect(progressbar).toHaveClass("relative", "h-5", "w-full", "ml-auto", "overflow-hidden");
+    expect(within(progressbar).getByText("更新处理中 100%")).toHaveClass("whitespace-nowrap", "text-white", "drop-shadow-sm");
   });
 
-  it("uses operation colors, prioritizes failed red, and shortens progress tracks", () => {
+  it("uses operation colors and keeps progress tracks full width", () => {
     const colorsState: EnvironmentProjectState = {
       ...state,
       environments: [
@@ -295,23 +320,24 @@ describe("EnvironmentWorkspace", () => {
       },
     })} />);
 
-    expect(screen.getByText("应用处理中 25%")).toHaveClass("text-right");
-    expect(screen.getByText("更新成功 100%")).toHaveClass("text-right");
-    expect(screen.getByText("复制成功 100%")).toHaveClass("text-right");
-    expect(screen.getByText("应用失败")).toHaveClass("text-right");
-    expect(screen.getByRole("progressbar", { name: "应用环境 应用进度" }).firstElementChild).toHaveClass("bg-green-400");
-    expect(screen.getByRole("progressbar", { name: "更新环境 更新进度" }).firstElementChild).toHaveClass("bg-cyan-400");
-    expect(screen.getByRole("progressbar", { name: "复制环境 复制进度" }).firstElementChild).toHaveClass("bg-blue-400");
-    expect(screen.getByRole("progressbar", { name: "失败环境 应用进度" }).firstElementChild).toHaveClass("bg-red-400");
+    const progressbars = screen.getAllByRole("progressbar");
+    expect(within(progressbars[0]).getByText("应用处理中 25%")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
+    expect(within(progressbars[1]).getByText("更新成功 100%")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
+    expect(within(progressbars[2]).getByText("复制成功 100%")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
+    expect(within(progressbars[3]).getByText("应用失败")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
+    expect(progressbars[0].firstElementChild).toHaveClass("absolute", "inset-y-0", "left-0", "bg-green-400");
+    expect(progressbars[1].firstElementChild).toHaveClass("absolute", "inset-y-0", "left-0", "bg-cyan-400");
+    expect(progressbars[2].firstElementChild).toHaveClass("absolute", "inset-y-0", "left-0", "bg-blue-400");
+    expect(progressbars[3].firstElementChild).toHaveClass("absolute", "inset-y-0", "left-0", "bg-red-400");
     expect(screen.getAllByRole("progressbar")).toHaveLength(4);
-    for (const progressbar of screen.getAllByRole("progressbar")) expect(progressbar).toHaveClass("w-2/3", "ml-auto");
+    for (const progressbar of screen.getAllByRole("progressbar")) expect(progressbar).toHaveClass("w-full", "ml-auto");
   });
 
-  it("gives names most of the row and orders status before file count", () => {
+  it("gives names most of the row and keeps status before the view action", () => {
     render(<EnvironmentWorkspace {...props()} />);
     const row = screen.getByText("开发").closest("[data-environment-row]");
     expect(row).not.toBeNull();
-    expect(row).toHaveClass("min-w-0", "items-center", "grid-cols-[minmax(0,1fr)_minmax(5rem,9rem)_auto_auto]");
+    expect(row).toHaveClass("min-w-0", "items-center", "grid-cols-[minmax(0,1fr)_minmax(8rem,10rem)_auto]");
     expect(row).not.toHaveClass("flex", "flex-wrap", "sm:flex-nowrap");
 
     const selectionCell = row?.querySelector("label");
@@ -322,22 +348,25 @@ describe("EnvironmentWorkspace", () => {
     const columns = row;
     expect(columns).toHaveClass(
       "min-w-0",
-      "grid-cols-[minmax(0,1fr)_minmax(5rem,9rem)_auto_auto]",
+      "grid-cols-[minmax(0,1fr)_minmax(8rem,10rem)_auto]",
       "gap-x-2",
     );
     expect(within(columns as HTMLElement).getByText("开发")).toHaveClass("min-w-0", "truncate");
-    expect(within(columns as HTMLElement).getByText("就绪")).toHaveClass("min-w-0", "text-right");
+    expect(within(columns as HTMLElement).getByText("就绪")).toHaveClass("text-xs");
     const readyProgress = columns?.querySelector("[data-ready-progress]");
-    expect(readyProgress).toHaveClass("h-1.5", "w-2/3", "ml-auto", "rounded-full", "bg-white");
+    expect(readyProgress).toHaveClass("relative", "h-5", "w-full", "ml-auto", "rounded-full", "bg-white");
+    expect(readyProgress).toHaveTextContent("就绪");
+    expect(readyProgress).not.toHaveAttribute("role");
+    expect(readyProgress).not.toHaveAttribute("aria-valuenow");
     expect(within(columns as HTMLElement).queryAllByRole("progressbar")).toHaveLength(0);
-    expect(within(columns as HTMLElement).getByText("文件：1")).toHaveClass("whitespace-nowrap");
+    expect(within(columns as HTMLElement).queryByText(/文件：/)).not.toBeInTheDocument();
     const viewButton = within(columns as HTMLElement).getByRole("button", { name: "查看" });
     expect(viewButton).toHaveClass("min-w-0", "size-7");
     expect(viewButton).toHaveAttribute("aria-label", "查看");
     expect(viewButton).not.toHaveAttribute("title");
     expect(viewButton.textContent).toBe("");
     expect(within(columns as HTMLElement).queryByText("查看")).not.toBeInTheDocument();
-    expect(Array.from(columns?.children ?? []).map((column) => column.textContent)).toEqual(["开发", "就绪", "文件：1", ""]);
+    expect(Array.from(columns?.children ?? []).map((column) => column.textContent)).toEqual(["开发", "就绪", ""]);
 
     const longName = "这是一个非常长的环境名称用于测试省略显示";
     const { unmount } = render(<EnvironmentWorkspace {...props({
@@ -363,7 +392,7 @@ describe("EnvironmentWorkspace", () => {
     expect(checkbox).toBeChecked();
 
     fireEvent.click(within(row).getByText("就绪"));
-    fireEvent.click(within(row).getByText("文件：1"));
+    fireEvent.click(row.querySelector("[data-ready-progress]") as HTMLElement);
     expect(checkbox).toBeChecked();
 
     fireEvent.click(within(row).getByRole("button", { name: "查看" }));
@@ -408,7 +437,7 @@ describe("EnvironmentWorkspace", () => {
     const row = screen.getByText("开发").closest("[data-environment-row]");
     expect(row).not.toBeNull();
     expect(row).toHaveClass("items-center", "px-3", "py-2");
-    expect(within(row as HTMLElement).getByText("文件：1")).toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText(/文件：/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
@@ -571,6 +600,25 @@ describe("EnvironmentWorkspace", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "选择文件" }));
     await waitFor(() => expect(openFileDialogMock).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: state.projectPath })));
+  });
+
+  it("passes the current-file opener through to the environment detail dialog", async () => {
+    const onDetail = vi.fn().mockResolvedValue({
+      profileId: state.profileId,
+      projectId: state.projectId,
+      environmentId: "dev",
+      path: ".env",
+      snapshot: { state: "text", content: "A=1\n" },
+      current: { state: "text", content: "A=2\n" },
+    });
+    const onOpenCurrentFile = vi.fn().mockResolvedValue(undefined);
+    render(<EnvironmentWorkspace {...props({ onDetail, onOpenCurrentFile })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "查看" }));
+    await waitFor(() => expect(screen.getByTestId("environment-diff-view")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "打开当前文件" }));
+
+    await waitFor(() => expect(onOpenCurrentFile).toHaveBeenCalledWith("dev", ".env"));
   });
 
   it("blocks the main workflow behind the legacy migration wizard", () => {

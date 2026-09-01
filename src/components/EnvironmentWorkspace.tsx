@@ -90,6 +90,7 @@ export interface EnvironmentWorkspaceProps {
   onCapture: (environmentId: string) => Promise<EnvironmentProjectState>;
   onCaptureMany?: (environmentIds: string[]) => Promise<EnvironmentBatchResult>;
   onDetail?: (environmentId: string, path: string) => Promise<EnvironmentDetailResponse>;
+  onOpenCurrentFile?: (environmentId: string, path: string) => Promise<void>;
   onCopy: (environmentId: string, name: string) => Promise<EnvironmentProjectState>;
   onDelete: (environmentId: string) => Promise<EnvironmentProjectState>;
   onDeleteMany?: (environmentIds: string[]) => Promise<EnvironmentBatchResult>;
@@ -307,7 +308,7 @@ function MigrationWizard({ draft, projectPath, busy, onMigrate }: { draft: Legac
   </div>;
 }
 
-export function EnvironmentWorkspace({ projectPath, state, busy, error, recoveryBlocked, recoveryError, migrationRequired, migrationDraft, onRefresh, onCreate, onCapture, onCaptureMany, onDetail, onCopy, onDelete, onDeleteMany, onMigrate, onPlan, onApply, onPlanUndo, onUndo, progress = {} }: EnvironmentWorkspaceProps) {
+export function EnvironmentWorkspace({ projectPath, state, busy, error, recoveryBlocked, recoveryError, migrationRequired, migrationDraft, onRefresh, onCreate, onCapture, onCaptureMany, onDetail, onOpenCurrentFile, onCopy, onDelete, onDeleteMany, onMigrate, onPlan, onApply, onPlanUndo, onUndo, progress = {} }: EnvironmentWorkspaceProps) {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newMode, setNewMode] = useState<"current" | "copy">("current");
@@ -332,6 +333,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
   const [operationError, setOperationError] = useState<string | null>(null);
 
   const environments = useMemo(() => state?.environments ?? [], [state?.environments]);
+  const managedFileCount = state?.managedPaths.length ?? 0;
   const canEdit = !busy && !migrationRequired && !recoveryBlocked;
   const selectedEnvironments = environments.filter((environment) => selectedIds.includes(environment.id));
   const selectedSingle = selectedEnvironments.length === 1 ? selectedEnvironments[0] : null;
@@ -493,7 +495,10 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
          <Button variant="outline" size="sm" className={toolbarActionClass} onClick={() => setPathDialogOpen(true)} disabled={!canEdit || !state}><FolderSync className="size-4" />文件清单</Button>
          <Button size="sm" onClick={() => { setNewMode("current"); setCopySource(""); setCopyStartedFromSelection(false); setNewDialogOpen(true); }} disabled={!canEdit}><Plus className="size-4" />新建</Button>
          <Button variant="outline" size="sm" className={toolbarActionClass} onClick={invertSelection} disabled={!canEdit || environments.length === 0}><ArrowLeftRight className="size-4" />反选</Button>
-         <span className="ml-auto text-xs text-muted-foreground">已选 {selectedEnvironments.length} 个</span>
+         <div className="ml-auto flex items-center gap-2">
+           <span className="rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground">已选: {selectedEnvironments.length} </span>
+           <span className="rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground">文件: {managedFileCount} </span>
+         </div>
        </div>
        <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
          <Button variant="outline" size="sm" className={toolbarActionClass} onClick={() => setCaptureConfirmOpen(true)} disabled={!canEdit || selectedEnvironments.length === 0}><RefreshCw className="size-4" />捕获更新</Button>
@@ -518,13 +523,21 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
             : `${operationLabel}${environmentProgress.status === "success" ? "成功" : "失败"}${environmentProgress.status === "success" ? " 100%" : ""}`
           : waiting ? "等待中" : "就绪";
           const selectionId = `environment-select-${environment.id}`;
-          return <div key={environment.id} data-environment-row={environment.id} className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(5rem,9rem)_auto_auto] items-center gap-x-2 rounded-md border px-3 py-2", selectedIds.includes(environment.id) ? "border-white/25 bg-muted/70" : "border-border bg-muted/40")}>
+          return <div key={environment.id} data-environment-row={environment.id} className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,10rem)_auto] items-center gap-x-2 rounded-md border px-3 py-2", selectedIds.includes(environment.id) ? "border-white/25 bg-muted/70" : "border-border bg-muted/40")}>
             <label htmlFor={selectionId} className={cn("-ml-3 -my-2 flex min-w-0 self-stretch items-center gap-2 py-2 pl-3", canEdit ? "cursor-pointer" : "cursor-not-allowed")}>
               <Checkbox id={selectionId} className="size-4 shrink-0" aria-label={`选择环境 ${environment.name}`} checked={selectedIds.includes(environment.id)} onCheckedChange={(checked) => setSelectedIds((current) => checked ? [...current, environment.id] : current.filter((id) => id !== environment.id))} disabled={!canEdit} />
               <p className="min-w-0 truncate text-sm font-medium">{environment.name}</p>
             </label>
-            <div className="flex min-w-0 flex-col gap-1" data-progress-status={environmentProgress?.status ?? (waiting ? "waiting" : "idle")}><span className="min-w-0 truncate text-right text-xs text-muted-foreground">{statusText}</span>{environmentProgress && <div role="progressbar" aria-label={`${environment.name} ${operationLabel}进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={environmentProgress.percent} className="ml-auto h-1.5 w-2/3 overflow-hidden rounded-full bg-muted"><div className={cn("h-full transition-[width]", progressColor)} style={{ width: `${environmentProgress.percent}%` }} /></div>}{!environmentProgress && !waiting && <div data-ready-progress aria-hidden="true" className="ml-auto h-1.5 w-2/3 overflow-hidden rounded-full bg-white" />}</div>
-            <span className="min-w-0 whitespace-nowrap text-xs text-muted-foreground">文件：{environment.fileCount}</span>
+            <div className="flex min-w-0 flex-col gap-1" data-progress-status={environmentProgress?.status ?? (waiting ? "waiting" : "idle")}>
+              {environmentProgress ? <div role="progressbar" aria-label={`${environment.name} ${operationLabel}进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={environmentProgress.percent} className="relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-muted text-center text-xs text-foreground">
+                <div aria-hidden="true" className={cn("absolute inset-y-0 left-0 transition-[width]", progressColor)} style={{ width: `${environmentProgress.percent}%` }} />
+                <span className="relative z-10 whitespace-nowrap text-xs text-white drop-shadow-sm">{statusText}</span>
+              </div> : waiting ? <div data-waiting-progress className="relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-muted/70 text-center text-xs text-muted-foreground">
+                <span className="relative z-10 whitespace-nowrap text-xs">{statusText}</span>
+              </div> : <div data-ready-progress className="relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-white text-center text-xs text-slate-900">
+                <span className="relative z-10 whitespace-nowrap text-xs">{statusText}</span>
+              </div>}
+            </div>
             <div className="flex min-w-0 justify-end"><Button variant="ghost" size="icon" className="size-7 min-w-0 shrink-0" aria-label="查看" onClick={() => setDetailTarget({ id: environment.id, name: environment.name })} disabled={!canEdit}><Eye className="size-4" /></Button></div>
           </div>;
        })}</div>
@@ -536,6 +549,6 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认删除环境？</AlertDialogTitle><AlertDialogDescription>将删除选中的 {selectedEnvironments.length} 个环境快照，且不能恢复。项目文件不会受到影响。</AlertDialogDescription></AlertDialogHeader><div className="mt-4 max-h-40 overflow-auto rounded-md border border-border px-3 py-2 text-sm">{selectedEnvironments.map((environment) => <div key={environment.id} className="truncate py-1">{environment.name}</div>)}</div><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={(event) => { event.preventDefault(); void deleteSelected(); }} disabled={busy || selectedEnvironments.length === 0}>确认删除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
      <PlanDialog plan={plan} open={planOpen} busy={busy} onOpenChange={setPlanOpen} onConfirm={() => void confirmApply()} />
       <AlertDialog open={undoOpen} onOpenChange={setUndoOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认撤销上次应用？</AlertDialogTitle><AlertDialogDescription>将按下面计划恢复上次应用前的文件状态。外部修改后会重新校验并更新计划，请重新确认。</AlertDialogDescription></AlertDialogHeader>{undoPlan && <div className="mt-4 space-y-2"><div className="flex flex-wrap gap-4 text-xs">{(["create", "overwrite", "delete", "unchanged"] as const).map((action) => <span key={action} className={cn("whitespace-nowrap", actionClass(action))}>{actionLabel(action)} {undoPlan.changes.filter((item) => item.action === action).length}</span>)}</div><div className="max-h-40 overflow-auto rounded-md border border-border px-3 py-2 text-xs">{undoPlan.changes.map((change) => <div key={change.path} className="grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-3 py-1"><span className={cn("whitespace-nowrap text-xs", actionClass(change.action))}>{actionLabel(change.action)}</span><span className="min-w-0 truncate text-sm">{change.path}</span></div>)}</div>{undoProgress && <div data-undo-progress className="space-y-1"><span className="text-xs text-muted-foreground">{undoProgress.status === "running" ? `撤销处理中 ${undoProgress.percent}%` : undoProgress.status === "success" ? "撤销成功" : "撤销失败"}</span><div role="progressbar" aria-label="撤销进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={undoProgress.percent} className="h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn("h-full transition-[width]", undoProgress.status === "failed" ? "bg-red-400" : undoProgress.status === "success" ? "bg-emerald-400" : "bg-primary")} style={{ width: `${undoProgress.percent}%` }} /></div></div>}</div>}<AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void confirmUndo(); }} disabled={busy || !undoPlan}>确认撤销</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-     <EnvironmentDiffDialog open={detailTarget !== null} environmentName={detailTarget?.name ?? ""} environmentId={detailTarget?.id ?? ""} paths={state?.managedPaths ?? []} busy={busy} onOpenChange={(open) => { if (!open) setDetailTarget(null); }} onDetail={onDetail} />
+     <EnvironmentDiffDialog open={detailTarget !== null} environmentName={detailTarget?.name ?? ""} environmentId={detailTarget?.id ?? ""} paths={state?.managedPaths ?? []} busy={busy} onOpenChange={(open) => { if (!open) setDetailTarget(null); }} onDetail={onDetail} onOpenCurrentFile={onOpenCurrentFile} />
    </div>;
 }

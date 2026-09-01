@@ -32,6 +32,9 @@
 }
 
 .environment-diff-table {
+  --environment-diff-old-line-number-column-width: calc(2ch + 4px);
+  --environment-diff-new-line-number-column-width: calc(2ch + 4px);
+  --environment-diff-controls-width: calc(var(--environment-diff-old-line-number-column-width) + var(--environment-diff-new-line-number-column-width));
   min-width: 100%;
   width: max-content;
   border-collapse: collapse;
@@ -51,10 +54,7 @@
 .environment-diff-new-line-num {
   position: sticky;
   z-index: 2;
-  width: 5.5rem;
-  min-width: 5.5rem;
-  max-width: 5.5rem;
-  padding: 0 10px;
+  padding: 0 2px;
   background: #111827;
   color: #9ca3af;
   text-align: right;
@@ -62,11 +62,17 @@
 }
 
 .environment-diff-old-line-num {
+  width: var(--environment-diff-old-line-number-column-width);
+  min-width: var(--environment-diff-old-line-number-column-width);
+  max-width: var(--environment-diff-old-line-number-column-width);
   left: 0;
 }
 
 .environment-diff-new-line-num {
-  left: 5.5rem;
+  width: var(--environment-diff-new-line-number-column-width);
+  min-width: var(--environment-diff-new-line-number-column-width);
+  max-width: var(--environment-diff-new-line-number-column-width);
+  left: var(--environment-diff-old-line-number-column-width);
 }
 
 .environment-diff-line-content {
@@ -95,6 +101,10 @@
 .environment-diff-operator {
   display: inline-block;
   width: 1.5em;
+  padding: 0 4px;
+  font-size: 20px;
+  line-height: 1;
+  text-align: center;
   color: #9ca3af;
 }
 
@@ -122,6 +132,12 @@
 }
 
 .environment-diff-hunk-header-controls {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: var(--environment-diff-controls-width);
+  min-width: var(--environment-diff-controls-width);
+  max-width: var(--environment-diff-controls-width);
   white-space: nowrap;
 }
 
@@ -138,35 +154,68 @@
 .environment-diff-gap-cell {
   padding: 0;
   border: 0;
+  background: #1f2937;
+}
+
+.environment-diff-gap-controls {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: var(--environment-diff-controls-width);
+  min-width: var(--environment-diff-controls-width);
+  max-width: var(--environment-diff-controls-width);
+  background: #1f2937;
+}
+
+.environment-diff-gap-controls .environment-diff-gap-marker {
   background: transparent;
+  border-right: 0;
 }
 
 .environment-diff-gap-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   min-height: 0;
   color: #9ca3af;
 }
 
 .environment-diff-gap-marker {
-  display: inline-flex;
-  height: 2.25rem;
-  min-width: 2.25rem;
-  min-height: 2.25rem;
+  display: grid;
+  width: 100%;
+  height: 1.25rem;
+  min-width: 0;
+  min-height: 1.25rem;
   padding: 0;
-  flex-direction: column;
+  grid-template-columns: var(--environment-diff-old-line-number-column-width) var(--environment-diff-new-line-number-column-width);
   align-items: center;
   justify-content: center;
-  background: #1f2937;
-  border-right: 1px solid #374151;
+  gap: 0;
+  margin: 0;
+  background: transparent;
+  border-right: 0;
+}
+
+.environment-diff-gap-marker > button[data-gap-direction="up"] {
+  grid-column: 1;
+}
+
+.environment-diff-gap-marker > button[data-gap-direction="down"] {
+  grid-column: 2;
 }
 
 .environment-diff-gap-marker > button {
-  width: 2rem;
-  height: 1.125rem;
-  min-height: 1.125rem;
+  width: 100%;
+  min-width: 0;
+  height: 1.25rem;
+  min-height: 1.25rem;
   padding: 0;
+  border-radius: 0.25rem;
+}
+
+.environment-diff-gap-marker > button:hover {
+  background: rgba(147, 197, 253, 0.12);
+  color: #dbeafe;
 }
 
 .environment-diff-gap-marker > button svg {

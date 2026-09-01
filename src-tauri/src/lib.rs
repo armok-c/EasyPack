@@ -34,6 +34,7 @@ pub fn run() {
             commands::environment::environment_create,
             commands::environment::environment_capture,
             commands::environment::environment_detail,
+            commands::environment::environment_open_current_file,
             commands::environment::environment_copy,
             commands::environment::environment_delete,
             commands::environment::environment_migrate_manifest,

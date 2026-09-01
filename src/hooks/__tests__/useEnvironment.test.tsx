@@ -41,6 +41,7 @@ function api(overrides: Partial<EnvironmentApi> = {}): EnvironmentApi {
       snapshot: { state: "text", content: "A=1" },
       current: { state: "text", content: "A=2" },
     })),
+    openCurrentFile: vi.fn(async () => undefined),
     copy: vi.fn(async () => state),
     deleteEnvironment: vi.fn(async () => state),
     migrateManifest: vi.fn(async () => state),
@@ -109,6 +110,35 @@ beforeEach(() => {
 });
 
 describe("useEnvironment", () => {
+  it("opens the current file with the detail request without changing environment state or progress", async () => {
+    const openCurrentFile = vi.fn(async () => undefined);
+    const environmentApi = api({ openCurrentFile });
+    const { result } = renderHook(() => useEnvironment({
+      profileId: "profile-a",
+      project,
+      api: environmentApi,
+    }));
+
+    await waitFor(() => expect(result.current.state).toEqual(state));
+    const stateBeforeOpen = result.current.state;
+    await act(async () => {
+      await result.current.openCurrentFile("dev", ".env");
+    });
+
+    expect(openCurrentFile).toHaveBeenCalledWith({
+      project: {
+        profileId: "profile-a",
+        projectId: project.id,
+        projectPath: project.path,
+      },
+      environmentId: "dev",
+      path: ".env",
+    });
+    expect(result.current.state).toBe(stateBeforeOpen);
+    expect(result.current.progress).toEqual({});
+    expect(result.current.busy).toBe(false);
+  });
+
   it("loads by active profile and project, then plans and applies undo by token", async () => {
     const environmentApi = api();
     const { result } = renderHook(() => useEnvironment({

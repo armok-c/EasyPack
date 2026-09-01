@@ -625,6 +625,7 @@ function App() {
             onCapture: environment.capture,
             onCaptureMany: environment.captureMany,
             onDetail: environment.detail,
+            onOpenCurrentFile: environment.openCurrentFile,
             onCopy: environment.copy,
             onDelete: environment.deleteEnvironment,
             onDeleteMany: environment.deleteMany,
