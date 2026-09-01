@@ -123,14 +123,14 @@ function SortableProjectItem({
               <img
                 src={convertFileSrc(getFilePath(project.icon))}
                 alt=""
-                className="size-3.5 mr-1.5 flex-shrink-0 rounded-sm object-cover"
+                className="size-5 mr-1.5 flex-shrink-0 rounded-sm object-cover"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                 }}
               />
             ) : (() => {
               const ProjectIcon = getIconByName(project.icon);
-              return <ProjectIcon className="size-3.5 mr-1.5 flex-shrink-0 text-muted-foreground" />;
+              return <ProjectIcon className="size-5 mr-1.5 flex-shrink-0 text-muted-foreground" />;
             })())}
 
             {/* D-03: only show folder name, truncate if too long */}

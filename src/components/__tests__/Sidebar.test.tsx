@@ -119,6 +119,19 @@ describe("Sidebar project context menu", () => {
     );
   });
 
+  it("renders project icons at the larger sidebar size", () => {
+    renderSidebar(vi.fn().mockResolvedValue(true), {
+      projects: [{ ...project, icon: "Package" }],
+    });
+
+    const projectCard = getProjectCard(project.name);
+    const projectIcon = Array.from(projectCard.querySelectorAll("svg")).find((icon) =>
+      icon.classList.contains("mr-1.5"),
+    );
+
+    expect(projectIcon).toHaveClass("size-5");
+  });
+
   it("allows the project list flex item to shrink for scrolling", () => {
     const { container } = renderSidebar(vi.fn().mockResolvedValue(true), {
       projects: [project, secondProject],

@@ -93,6 +93,24 @@ describe("ProjectSettingsDialog custom icon picker", () => {
     expect(card.querySelector("span")).toHaveClass("truncate");
     expect(card.querySelector("span")).not.toHaveAttribute("title");
   });
+
+  it("selects and saves a newly available built-in icon", () => {
+    const onSave = vi.fn();
+    renderSettings(onSave);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
+    expect(screen.getByRole("radio", { name: "Cloud" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+
+    expect(onSave).toHaveBeenCalledWith("project-a", {
+      icon: "Cloud",
+      color: "#112233",
+    });
+  });
 });
 
 describe("ProjectSettingsDialog color picker", () => {

@@ -138,6 +138,28 @@ describe("CommandDialog", () => {
       const terminalButton = screen.getByRole("radio", { name: "Terminal" });
       expect(terminalButton).toHaveAttribute("aria-checked", "false");
     });
+
+    it("selects and saves a newly available icon", () => {
+      const { props } = renderDialog();
+      const databaseButton = screen.getByRole("radio", { name: "Database" });
+      fireEvent.click(databaseButton);
+
+      expect(databaseButton).toHaveAttribute("aria-checked", "true");
+
+      fireEvent.change(screen.getByPlaceholderText("例如: 运行测试"), {
+        target: { value: "备份数据库" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("例如: npm test"), {
+        target: { value: "npm run backup" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "添加" }));
+
+      expect(props.onSubmit).toHaveBeenCalledWith({
+        name: "备份数据库",
+        command: "npm run backup",
+        icon: "Database",
+      });
+    });
   });
 
   describe("preview card", () => {

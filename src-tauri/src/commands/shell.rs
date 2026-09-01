@@ -76,6 +76,38 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+const SHELL_EXECUTE_SUCCESS_THRESHOLD: isize = 32;
+const SE_ERR_NOASSOC: isize = 31;
+
+/// 根据 ShellExecuteW 的返回值决定是否需要打开“选择应用”窗口。
+///
+/// 通过注入调用函数测试判断逻辑，避免单元测试真的启动系统窗口。
+fn execute_file_open_with_fallback<F>(mut shell_execute: F) -> Result<(), String>
+where
+    F: FnMut(&str) -> isize,
+{
+    let default_result = shell_execute("open");
+    if default_result > SHELL_EXECUTE_SUCCESS_THRESHOLD {
+        return Ok(());
+    }
+    if default_result != SE_ERR_NOASSOC {
+        return Err(format!(
+            "Windows Shell 打开文件失败（返回码 {}）",
+            default_result
+        ));
+    }
+
+    let openas_result = shell_execute("openas");
+    if openas_result > SHELL_EXECUTE_SUCCESS_THRESHOLD {
+        return Ok(());
+    }
+
+    Err(format!(
+        "Windows Shell 打开文件失败：默认程序打开失败（返回码 {}）；选择应用窗口启动失败（返回码 {}）",
+        default_result, openas_result
+    ))
+}
+
 /// 使用 Windows 文件关联打开文件，不经过 cmd.exe 或 start 命令。
 pub fn open_file_with_default_program(path: &Path) -> Result<(), String> {
     let path = path
@@ -99,25 +131,24 @@ pub fn open_file_with_default_program(path: &Path) -> Result<(), String> {
         ) -> isize;
     }
 
-    let operation: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
     let file: Vec<u16> = std::ffi::OsStr::new(&path)
         .encode_wide()
         .chain(Some(0))
         .collect();
-    let result = unsafe {
-        ShellExecuteW(
-            std::ptr::null_mut(),
-            operation.as_ptr(),
-            file.as_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            1,
-        )
-    };
-    if result <= 32 {
-        return Err(format!("Windows Shell 打开文件失败（返回码 {}）", result));
-    }
-    Ok(())
+
+    execute_file_open_with_fallback(|operation_name| {
+        let operation: Vec<u16> = operation_name.encode_utf16().chain(Some(0)).collect();
+        unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                operation.as_ptr(),
+                file.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            )
+        }
+    })
 }
 
 fn strip_extended_path_prefix(path: &str) -> String {
@@ -388,6 +419,62 @@ mod tests {
             strip_extended_path_prefix(r"D:\Projects\EasyPack\config.env"),
             r"D:\Projects\EasyPack\config.env"
         );
+    }
+
+    #[test]
+    fn test_execute_file_open_success_does_not_fallback_to_openas() {
+        let mut operations = Vec::new();
+
+        let result = execute_file_open_with_fallback(|operation| {
+            operations.push(operation.to_string());
+            33
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(operations, vec!["open"]);
+    }
+
+    #[test]
+    fn test_execute_file_open_no_association_falls_back_to_openas() {
+        let mut operations = Vec::new();
+        let mut results = [SE_ERR_NOASSOC, 33].into_iter();
+
+        let result = execute_file_open_with_fallback(|operation| {
+            operations.push(operation.to_string());
+            results.next().expect("expected one result per operation")
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(operations, vec!["open", "openas"]);
+    }
+
+    #[test]
+    fn test_execute_file_open_other_errors_do_not_fallback() {
+        for error_code in [0, 1, 30, 32] {
+            let mut operations = Vec::new();
+
+            let result = execute_file_open_with_fallback(|operation| {
+                operations.push(operation.to_string());
+                error_code
+            });
+
+            let error = result.expect_err("non-NOASSOC errors should fail directly");
+            assert!(error.contains(&format!("返回码 {}", error_code)));
+            assert_eq!(operations, vec!["open"]);
+        }
+    }
+
+    #[test]
+    fn test_execute_file_open_openas_failure_identifies_both_stages() {
+        let mut results = [SE_ERR_NOASSOC, 5].into_iter();
+
+        let error = execute_file_open_with_fallback(|_| {
+            results.next().expect("expected one result per operation")
+        })
+        .expect_err("failed openas should return an error");
+
+        assert!(error.contains("默认程序打开失败（返回码 31）"));
+        assert!(error.contains("选择应用窗口启动失败（返回码 5）"));
     }
 
     #[test]
