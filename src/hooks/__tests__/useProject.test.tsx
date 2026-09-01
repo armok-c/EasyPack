@@ -165,6 +165,9 @@ describe("useProject - missing project directory errors", () => {
     const { result } = renderHook(() => useProject());
     await act(async () => {
       await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
     });
     return result;
   }
@@ -457,6 +460,9 @@ describe("useProject - stable project identity and rebinding", () => {
     const { result } = renderHook(() => useProject());
     await act(async () => {
       await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
     });
     return result;
   }
@@ -1285,5 +1291,310 @@ describe("useProject - profile environment boundary", () => {
     expect(mockToastError).toHaveBeenLastCalledWith("删除配置失败", {
       description: "删除失败且恢复不完整，请检查数据后重试。",
     });
+  });
+});
+
+describe("useProject - project info refresh", () => {
+  const projectA = {
+    id: "project-a",
+    name: "项目A",
+    path: "C:\\Workspace\\ProjectA",
+    addedAt: 1000,
+  };
+  const projectB = {
+    id: "project-b",
+    name: "项目B",
+    path: "C:\\Workspace\\ProjectB",
+    addedAt: 2000,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockLoad.mockResolvedValue(mockStore);
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve([{ id: "profile-a", name: "默认", createdAt: 1 }]);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([projectA, projectB]);
+      if (key === "selectedProjectId") return Promise.resolve(projectA.id);
+      return Promise.resolve(undefined);
+    });
+    mockStore.set.mockResolvedValue(undefined);
+    mockStore.delete.mockResolvedValue(undefined);
+    mockStore.keys.mockResolvedValue([]);
+    mockStore.save.mockResolvedValue(undefined);
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_project_info") {
+        return Promise.resolve({ size: "12.0 MB", branch: "main" });
+      }
+      if (command === "environment_prepare_delete_project") {
+        return Promise.resolve({ token: "delete-project", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  async function initHook() {
+    const { result } = renderHook(() => useProject());
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    return result;
+  }
+
+  function deferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it("fetches complete info after adding and auto-selecting a project", async () => {
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve([{ id: "profile-a", name: "默认", createdAt: 1 }]);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([]);
+      if (key === "selectedProjectId") return Promise.resolve(null);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await result.current.addProject(projectB.path, projectB.name);
+      await Promise.resolve();
+    });
+
+    expect(result.current.selectedId).toBe(result.current.projects[0].id);
+    expect(mockInvoke).toHaveBeenCalledWith("get_project_info", {
+      projectPath: projectB.path,
+    });
+    expect(result.current.projectInfo).toEqual({ size: "12.0 MB", branch: "main" });
+  });
+
+  it("fetches complete info after deleting the selected project and auto-selecting its neighbor", async () => {
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve([{ id: "profile-a", name: "默认", createdAt: 1 }]);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([projectA, projectB]);
+      if (key === "selectedProjectId") return Promise.resolve(projectA.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await result.current.removeProject(projectA.id);
+      await Promise.resolve();
+    });
+
+    expect(result.current.selectedId).toBe(projectB.id);
+    expect(mockInvoke).toHaveBeenCalledWith("get_project_info", {
+      projectPath: projectB.path,
+    });
+  });
+
+  it("clears info and invalidates an old full request when deleting the last project", async () => {
+    const pending = deferred<{ size: string; branch: string | null }>();
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "profileMigrationDone") return Promise.resolve(true);
+      if (key === "profiles") return Promise.resolve([{ id: "profile-a", name: "默认", createdAt: 1 }]);
+      if (key === "activeProfileId") return Promise.resolve("profile-a");
+      if (key === "projects") return Promise.resolve([projectA]);
+      if (key === "selectedProjectId") return Promise.resolve(projectA.id);
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_project_info") return pending.promise;
+      if (command === "environment_prepare_delete_project") {
+        return Promise.resolve({ token: "delete-project", projectCount: 1 });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await act(async () => {
+      await result.current.selectProject(projectA.id);
+    });
+
+    await act(async () => {
+      await result.current.removeProject(projectA.id);
+    });
+    pending.resolve({ size: "old", branch: "old" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.selectedId).toBeNull();
+    expect(result.current.projectInfo).toBeNull();
+    expect(result.current.projectInfoLoading).toBe(false);
+    expect(result.current.projectInfoError).toBe(false);
+  });
+
+  it("keeps the newest project's info when full requests finish out of order", async () => {
+    const requestB = deferred<{ size: string; branch: string | null }>();
+    const requestA = deferred<{ size: string; branch: string | null }>();
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string, args?: { projectPath?: string }) => {
+      if (command !== "get_project_info") return Promise.resolve(undefined);
+      if (args?.projectPath === projectB.path) return requestB.promise;
+      if (args?.projectPath === projectA.path) return requestA.promise;
+      return Promise.resolve(undefined);
+    });
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await result.current.selectProject(projectB.id);
+      await result.current.selectProject(projectA.id);
+    });
+    await act(async () => {
+      requestA.resolve({ size: "A", branch: "branch-a" });
+      requestB.reject(new Error("stale B failure"));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.selectedId).toBe(projectA.id);
+    expect(result.current.projectInfo).toEqual({ size: "A", branch: "branch-a" });
+    expect(result.current.projectInfoError).toBe(false);
+    expect(result.current.projectInfoLoading).toBe(false);
+  });
+
+  it("refreshes only the branch and preserves the existing folder size", async () => {
+    const result = await initHook();
+    mockInvoke.mockClear();
+    mockInvoke.mockResolvedValue("feature/new");
+
+    await act(async () => {
+      await result.current.refreshProjectBranch();
+    });
+
+    expect(mockInvoke).toHaveBeenCalledOnce();
+    expect(mockInvoke).toHaveBeenCalledWith("get_git_branch", {
+      projectPath: projectA.path,
+    });
+    expect(result.current.projectInfo).toEqual({ size: "12.0 MB", branch: "feature/new" });
+  });
+
+  it("marks project info unavailable when branch refresh finds a missing directory", async () => {
+    const result = await initHook();
+    expect(result.current.projectInfoError).toBe(false);
+    mockInvoke.mockImplementation((command: string) =>
+      command === "get_git_branch"
+        ? Promise.reject("项目目录不存在")
+        : Promise.resolve(undefined),
+    );
+
+    await act(async () => {
+      await result.current.refreshProjectBranch();
+    });
+
+    expect(result.current.projectInfoError).toBe(true);
+    expect(result.current.projectInfo).toEqual({ size: "12.0 MB", branch: "main" });
+    expect(result.current.projectInfoLoading).toBe(false);
+  });
+
+  it("clears an existing project info error after a successful branch refresh", async () => {
+    const result = await initHook();
+    mockInvoke.mockRejectedValue("项目目录不存在");
+
+    await act(async () => {
+      await result.current.refreshProjectBranch();
+    });
+    expect(result.current.projectInfoError).toBe(true);
+
+    mockInvoke.mockResolvedValue("main");
+    await act(async () => {
+      await result.current.refreshProjectBranch();
+    });
+
+    expect(result.current.projectInfoError).toBe(false);
+    expect(result.current.projectInfo).toEqual({ size: "12.0 MB", branch: "main" });
+  });
+
+  it("keeps existing project info state for non-directory branch refresh errors", async () => {
+    const result = await initHook();
+    mockInvoke.mockRejectedValue("branch lookup failed");
+
+    await act(async () => {
+      await result.current.refreshProjectBranch();
+    });
+
+    expect(result.current.projectInfoError).toBe(false);
+    expect(result.current.projectInfo).toEqual({ size: "12.0 MB", branch: "main" });
+    expect(result.current.projectInfoLoading).toBe(false);
+  });
+
+  it("does not show folder-size loading or error while refreshing the branch", async () => {
+    const branch = deferred<string | null>();
+    const result = await initHook();
+    mockInvoke.mockImplementation((command: string) =>
+      command === "get_git_branch" ? branch.promise : Promise.resolve(undefined),
+    );
+
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refreshProjectBranch();
+    });
+    expect(result.current.projectInfoLoading).toBe(false);
+    expect(result.current.projectInfoError).toBe(false);
+
+    branch.resolve("feature/pending");
+    await act(async () => {
+      await refresh;
+    });
+
+    expect(result.current.projectInfo).toEqual({ size: "12.0 MB", branch: "feature/pending" });
+    expect(result.current.projectInfoLoading).toBe(false);
+    expect(result.current.projectInfoError).toBe(false);
+  });
+
+  it("ignores a stale branch result after switching projects", async () => {
+    const branchA = deferred<string | null>();
+    mockInvoke.mockImplementation((command: string, args?: { projectPath?: string }) => {
+      if (command === "get_git_branch") return branchA.promise;
+      if (command === "get_project_info" && args?.projectPath === projectB.path) {
+        return Promise.resolve({ size: "B", branch: "branch-b" });
+      }
+      if (command === "get_project_info") return Promise.resolve({ size: "A", branch: "branch-a" });
+      return Promise.resolve(undefined);
+    });
+    const result = await initHook();
+    mockInvoke.mockClear();
+
+    let branchRefresh!: Promise<void>;
+    act(() => {
+      branchRefresh = result.current.refreshProjectBranch();
+    });
+    await act(async () => {
+      await result.current.selectProject(projectB.id);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      branchA.resolve("stale-A");
+      await branchRefresh;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.selectedId).toBe(projectB.id);
+    expect(result.current.projectInfo).toEqual({ size: "B", branch: "branch-b" });
   });
 });

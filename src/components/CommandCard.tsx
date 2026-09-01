@@ -28,7 +28,6 @@ interface CommandCardProps {
 export function CommandCard({
   name,
   icon: Icon,
-  command,
   disabled = false,
   onClick,
   isCustom = false,
@@ -38,7 +37,6 @@ export function CommandCard({
   tabIndex = 0,
   shortcutNumber,
   shortcut,
-  scriptLines,
 }: CommandCardProps) {
   const [flashing, setFlashing] = useState(false);
 

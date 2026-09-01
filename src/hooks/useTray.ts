@@ -45,7 +45,6 @@ export function useTray({
   onHide,
   onQuit,
   enabled,
-  appWindow,
   onToggleFloat,
   floatVisible,
   onRestoreFromDrawer,

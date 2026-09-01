@@ -358,12 +358,22 @@ export function useProject() {
   const [projectInfo, setProjectInfo] = useState<ProjectInfoResult | null>(null);
   const [projectInfoLoading, setProjectInfoLoading] = useState(false);
   const [projectInfoError, setProjectInfoError] = useState(false);
+  const projectInfoRequestRef = useRef(0);
+  const projectInfoBranchRequestRef = useRef(0);
+  const projectInfoBranchResultRef = useRef<{
+    requestId: number;
+    projectId: string;
+    projectPath: string;
+    branch: string | null;
+  } | null>(null);
+  const currentProjectRef = useRef<ProjectItem | null>(null);
 
   // Derived state: current project from projects + selectedId
   const currentProject = useMemo(
     () => selectedId ? projects.find((p) => p.id === selectedId) ?? null : null,
     [selectedId, projects]
   );
+  currentProjectRef.current = currentProject;
 
   // Commands derived from projectCommandsMap only (Phase 22: no global mode)
   const commands = useMemo(() => {
@@ -381,9 +391,23 @@ export function useProject() {
   }, [selectedId, projectCommandsMap, shortcutBindings]);
 
 
-  // Phase 8: fetch project info (folder size + Git branch) per D-04
+  const resetProjectInfo = useCallback(() => {
+    projectInfoRequestRef.current += 1;
+    projectInfoBranchRequestRef.current += 1;
+    projectInfoBranchResultRef.current = null;
+    setProjectInfo(null);
+    setProjectInfoLoading(false);
+    setProjectInfoError(false);
+  }, []);
+
+  // Phase 8: fetch project info (folder size + Git branch) per D-04.
+  // Each full request starts a new generation so results from a previous
+  // project cannot overwrite the current project's metadata.
   // Must be declared before loadProfileDataIntoState (dependency)
-  const fetchProjectInfo = useCallback(async (projectPath: string) => {
+  const fetchProjectInfo = useCallback(async (projectId: string, projectPath: string) => {
+    const requestId = ++projectInfoRequestRef.current;
+    projectInfoBranchRequestRef.current += 1;
+    projectInfoBranchResultRef.current = null;
     setProjectInfoLoading(true);
     setProjectInfoError(false);
     setProjectInfo(null);
@@ -394,16 +418,72 @@ export function useProject() {
           setTimeout(() => reject(new Error("timeout")), 8000)
         ),
       ]);
-      setProjectInfo(result);
+      if (requestId !== projectInfoRequestRef.current) return;
+      const branchResult = projectInfoBranchResultRef.current as {
+        requestId: number;
+        projectId: string;
+        projectPath: string;
+        branch: string | null;
+      } | null;
+      setProjectInfo(
+        branchResult
+          && branchResult.requestId === requestId
+          && branchResult.projectId === projectId
+          && branchResult.projectPath === projectPath
+          ? { ...result, branch: branchResult.branch }
+          : result,
+      );
     } catch {
+      if (requestId !== projectInfoRequestRef.current) return;
       setProjectInfoError(true);
     } finally {
+      if (requestId !== projectInfoRequestRef.current) return;
       setProjectInfoLoading(false);
+    }
+  }, []);
+
+  // Refresh only the branch so returning to the app after an external Git
+  // checkout does not recalculate the project's folder size.
+  const refreshProjectBranch = useCallback(async () => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    const requestId = projectInfoRequestRef.current;
+    const branchRequestId = ++projectInfoBranchRequestRef.current;
+    try {
+      const branch = await Promise.race([
+        invoke<string | null>("get_git_branch", { projectPath: project.path }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 8000)
+        ),
+      ]);
+      if (
+        requestId !== projectInfoRequestRef.current
+        || branchRequestId !== projectInfoBranchRequestRef.current
+      ) return;
+      projectInfoBranchResultRef.current = {
+        requestId,
+        projectId: project.id,
+        projectPath: project.path,
+        branch,
+      };
+      setProjectInfoError(false);
+      setProjectInfo((previous) => previous ? { ...previous, branch } : previous);
+    } catch (error) {
+      if (
+        requestId !== projectInfoRequestRef.current
+        || branchRequestId !== projectInfoBranchRequestRef.current
+      ) return;
+      if (isMissingProjectDirectoryError(error)) {
+        setProjectInfoError(true);
+      }
     }
   }, []);
 
   // Phase 20: 从 profile store 加载数据到 React state
   const loadProfileDataIntoState = useCallback(async (s: Store, profileId: string) => {
+    resetProjectInfo();
+    const loadRequestId = projectInfoRequestRef.current;
     let savedProjects = await s.get<ProjectItem[]>(PROJECTS_KEY);
     const savedSelectedId = await s.get<string>(SELECTED_KEY);
 
@@ -456,10 +536,10 @@ export function useProject() {
     }
 
     // Fetch project info for selected project
-    if (savedSelectedId && savedProjects) {
+    if (savedSelectedId && savedProjects && loadRequestId === projectInfoRequestRef.current) {
       const savedProject = savedProjects.find((p: ProjectItem) => p.id === savedSelectedId);
       if (savedProject) {
-        fetchProjectInfo(savedProject.path);
+        fetchProjectInfo(savedProject.id, savedProject.path);
       }
     }
 
@@ -474,7 +554,7 @@ export function useProject() {
       await s.save();
       toast.info("全局指令已移除，请使用项目环境添加指令");
     }
-  }, [fetchProjectInfo]);
+  }, [fetchProjectInfo, resetProjectInfo]);
 
   // Phase 20: 迁移旧数据到 profile 架构（幂等）
   const migrateToProfiles = useCallback(async (ms: Store): Promise<{ metas: ProfileMeta[]; activeId: string }> => {
@@ -610,8 +690,6 @@ export function useProject() {
       setStore(ps);
       // 6. 更新 activeProfileId
       setActiveProfileId(id);
-      // 7. 重置 project info
-      setProjectInfo(null);
     } finally {
       switchingProfileRef.current = false;
       setProfileSwitching(false);
@@ -672,13 +750,15 @@ export function useProject() {
       const id = crypto.randomUUID();
       const newItem: ProjectItem = { id, name, path, addedAt: Date.now() };
       const updated = [...projects, newItem];
+      resetProjectInfo();
       setProjects(updated);
       setSelectedId(id);
+      fetchProjectInfo(newItem.id, newItem.path);
       await profileStore?.set(PROJECTS_KEY, updated);
       await profileStore?.set(SELECTED_KEY, id);
       await profileStore?.save();
     },
-    [projects, profileStore]
+    [fetchProjectInfo, profileStore, projects, resetProjectInfo]
   );
 
   // Rebind a project after its directory moved. The stable project ID is
@@ -743,7 +823,7 @@ export function useProject() {
         }
 
         setProjects(updated);
-        if (selectedId === projectId) fetchProjectInfo(selected);
+        if (selectedId === projectId) fetchProjectInfo(projectId, selected);
         toast.success(`已重新绑定项目目录: ${target.name}`);
         return true;
       } catch (error) {
@@ -754,7 +834,7 @@ export function useProject() {
         return false;
       }
     },
-    [activeProfileId, projects, profileStore, selectedId, fetchProjectInfo],
+    [activeProfileId, fetchProjectInfo, projects, profileStore, selectedId],
   );
 
   // Remove project (per D-10 auto-select nearest, D-11 empty state for last item)
@@ -809,8 +889,13 @@ export function useProject() {
         frontendCommitted = true;
         await updatePendingDeletion(mainStore, deletion, "frontendDeleted");
 
+        if (id === selectedId) resetProjectInfo();
         setProjects(updated);
         setSelectedId(newSelectedId);
+        if (id === selectedId && newSelectedId) {
+          const nextProject = updated.find((project) => project.id === newSelectedId);
+          if (nextProject) fetchProjectInfo(nextProject.id, nextProject.path);
+        }
         setProjectCommandsMap((prev) => {
           const next = { ...prev };
           delete next[id];
@@ -875,25 +960,26 @@ export function useProject() {
         throw errorWithRollback(failure, rollbackErrors);
       }
     },
-    [activeProfileId, mainStore, projects, selectedId, profileStore]
+    [activeProfileId, fetchProjectInfo, mainStore, projects, resetProjectInfo, selectedId, profileStore]
   );
 
   // Select project (also exits edit mode on project switch)
   const selectProject = useCallback(
     async (id: string) => {
+      const project = projects.find((p) => p.id === id);
+      resetProjectInfo();
       setSelectedId(id);
       setEditMode(false);
       await profileStore?.set(SELECTED_KEY, id);
       // Phase 8: fetch project info on project switch (per D-04)
-      const project = projects.find((p) => p.id === id);
       if (project) {
-        fetchProjectInfo(project.path);
+        fetchProjectInfo(project.id, project.path);
       }
     },
     // projectCommandsMap intentionally omitted — the body above does not read it
     // (WR-04): including it widened the callback's invalidation scope on every
     // command mutation, busting memoized consumers without affecting behavior.
-    [profileStore, projects, fetchProjectInfo]
+    [fetchProjectInfo, profileStore, projects, resetProjectInfo]
   );
 
   // Folder picker (inherits Phase 1 logic, calls addProject internally)
@@ -1475,6 +1561,7 @@ export function useProject() {
     projectInfo,           // ProjectInfoResult | null
     projectInfoLoading,    // boolean
     projectInfoError,      // boolean
+    refreshProjectBranch,  // () => Promise<void>
 
     // Phase 9: project-level command map + open folder
     projectCommandsMap,    // Record<string, CommandItem[]>

@@ -9,7 +9,6 @@
  * whether the change originated from user input (onChange callback).
  */
 import { useRef, useEffect } from "react";
-import type { Extension } from "@codemirror/state";
 import { useCodeMirror } from "@/hooks/useCodeMirror";
 import { batchSupport } from "@/lib/batch-lang";
 

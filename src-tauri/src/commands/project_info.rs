@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Icon candidate found by scanning a project directory
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -75,15 +75,43 @@ pub fn calculate_dir_size(path: &Path) -> u64 {
     total
 }
 
-/// Read the current git branch from .git/HEAD
-/// Returns None for detached HEAD or non-git projects
+/// Resolve the HEAD path for a normal repository or a worktree checkout.
+/// A worktree stores a `gitdir: ...` pointer in the project root's `.git` file.
+fn git_head_path(project_path: &Path) -> Option<PathBuf> {
+    let git_path = project_path.join(".git");
+    let metadata = fs::metadata(&git_path).ok()?;
+
+    if metadata.is_dir() {
+        return Some(git_path.join("HEAD"));
+    }
+    if !metadata.is_file() {
+        return None;
+    }
+
+    let git_file_content = fs::read_to_string(&git_path).ok()?;
+    let gitdir = git_file_content.trim().strip_prefix("gitdir:")?.trim();
+    if gitdir.is_empty() {
+        return None;
+    }
+
+    let gitdir_path = Path::new(gitdir);
+    let resolved_gitdir = if gitdir_path.is_absolute() {
+        gitdir_path.to_path_buf()
+    } else {
+        project_path.join(gitdir_path)
+    };
+    Some(resolved_gitdir.join("HEAD"))
+}
+
+/// Read the current git branch from the repository HEAD.
+/// Returns None for detached HEAD or non-git projects.
 pub fn read_git_branch(project_path: &Path) -> Option<String> {
-    let head_path = project_path.join(".git").join("HEAD");
+    let head_path = git_head_path(project_path)?;
     let content = fs::read_to_string(&head_path).ok()?;
 
     let trimmed = content.trim();
     if let Some(branch) = trimmed.strip_prefix("ref: refs/heads/") {
-        Some(branch.to_string())
+        (!branch.is_empty()).then(|| branch.to_string())
     } else {
         // detached HEAD (commit hash) or unexpected format
         None
@@ -219,6 +247,16 @@ pub async fn scan_project_icons(project_path: String) -> Result<Vec<IconCandidat
 pub async fn get_project_info(project_path: String) -> Result<ProjectInfo, String> {
     let path = Path::new(&project_path);
     get_info(path)
+}
+
+/// Tauri command: get only the current git branch without calculating folder size.
+#[tauri::command]
+pub async fn get_git_branch(project_path: String) -> Result<Option<String>, String> {
+    let path = Path::new(&project_path);
+    if !path.exists() || !path.is_dir() {
+        return Err("项目目录不存在".to_string());
+    }
+    Ok(read_git_branch(path))
 }
 
 #[cfg(test)]
@@ -436,6 +474,47 @@ mod tests {
 
         let branch = read_git_branch(&dir);
         assert_eq!(branch, None);
+
+        cleanup_test_dir(&dir);
+    }
+
+    #[test]
+    fn test_read_git_branch_gitdir_file_absolute() {
+        let dir = create_test_dir("gitdir_absolute");
+        let gitdir = dir.join("actual-git-dir");
+        test_fs::create_dir_all(&gitdir).unwrap();
+        test_fs::write(gitdir.join("HEAD"), "ref: refs/heads/worktree\n").unwrap();
+        test_fs::write(
+            dir.join(".git"),
+            format!("gitdir: {}\n", gitdir.to_string_lossy()),
+        )
+        .unwrap();
+
+        assert_eq!(read_git_branch(&dir), Some("worktree".to_string()));
+
+        cleanup_test_dir(&dir);
+    }
+
+    #[test]
+    fn test_read_git_branch_gitdir_file_relative() {
+        let dir = create_test_dir("gitdir_relative");
+        let gitdir = dir.join("gitdir-relative-target");
+        test_fs::create_dir_all(&gitdir).unwrap();
+        test_fs::write(gitdir.join("HEAD"), "ref: refs/heads/relative\n").unwrap();
+        test_fs::write(dir.join(".git"), "gitdir: gitdir-relative-target\n").unwrap();
+
+        assert_eq!(read_git_branch(&dir), Some("relative".to_string()));
+
+        cleanup_test_dir(&gitdir);
+        cleanup_test_dir(&dir);
+    }
+
+    #[test]
+    fn test_read_git_branch_invalid_gitdir_file() {
+        let dir = create_test_dir("gitdir_invalid");
+        test_fs::write(dir.join(".git"), "gitdir: missing-target\n").unwrap();
+
+        assert_eq!(read_git_branch(&dir), None);
 
         cleanup_test_dir(&dir);
     }

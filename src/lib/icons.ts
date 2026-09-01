@@ -25,7 +25,6 @@ import {
   FolderOpen,
   GitCommit,
   GitCompare,
-  GitFork,
   GitMerge,
   GitPullRequest,
   Hammer,

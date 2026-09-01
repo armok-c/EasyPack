@@ -59,6 +59,7 @@ function App() {
     projectInfo,
     projectInfoLoading,
     projectInfoError,
+    refreshProjectBranch,
     // Phase 9: open folder
     openFolder,
     // Phase 18: unified shortcut bindings
@@ -356,6 +357,32 @@ function App() {
       unlistenAutostartHidden.then((fn) => fn());
     };
   }, [showFromTray, hideToTray, showFromDrawer, restoreFromDrawer, isDrawerHidden]);
+
+  // Refresh the branch after returning to the main window. The listener is
+  // asynchronous, so cleanup also handles registration completing after
+  // unmount.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+
+    const setupFocusListener = async () => {
+      try {
+        const remove = await appWindow.onFocusChanged(({ payload: focused }) => {
+          if (focused) void refreshProjectBranch();
+        });
+        if (disposed) remove();
+        else unlisten = remove;
+      } catch (error) {
+        if (import.meta.env.DEV) console.error("Failed to listen for window focus:", error);
+      }
+    };
+
+    void setupFocusListener();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [refreshProjectBranch]);
 
   // Phase 12: onCloseRequested — always registered, reads state from refs
   useEffect(() => {
