@@ -17,6 +17,7 @@ export interface CommandItem {
   shortcut?: string;  // Phase 11: OS-level global shortcut in Tauri Accelerator format, e.g. "CommandOrControl+G"
   scriptLines?: string;  // Phase 17: Multi-line script content, \n-separated string. Undefined = use command field (SCRIPT-05)
   executionMode?: "strict" | "lenient" | "batch";  // Phase 17: Execution mode. strict=stop on error (&&), lenient=continue (&), batch=verbatim. Default: strict (D-08)
+  action?: "open-folder";  // Open a project-relative directory instead of executing a shell command.
 }
 
 /** Phase 18: Shortcut action category — command execution, window ops, project ops */

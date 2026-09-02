@@ -1,12 +1,27 @@
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::os::windows::process::CommandExt;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::process::Command as StdCommand;
+use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_EXPAND_SZ, REG_SZ};
+use winreg::types::FromRegValue;
+use winreg::{RegKey, HKEY};
 
 // 子进程脱离父进程的 Job Object，避免 tauri dev 重启时终端被一并杀死
 const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
 const DETACHED_PROCESS: u32 = 0x00000008;
 const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
 const MISSING_PROJECT_DIRECTORY_ERROR: &str = "项目目录不存在";
+const EMPTY_PROJECT_RELATIVE_DIRECTORY_ERROR: &str = "项目相对目录不能为空";
+const INVALID_PROJECT_RELATIVE_DIRECTORY_ERROR: &str = "项目相对目录无效";
+const MISSING_TARGET_DIRECTORY_ERROR: &str = "目标目录不存在";
+const TARGET_NOT_DIRECTORY_ERROR: &str = "目标路径不是目录";
+const TARGET_OUTSIDE_PROJECT_ERROR: &str = "目标目录不能位于项目目录外";
+
+const PATH_SEPARATOR: char = ';';
+const MACHINE_ENVIRONMENT_KEY: &str =
+    r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+const USER_ENVIRONMENT_KEY: &str = "Environment";
 
 fn validate_project_directory(project_path: &str) -> Result<(), String> {
     if !Path::new(project_path).is_dir() {
@@ -15,24 +30,197 @@ fn validate_project_directory(project_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn expand_percent_variables_with<F>(value: &str, mut get_variable: F) -> String
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    let mut expanded = String::with_capacity(value.len());
+    let mut remaining = value;
+
+    while let Some(start) = remaining.find('%') {
+        expanded.push_str(&remaining[..start]);
+        let after_start = &remaining[start + 1..];
+        let Some(end_offset) = after_start.find('%') else {
+            expanded.push('%');
+            expanded.push_str(after_start);
+            return expanded;
+        };
+
+        let end = start + 1 + end_offset;
+        let variable_name = &remaining[start + 1..end];
+        let token = &remaining[start..=end];
+        if variable_name.is_empty() {
+            expanded.push_str(token);
+        } else if let Some(replacement) = get_variable(variable_name) {
+            expanded.push_str(&replacement);
+        } else {
+            expanded.push_str(token);
+        }
+        remaining = &remaining[end + 1..];
+    }
+
+    expanded.push_str(remaining);
+    expanded
+}
+
+/// Read string environment values from a current Windows registry environment
+/// key. Registry environment names are case-insensitive, so normalize them
+/// before they are merged.
+fn read_registry_environment(
+    root: HKEY,
+    sub_key: &str,
+) -> std::io::Result<HashMap<String, String>> {
+    let key = RegKey::predef(root).open_subkey(sub_key)?;
+    let mut environment = HashMap::new();
+
+    for value_result in key.enum_values() {
+        let (name, value) = value_result?;
+        if value.vtype != REG_SZ && value.vtype != REG_EXPAND_SZ {
+            continue;
+        }
+
+        let value = <String as FromRegValue>::from_reg_value(&value)?;
+        environment.insert(name.to_ascii_lowercase(), value);
+    }
+
+    Ok(environment)
+}
+
+fn registry_environment_value<'a>(
+    environment: Option<&'a HashMap<String, String>>,
+    name: &str,
+) -> Option<&'a str> {
+    environment?
+        .iter()
+        .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
+}
+
+fn path_entry_key(entry: &str) -> String {
+    let entry = entry.trim();
+    let mut key = entry.to_ascii_lowercase();
+    while key.len() > 3 && (key.ends_with('\\') || key.ends_with('/')) {
+        key.pop();
+    }
+    key
+}
+
+/// Combine registry PATH entries with the process PATH while preserving
+/// process-only entries used by tools launched through EasyPack.
+fn merge_path_values(
+    process_path: &str,
+    machine_path: Option<&str>,
+    user_path: Option<&str>,
+) -> String {
+    let mut entries = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    for path in [machine_path, user_path, Some(process_path)] {
+        let Some(path) = path else {
+            continue;
+        };
+        for raw_entry in path.split(PATH_SEPARATOR) {
+            let entry = raw_entry.trim();
+            if entry.is_empty() {
+                continue;
+            }
+            let key = path_entry_key(entry);
+            if seen.insert(key) {
+                entries.push(entry.to_string());
+            }
+        }
+    }
+
+    entries.join(";")
+}
+
+fn refreshed_command_path_with_sources<F>(
+    process_path: Option<&std::ffi::OsStr>,
+    machine_environment: Option<&HashMap<String, String>>,
+    user_environment: Option<&HashMap<String, String>>,
+    mut process_variable: F,
+) -> Option<OsString>
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    let machine_path = registry_environment_value(machine_environment, "Path");
+    let user_path = registry_environment_value(user_environment, "Path");
+
+    // If registry PATH is unavailable, let Command inherit the exact
+    // original value rather than replacing it with a lossy conversion.
+    if machine_path.is_none() && user_path.is_none() {
+        return process_path.map(OsString::from);
+    }
+
+    let mut registry_environment = HashMap::new();
+    for environment in [machine_environment, user_environment]
+        .into_iter()
+        .flatten()
+    {
+        for (name, value) in environment {
+            registry_environment.insert(name.to_ascii_lowercase(), value.clone());
+        }
+    }
+
+    let mut resolve_variable = |name: &str| {
+        registry_environment
+            .get(&name.to_ascii_lowercase())
+            .cloned()
+            .or_else(|| process_variable(name))
+    };
+    let machine_path =
+        machine_path.map(|path| expand_percent_variables_with(path, &mut resolve_variable));
+    let user_path =
+        user_path.map(|path| expand_percent_variables_with(path, &mut resolve_variable));
+    let process_path_text = process_path.and_then(|path| path.to_str()).unwrap_or("");
+    let merged = merge_path_values(
+        process_path_text,
+        machine_path.as_deref(),
+        user_path.as_deref(),
+    );
+
+    if merged.is_empty() {
+        process_path.map(OsString::from)
+    } else {
+        Some(OsString::from(merged))
+    }
+}
+
+/// Build a command PATH from the current registry values instead of relying
+/// on the environment captured when EasyPack itself was started.
+fn refreshed_command_path() -> Option<OsString> {
+    let process_path = std::env::var_os("PATH");
+    let machine_environment =
+        read_registry_environment(HKEY_LOCAL_MACHINE, MACHINE_ENVIRONMENT_KEY).ok();
+    let user_environment = read_registry_environment(HKEY_CURRENT_USER, USER_ENVIRONMENT_KEY).ok();
+
+    refreshed_command_path_with_sources(
+        process_path.as_deref(),
+        machine_environment.as_ref(),
+        user_environment.as_ref(),
+        |name| std::env::var(name).ok(),
+    )
+}
+
+fn new_shell_command(args: &str, creation_flags: u32) -> StdCommand {
+    let mut command = StdCommand::new("cmd");
+    if let Some(path) = refreshed_command_path() {
+        command.env("PATH", path);
+    }
+    command.creation_flags(creation_flags).raw_arg(args);
+    command
+}
+
 /// spawn cmd.exe 并尝试脱离 Job Object。
 /// 若父进程的 Job Object 不允许 breakaway (ERROR_ACCESS_DENIED)，回退到普通 spawn。
 fn spawn_detached(args: &str) -> Result<std::process::Child, std::io::Error> {
     // 优先尝试 BREAKAWAY_FROM_JOB + DETACHED_PROCESS 脱离 Job Object
-    match StdCommand::new("cmd")
-        .creation_flags(CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS)
-        .raw_arg(args)
-        .spawn()
-    {
+    match new_shell_command(args, CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS).spawn() {
         Ok(child) => Ok(child),
         Err(e) if e.raw_os_error() == Some(5) => {
             // os error 5 = ACCESS_DENIED: Job Object 不允许 breakaway
             // 仍然使用 DETACHED_PROCESS 避免继承父进程控制台，
             // CREATE_NEW_PROCESS_GROUP 使进程组独立，降低被级联终止的风险。
-            StdCommand::new("cmd")
-                .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
-                .raw_arg(args)
-                .spawn()
+            new_shell_command(args, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP).spawn()
         }
         Err(e) => Err(e),
     }
@@ -83,6 +271,70 @@ pub async fn open_folder(path: String) -> Result<(), String> {
         .raw_arg(format!("\"{}\"", path))
         .spawn()
         .map_err(|e| format!("Failed to open folder: {}", e))?;
+    Ok(())
+}
+
+/// Resolve an existing project-relative directory without allowing path
+/// traversal, absolute paths, or symlink/junction escapes.
+fn resolve_project_subfolder(project_path: &str, relative_path: &str) -> Result<PathBuf, String> {
+    if project_path.contains('"') {
+        return Err("Invalid project path: contains double quote".to_string());
+    }
+
+    let relative_path = relative_path.trim();
+    if relative_path.is_empty() {
+        return Err(EMPTY_PROJECT_RELATIVE_DIRECTORY_ERROR.to_string());
+    }
+    if relative_path.contains('"') {
+        return Err(INVALID_PROJECT_RELATIVE_DIRECTORY_ERROR.to_string());
+    }
+
+    let relative = Path::new(relative_path);
+    if relative.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    }) {
+        return Err(INVALID_PROJECT_RELATIVE_DIRECTORY_ERROR.to_string());
+    }
+
+    let root = std::fs::canonicalize(project_path)
+        .map_err(|_| MISSING_PROJECT_DIRECTORY_ERROR.to_string())?;
+    if !root.is_dir() {
+        return Err(MISSING_PROJECT_DIRECTORY_ERROR.to_string());
+    }
+
+    let target = std::fs::canonicalize(root.join(relative)).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            MISSING_TARGET_DIRECTORY_ERROR.to_string()
+        } else {
+            format!("无法访问目标目录：{}", error)
+        }
+    })?;
+
+    if !target.starts_with(&root) {
+        return Err(TARGET_OUTSIDE_PROJECT_ERROR.to_string());
+    }
+    if !target.is_dir() {
+        return Err(TARGET_NOT_DIRECTORY_ERROR.to_string());
+    }
+
+    Ok(target)
+}
+
+/// Open an existing directory below the current project directly in Explorer.
+/// This intentionally bypasses cmd.exe so no terminal window is shown.
+#[tauri::command]
+pub async fn open_project_subfolder(
+    project_path: String,
+    relative_path: String,
+) -> Result<(), String> {
+    let target = resolve_project_subfolder(&project_path, &relative_path)?;
+    StdCommand::new("explorer.exe")
+        .arg(&target)
+        .spawn()
+        .map_err(|error| format!("打开目录失败：{}", error))?;
     Ok(())
 }
 
@@ -409,6 +661,89 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_expand_percent_variables_replaces_known_and_keeps_unknown() {
+        let expanded = expand_percent_variables_with(
+            r#"%SystemRoot%\System32;%NVM_HOME%;%UNKNOWN_VAR%"#,
+            |name| match name {
+                "SystemRoot" => Some(r#"C:\Windows"#.to_string()),
+                "NVM_HOME" => Some(r#"D:\environment\nvm"#.to_string()),
+                _ => None,
+            },
+        );
+
+        assert_eq!(
+            expanded,
+            r#"C:\Windows\System32;D:\environment\nvm;%UNKNOWN_VAR%"#
+        );
+    }
+
+    #[test]
+    fn test_merge_path_values_prefers_current_registry_paths_and_keeps_process_extras() {
+        let merged = merge_path_values(
+            r#"C:\Codex\bin;C:\Windows\System32;D:\old-node"#,
+            Some(r#"C:\Windows\System32;D:\environment\nodejs"#),
+            Some(r#"C:\Users\PC\AppData\Roaming\npm;D:\environment\nodejs"#),
+        );
+
+        assert_eq!(
+            merged,
+            r#"C:\Windows\System32;D:\environment\nodejs;C:\Users\PC\AppData\Roaming\npm;C:\Codex\bin;D:\old-node"#
+        );
+    }
+
+    #[test]
+    fn test_merge_path_values_deduplicates_case_insensitively() {
+        let merged = merge_path_values(
+            r#"C:\Tools;D:\Tools\;C:\Users\PC\Temp"#,
+            Some(r#"c:\tools;D:\Tools"#),
+            Some(r#"C:\USERS\PC\TEMP"#),
+        );
+
+        assert_eq!(merged, r#"c:\tools;D:\Tools;C:\USERS\PC\TEMP"#);
+    }
+
+    #[test]
+    fn test_merge_path_values_falls_back_to_process_path_when_registry_unavailable() {
+        let process_path = r#"C:\Codex\bin;C:\Windows\System32"#;
+
+        assert_eq!(merge_path_values(process_path, None, None), process_path);
+    }
+
+    #[test]
+    fn test_refreshed_command_path_prefers_current_registry_variables_over_stale_process_values() {
+        let process_path = OsString::from(r#"C:\old-nvm\nodejs;C:\process-only"#);
+        let machine_environment = std::collections::HashMap::from([
+            (
+                "path".to_string(),
+                r#"%Nvm_Home%\nodejs;C:\Windows\System32"#.to_string(),
+            ),
+            ("nvm_home".to_string(), r#"D:\old-nvm"#.to_string()),
+        ]);
+        let user_environment = std::collections::HashMap::from([
+            ("PATH".to_string(), r#"%NVM_HOME%\npm"#.to_string()),
+            ("NVM_HOME".to_string(), r#"E:\new-nvm"#.to_string()),
+        ]);
+
+        let refreshed = refreshed_command_path_with_sources(
+            Some(process_path.as_os_str()),
+            Some(&machine_environment),
+            Some(&user_environment),
+            |name| {
+                name.eq_ignore_ascii_case("NVM_HOME")
+                    .then(|| r#"C:\old-nvm"#.to_string())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            refreshed,
+            OsString::from(
+                r#"E:\new-nvm\nodejs;C:\Windows\System32;E:\new-nvm\npm;C:\old-nvm\nodejs;C:\process-only"#,
+            )
+        );
+    }
+
+    #[test]
     fn test_strip_extended_path_prefix_drive_path() {
         assert_eq!(
             strip_extended_path_prefix(r"\\?\C:\Projects\EasyPack\config.env"),
@@ -569,6 +904,75 @@ mod tests {
         let missing_path = temp_dir.path().join("missing-project");
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(open_folder(missing_path.to_string_lossy().into_owned()));
+
+        assert_eq!(result.unwrap_err(), MISSING_PROJECT_DIRECTORY_ERROR);
+    }
+
+    #[test]
+    fn test_resolve_project_subfolder_rejects_empty_and_non_relative_paths() {
+        let project = tempfile::tempdir().unwrap();
+
+        let empty = resolve_project_subfolder(&project.path().to_string_lossy(), "");
+        assert_eq!(empty.unwrap_err(), EMPTY_PROJECT_RELATIVE_DIRECTORY_ERROR);
+
+        for relative_path in [
+            "..\\outside",
+            "\\absolute",
+            "C:\\absolute",
+            "C:relative",
+            "\\\\server\\share",
+        ] {
+            let result =
+                resolve_project_subfolder(&project.path().to_string_lossy(), relative_path);
+            assert_eq!(
+                result.unwrap_err(),
+                INVALID_PROJECT_RELATIVE_DIRECTORY_ERROR,
+                "path should be rejected: {}",
+                relative_path
+            );
+        }
+    }
+
+    #[test]
+    fn test_resolve_project_subfolder_distinguishes_missing_and_non_directory_targets() {
+        let project = tempfile::tempdir().unwrap();
+
+        let missing = resolve_project_subfolder(&project.path().to_string_lossy(), "bundle");
+        assert_eq!(missing.unwrap_err(), MISSING_TARGET_DIRECTORY_ERROR);
+
+        std::fs::write(project.path().join("artifact.txt"), "artifact").unwrap();
+        let file = resolve_project_subfolder(&project.path().to_string_lossy(), "artifact.txt");
+        assert_eq!(file.unwrap_err(), TARGET_NOT_DIRECTORY_ERROR);
+    }
+
+    #[test]
+    fn test_resolve_project_subfolder_returns_canonical_directory_inside_project() {
+        let project = tempfile::tempdir().unwrap();
+        let target = project
+            .path()
+            .join("src-tauri")
+            .join("target")
+            .join("release")
+            .join("bundle");
+        std::fs::create_dir_all(&target).unwrap();
+
+        let resolved = resolve_project_subfolder(
+            &project.path().to_string_lossy(),
+            "src-tauri\\target\\release\\bundle",
+        )
+        .unwrap();
+        assert_eq!(resolved, std::fs::canonicalize(target).unwrap());
+    }
+
+    #[test]
+    fn test_open_project_subfolder_rejects_invalid_input_before_spawning_explorer() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let missing_path = temp_dir.path().join("missing-project");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(open_project_subfolder(
+            missing_path.to_string_lossy().into_owned(),
+            "bundle".to_string(),
+        ));
 
         assert_eq!(result.unwrap_err(), MISSING_PROJECT_DIRECTORY_ERROR);
     }

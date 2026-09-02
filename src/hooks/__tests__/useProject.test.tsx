@@ -228,6 +228,31 @@ describe("useProject - missing project directory errors", () => {
       ["脚本执行失败：backend failed。请检查脚本内容是否正确。"],
     ]);
   });
+
+  it("executes an open-folder action through the dedicated backend command", async () => {
+    const result = await initHook();
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await expect(result.current.executeScriptCommand({
+        id: "folder-command",
+        name: "打开安装包目录",
+        command: "src-tauri\\target\\release\\bundle",
+        icon: "FolderOpen",
+        type: "custom",
+        scope: "project",
+        addedAt: 1000,
+        action: "open-folder",
+      })).resolves.toBe(true);
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("open_project_subfolder", {
+      projectPath: testProject.path,
+      relativePath: "src-tauri\\target\\release\\bundle",
+    });
+    expect(mockInvoke).not.toHaveBeenCalledWith("execute_command", expect.anything());
+    expect(mockInvoke).not.toHaveBeenCalledWith("execute_script", expect.anything());
+  });
 });
 
 describe("useProject - command CRUD", () => {
@@ -296,6 +321,48 @@ describe("useProject - command CRUD", () => {
     expect(added!.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     );
+  });
+
+  it("persists an open-folder action without script fields", async () => {
+    const result = await initHook();
+
+    await act(async () => {
+      await result.current.addCommand("打开安装包目录", "src-tauri\\target\\release\\bundle", "FolderOpen", {
+        action: "open-folder",
+      });
+    });
+
+    const added = result.current.commands.find((c) => c.name === "打开安装包目录");
+    expect(added).toMatchObject({
+      command: "src-tauri\\target\\release\\bundle",
+      icon: "FolderOpen",
+      action: "open-folder",
+    });
+    expect(added).not.toHaveProperty("scriptLines");
+    expect(added).not.toHaveProperty("executionMode");
+  });
+
+  it("removes an old open-folder action when updating as a shell command", async () => {
+    const result = await initHook();
+
+    await act(async () => {
+      await result.current.addCommand("打开日志目录", "logs", "FolderOpen", { action: "open-folder" });
+    });
+    const added = result.current.commands.find((c) => c.name === "打开日志目录")!;
+
+    await act(async () => {
+      await result.current.updateCommand(added.id, {
+        name: "运行日志命令",
+        command: "echo logs",
+        icon: "Terminal",
+      });
+    });
+
+    const updated = result.current.commands.find((c) => c.id === added.id)!;
+    expect(updated).toMatchObject({ name: "运行日志命令", command: "echo logs", icon: "Terminal" });
+    expect(updated).not.toHaveProperty("action");
+    expect(updated).not.toHaveProperty("scriptLines");
+    expect(updated).not.toHaveProperty("executionMode");
   });
 
   it("updateCommand updates name, command, and icon of existing command", async () => {

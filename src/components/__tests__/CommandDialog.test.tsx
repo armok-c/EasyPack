@@ -188,6 +188,103 @@ describe("CommandDialog", () => {
   });
 
   describe("onSubmit callback", () => {
+    it("saves a named folder action with the selected icon and no script fields", () => {
+      const { props } = renderDialog();
+
+      fireEvent.click(screen.getByRole("radio", { name: "打开目录" }));
+      fireEvent.change(screen.getByPlaceholderText("例如: 运行测试"), {
+        target: { value: "打开安装包目录" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("例如: src-tauri\\target\\release\\bundle"), {
+        target: { value: "src-tauri\\target\\release\\bundle" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "添加" }));
+
+      expect(props.onSubmit).toHaveBeenCalledWith({
+        name: "打开安装包目录",
+        command: "src-tauri\\target\\release\\bundle",
+        icon: "FolderOpen",
+        action: "open-folder",
+      });
+    });
+
+    it("restores the default icon when a new folder action switches to single-line", () => {
+      const { props } = renderDialog();
+
+      fireEvent.click(screen.getByRole("radio", { name: "打开目录" }));
+      fireEvent.change(screen.getByPlaceholderText("例如: 运行测试"), {
+        target: { value: "打开目录" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("例如: src-tauri\\target\\release\\bundle"), {
+        target: { value: "logs" },
+      });
+      fireEvent.click(screen.getByRole("radio", { name: "单行命令" }));
+
+      expect(screen.getByRole("radio", { name: "Terminal" })).toHaveAttribute("aria-checked", "true");
+      fireEvent.click(screen.getByRole("button", { name: "添加" }));
+
+      expect(props.onSubmit).toHaveBeenCalledWith({
+        name: "打开目录",
+        command: "logs",
+        icon: "Terminal",
+      });
+    });
+
+    it("recognizes a folder action while editing and preserves its icon", () => {
+      renderDialog({
+        initialData: {
+          id: "folder-1",
+          name: "打开日志目录",
+          command: "logs",
+          icon: "Code",
+          type: "custom" as const,
+          scope: "project",
+          addedAt: 1000,
+          action: "open-folder" as const,
+        },
+      });
+
+      expect(screen.getByRole("radio", { name: "打开目录" })).toHaveAttribute("aria-checked", "true");
+      expect((screen.getByPlaceholderText("例如: src-tauri\\target\\release\\bundle") as HTMLInputElement).value).toBe("logs");
+      expect(screen.getByRole("radio", { name: "Code" })).toHaveAttribute("aria-checked", "true");
+    });
+
+    it("uses FolderOpen by default without replacing an explicitly selected icon", () => {
+      const { unmount } = renderDialog();
+      fireEvent.click(screen.getByRole("radio", { name: "打开目录" }));
+      expect(screen.getByRole("radio", { name: "FolderOpen" })).toHaveAttribute("aria-checked", "true");
+      unmount();
+
+      renderDialog();
+      fireEvent.click(screen.getByRole("radio", { name: "Code" }));
+      fireEvent.click(screen.getByRole("radio", { name: "打开目录" }));
+      expect(screen.getByRole("radio", { name: "Code" })).toHaveAttribute("aria-checked", "true");
+    });
+
+    it("clears the folder action when saving an edited command as single-line", () => {
+      const { props } = renderDialog({
+        initialData: {
+          id: "folder-2",
+          name: "打开日志目录",
+          command: "logs",
+          icon: "FolderOpen",
+          type: "custom" as const,
+          scope: "project",
+          addedAt: 1000,
+          action: "open-folder" as const,
+        },
+      });
+
+      fireEvent.click(screen.getByRole("radio", { name: "单行命令" }));
+      fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+      expect(props.onSubmit).toHaveBeenCalledWith({
+        name: "打开日志目录",
+        command: "logs",
+        icon: "FolderOpen",
+      });
+    });
+
     it("clears multi-line fields when saving an edited command from single-line mode", () => {
       const { props } = renderDialog({
         initialData: {

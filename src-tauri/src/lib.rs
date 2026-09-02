@@ -29,6 +29,7 @@ pub fn run() {
             commands::project_info::get_project_info,
             commands::project_info::get_git_branch,
             commands::shell::open_folder,
+            commands::shell::open_project_subfolder,
             commands::shell::read_file_content,
             commands::environment::environment_open_project,
             commands::environment::environment_get_project_path,

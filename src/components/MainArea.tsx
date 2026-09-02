@@ -19,8 +19,8 @@ interface MainAreaProps {
   commands: CommandItem[];
   editMode: boolean;
   setEditMode: (editMode: boolean) => void;
-  addCommand: (name: string, command: string, icon?: string, extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
-  updateCommand: (id: string, data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => Promise<void>;
+  addCommand: (name: string, command: string, icon?: string, extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch"; action?: "open-folder" }) => Promise<void>;
+  updateCommand: (id: string, data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch"; action?: "open-folder" }) => Promise<void>;
   deleteCommand: (id: string) => Promise<void>;
   // Phase 5 Plan 03: keyboard navigation zone management
   activeZone: "sidebar" | "main";
@@ -155,7 +155,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
   }, []);
 
   const handleDialogSubmit = useCallback(
-    async (data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" }) => {
+    async (data: { name: string; command: string; icon: string; scriptLines?: string; executionMode?: "strict" | "lenient" | "batch"; action?: "open-folder" }) => {
       await runBusy(async () => {
         if (editingCommand) {
           await updateCommand(editingCommand.id, data);
@@ -163,6 +163,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
           await addCommand(data.name, data.command, data.icon, {
             scriptLines: data.scriptLines,
             executionMode: data.executionMode,
+            action: data.action,
           });
         }
         setDialogOpen(false);

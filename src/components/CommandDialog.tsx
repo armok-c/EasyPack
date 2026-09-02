@@ -35,6 +35,7 @@ import { ScriptEditor } from "@/components/ScriptEditor";
 import { useBatchDetect } from "@/hooks/useBatchDetect";
 
 type ExecutionMode = "strict" | "lenient" | "batch";
+type CommandMode = "single" | "multi" | "folder";
 
 export interface CommandDialogHandle {
   requestLeave: (options?: {
@@ -51,6 +52,7 @@ interface CommandDialogProps {
     icon: string;
     scriptLines?: string;
     executionMode?: ExecutionMode;
+    action?: "open-folder";
   }) => void | Promise<void>;
   initialData?: CommandItem | null;
 }
@@ -71,10 +73,11 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
   // it cannot cover the open-then-edit-different-command transition alone.
   const isEditing = initialData !== null && initialData !== undefined;
 
-  // Phase 17: Tab state -- "single" for single-line, "multi" for multi-line script
+  // Command mode: single-line command, multi-line script, or project-relative folder.
+  const hasInitialFolderAction = initialData?.action === "open-folder";
   const hasInitialScript = !!(initialData?.scriptLines);
-  const [activeTab, setActiveTab] = useState<"single" | "multi">(
-    () => hasInitialScript ? "multi" : "single"
+  const [activeTab, setActiveTab] = useState<CommandMode>(
+    () => hasInitialFolderAction ? "folder" : hasInitialScript ? "multi" : "single"
   );
   const [scriptContent, setScriptContent] = useState(
     () => initialData?.scriptLines ?? ""
@@ -93,8 +96,9 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
   const [name, setName] = useState(() => initialData?.name ?? "");
   const [command, setCommand] = useState(() => initialData?.command ?? "");
   const [selectedIcon, setSelectedIcon] = useState(
-    () => initialData?.icon ?? DEFAULT_ICON
+    () => initialData?.icon ?? (hasInitialFolderAction ? "FolderOpen" : DEFAULT_ICON)
   );
+  const [iconTouched, setIconTouched] = useState(() => !!initialData?.icon);
   const [nameDirty, setNameDirty] = useState(false);
   const [commandDirty, setCommandDirty] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -150,16 +154,23 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
 
   const handleIconSelect = useCallback((iconName: string) => {
     setSelectedIcon(iconName);
+    setIconTouched(true);
   }, []);
 
   // Phase 17: Tab switch handler (D-03: preserve content on switch)
-  const handleTabChange = useCallback((tab: "single" | "multi") => {
+  const handleTabChange = useCallback((tab: CommandMode) => {
     if (tab === "multi" && activeTab === "single" && command.trim()) {
       // D-03: carry single-line content into multi-line editor
       setScriptContent(command);
     }
+    if (tab === "folder" && !iconTouched && selectedIcon === DEFAULT_ICON) {
+      setSelectedIcon("FolderOpen");
+    }
+    if (activeTab === "folder" && tab !== "folder" && !iconTouched && selectedIcon === "FolderOpen") {
+      setSelectedIcon(DEFAULT_ICON);
+    }
     setActiveTab(tab);
-  }, [activeTab, command]);
+  }, [activeTab, command, iconTouched, selectedIcon]);
 
   // WR-01 (iter 3): wrap ScriptEditor's onChange so direct user edits mark
   // the script as touched. The tab-switch carry above deliberately does NOT
@@ -176,6 +187,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
     setName("");
     setCommand("");
     setSelectedIcon(DEFAULT_ICON);
+    setIconTouched(false);
     setNameDirty(false);
     setCommandDirty(false);
   }, []);
@@ -186,6 +198,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
       setName(preset.name);
       setCommand(preset.command);
       setSelectedIcon(preset.icon);
+      setIconTouched(true);
       setNameDirty(false);
       setCommandDirty(false);
     }
@@ -193,18 +206,26 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
   }, []);
 
   const isDirty = useMemo(() => {
-    const initialTab = initialData?.scriptLines ? "multi" : "single";
-    const effectiveScript = scriptTouched ? (scriptContent.trim() || undefined) : initialData?.scriptLines;
-    const initialMode = initialData?.executionMode ?? "strict";
+    const initialTab: CommandMode = initialData?.action === "open-folder"
+      ? "folder"
+      : initialData?.scriptLines ? "multi" : "single";
+    const effectiveScript = activeTab === "multi"
+      ? scriptTouched ? (scriptContent.trim() || undefined) : initialData?.scriptLines
+      : undefined;
+    const initialScriptMode = initialData?.scriptLines
+      ? (initialData.executionMode ?? "strict")
+      : undefined;
     const effectiveMode = activeTab === "multi"
       ? (isBatch ? "batch" : executionMode)
-      : scriptTouched ? executionMode : initialMode;
+      : undefined;
+    const effectiveAction = activeTab === "folder" ? "open-folder" : undefined;
     return activeTab !== initialTab
       || name !== (initialData?.name ?? "")
       || command !== (initialData?.command ?? "")
-      || selectedIcon !== (initialData?.icon ?? DEFAULT_ICON)
+      || selectedIcon !== (initialData?.icon ?? (initialData?.action === "open-folder" ? "FolderOpen" : DEFAULT_ICON))
       || effectiveScript !== initialData?.scriptLines
-      || effectiveMode !== initialMode
+      || effectiveMode !== initialScriptMode
+      || effectiveAction !== initialData?.action
       || selectedCategory !== ""
       || selectedPresetId !== "";
   }, [activeTab, name, command, selectedIcon, scriptContent, scriptTouched, executionMode, isBatch, initialData, selectedCategory, selectedPresetId]);
@@ -212,12 +233,13 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
   const resetFormState = useCallback(() => {
     setName(initialData?.name ?? "");
     setCommand(initialData?.command ?? "");
-    setSelectedIcon(initialData?.icon ?? DEFAULT_ICON);
+    setSelectedIcon(initialData?.icon ?? (initialData?.action === "open-folder" ? "FolderOpen" : DEFAULT_ICON));
+    setIconTouched(!!initialData?.icon);
     setNameDirty(false);
     setCommandDirty(false);
     setSelectedCategory("");
     setSelectedPresetId("");
-    setActiveTab(initialData?.scriptLines ? "multi" : "single");
+    setActiveTab(initialData?.action === "open-folder" ? "folder" : initialData?.scriptLines ? "multi" : "single");
     setScriptContent(initialData?.scriptLines ?? "");
     setExecutionMode(initialData?.executionMode ?? "strict");
     setScriptTouched(false);
@@ -240,13 +262,20 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
     if (!isValid) return false;
     try {
       if (activeTab === "multi") {
-      const effectiveMode = isBatch ? "batch" : executionMode;
+        const effectiveMode = isBatch ? "batch" : executionMode;
         await onSubmit({
           name: name.trim(),
           command: scriptContent.trim().split("\n")[0] || "",
           icon: selectedIcon,
           scriptLines: scriptContent.trim(),
           executionMode: effectiveMode,
+        });
+      } else if (activeTab === "folder") {
+        await onSubmit({
+          name: name.trim(),
+          command: command.trim(),
+          icon: selectedIcon,
+          action: "open-folder",
         });
       } else {
         await onSubmit({
@@ -366,6 +395,22 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
             >
               多行
             </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={activeTab === "folder"}
+              aria-label="打开目录"
+              onClick={() => handleTabChange("folder")}
+              className={cn(
+                "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
+                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                activeTab === "folder"
+                  ? "bg-white/15 text-foreground"
+                  : "bg-transparent text-muted-foreground hover:bg-white/5"
+              )}
+            >
+              打开目录
+            </button>
           </div>
         </div>
 
@@ -445,12 +490,12 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
           {/* Command field -- single-line Input or multi-line ScriptEditor */}
           <div className="space-y-2">
             <Label htmlFor="cmd-command">
-              {activeTab === "multi" ? "脚本内容" : "Shell 命令"}
+              {activeTab === "multi" ? "脚本内容" : activeTab === "folder" ? "项目相对目录" : "Shell 命令"}
             </Label>
-            {activeTab === "single" ? (
+            {activeTab !== "multi" ? (
               <Input
                 id="cmd-command"
-                placeholder="例如: npm test"
+                placeholder={activeTab === "folder" ? "例如: src-tauri\\target\\release\\bundle" : "例如: npm test"}
                 value={command}
                 onChange={handleCommandChange}
               />
@@ -464,6 +509,9 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
             )}
             {activeTab === "single" && commandDirty && command.trim().length === 0 && (
               <p className="text-red-400 text-xs mt-1">命令不能为空</p>
+            )}
+            {activeTab === "folder" && commandDirty && command.trim().length === 0 && (
+              <p className="text-red-400 text-xs mt-1">目录不能为空</p>
             )}
           </div>
 

@@ -1,6 +1,6 @@
 [package]
 name = "easypack"
-version = "3.0.0"
+version = "3.0.1"
 description = "A Windows desktop project quick command launcher"
 authors = ["you"]
 edition = "2021"
@@ -25,6 +25,9 @@ image = "0.25"
 tempfile = "3"
 tauri-plugin-fs = "2"
 sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt"] }

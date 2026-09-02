@@ -1029,6 +1029,24 @@ export function useProject() {
     async (cmd: CommandItem): Promise<boolean> => {
       if (!currentProject) return false;
 
+      if (cmd.action === "open-folder") {
+        try {
+          await invoke("open_project_subfolder", {
+            projectPath: currentProject.path,
+            relativePath: cmd.command,
+          });
+          toast.success(`已打开目录: ${cmd.name}`);
+          return true;
+        } catch (error) {
+          if (isMissingProjectDirectoryError(error)) {
+            toast.error("项目目录不存在");
+          } else {
+            toast.error(`目录打开失败：${errorDetail(error)}`);
+          }
+          return false;
+        }
+      }
+
       if (cmd.scriptLines) {
         // Multi-line script path: call execute_script on Rust backend
         try {
@@ -1066,12 +1084,17 @@ export function useProject() {
       name: string,
       command: string,
       icon?: string,
-      extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch" },
+      extra?: { scriptLines?: string; executionMode?: "strict" | "lenient" | "batch"; action?: "open-folder" },
     ) => {
       if (!selectedId) {
         toast.error("请先选择一个项目");
         return;
       }
+      const modeFields = extra?.action === "open-folder"
+        ? { action: extra.action }
+        : extra?.scriptLines !== undefined
+          ? { scriptLines: extra.scriptLines, executionMode: extra.executionMode }
+          : {};
       const newItem: CommandItem = {
         id: crypto.randomUUID(),
         name,
@@ -1080,8 +1103,7 @@ export function useProject() {
         type: "custom",
         scope: "project",
         addedAt: Date.now(),
-        scriptLines: extra?.scriptLines,
-        executionMode: extra?.executionMode,
+        ...modeFields,
       };
       const current = projectCommandsMap[selectedId] ?? [];
       const updated = [...current, newItem];
@@ -1103,19 +1125,25 @@ export function useProject() {
         icon: string;
         scriptLines?: string;
         executionMode?: "strict" | "lenient" | "batch";
+        action?: "open-folder";
       },
     ) => {
       if (!selectedId) return;
       const projectCmds = projectCommandsMap[selectedId] ?? [];
       const idx = projectCmds.findIndex((c) => c.id === id);
       if (idx === -1) return;
+      const { scriptLines: _scriptLines, executionMode: _executionMode, action: _action, ...existingItem } = projectCmds[idx];
+      const modeFields = data.action === "open-folder"
+        ? { action: data.action }
+        : data.scriptLines !== undefined
+          ? { scriptLines: data.scriptLines, executionMode: data.executionMode }
+          : {};
       const updatedItem: CommandItem = {
-        ...projectCmds[idx],
+        ...existingItem,
         name: data.name,
         command: data.command,
         icon: data.icon,
-        scriptLines: data.scriptLines,
-        executionMode: data.executionMode,
+        ...modeFields,
       };
       const updated = projectCmds.map((c) => (c.id === id ? updatedItem : c));
       setProjectCommandsMap((prev) => ({ ...prev, [selectedId]: updated }));
