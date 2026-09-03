@@ -1,12 +1,13 @@
 {
   "name": "easypack",
   "private": true,
-  "version": "3.0.1",
+  "version": "3.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "release": "npm version patch --no-git-tag-version && npm run tauri build",
     "tauri": "tauri"
   },
   "dependencies": {
