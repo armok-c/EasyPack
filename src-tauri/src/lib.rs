@@ -23,6 +23,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            commands::color_picker::pick_screen_color,
+            commands::color_picker::cancel_screen_color_pick,
             commands::shell::execute_command,
             commands::shell::execute_script,
             commands::project_info::scan_project_icons,

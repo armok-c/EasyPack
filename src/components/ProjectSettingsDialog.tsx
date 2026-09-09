@@ -1,8 +1,9 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
-import { X, FolderOpen, FileImage, Loader2 } from "lucide-react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { X, FolderOpen, FileImage, Loader2, Pipette } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import { ICON_OPTIONS, DEFAULT_ICON, getIconByName, isFileIcon, getFilePath } from "@/lib/icons";
 import { DEFAULT_COLOR } from "@/lib/colors";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,12 @@ interface IconCandidate {
 }
 
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+function createScreenColorRequestId(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  const suffix = randomUuid ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `screen-color-${suffix}`;
+}
 
 function normalizeHexColor(value: string | undefined): string {
   if (!value || !HEX_COLOR_PATTERN.test(value)) return DEFAULT_COLOR;
@@ -59,6 +66,31 @@ export function ProjectSettingsDialog({
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [rebinding, setRebinding] = useState(false);
+  const [pickingColor, setPickingColor] = useState(false);
+  const pickingColorRef = useRef(false);
+  const activePickRequestIdRef = useRef<string | null>(null);
+  const scanningRef = useRef(false);
+  const rebindingRef = useRef(false);
+  const cancelRequestedRef = useRef(false);
+  const latestProjectIdRef = useRef(project?.id);
+  latestProjectIdRef.current = project?.id;
+
+  const requestCancelScreenColorPick = useCallback(() => {
+    const requestId = activePickRequestIdRef.current;
+    if (!pickingColorRef.current || !requestId || cancelRequestedRef.current) return;
+    cancelRequestedRef.current = true;
+    void Promise.resolve(invoke("cancel_screen_color_pick", { requestId })).catch(() => {
+      // Best effort: the picker still has its timeout and RAII cleanup.
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) requestCancelScreenColorPick();
+  }, [open, requestCancelScreenColorPick]);
+
+  useEffect(() => {
+    return () => requestCancelScreenColorPick();
+  }, [requestCancelScreenColorPick]);
 
   // Reset state when project changes or dialog opens
   useEffect(() => {
@@ -70,6 +102,7 @@ export function ProjectSettingsDialog({
       setCandidates([]);
       setHasScanned(false);
       setScanError(null);
+      if (!pickingColorRef.current) setPickingColor(false);
     }
   }, [open, project]);
 
@@ -83,6 +116,7 @@ export function ProjectSettingsDialog({
     colorInputIsValid &&
     (selectedIcon !== (project?.icon ?? DEFAULT_ICON) ||
       selectedColor !== projectColor);
+  const interactionLocked = pickingColor || rebinding || scanning;
 
   const handleSubmit = useCallback(() => {
     if (!project || !hasChanges) return;
@@ -92,6 +126,7 @@ export function ProjectSettingsDialog({
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
+      if (!newOpen && pickingColorRef.current) return;
       if (!newOpen && project) {
         setSelectedIcon(project.icon ?? DEFAULT_ICON);
         const color = normalizeHexColor(project.color);
@@ -107,7 +142,8 @@ export function ProjectSettingsDialog({
   );
 
   const handleScanIcons = useCallback(async () => {
-    if (!project) return;
+    if (!project || scanningRef.current || rebindingRef.current || pickingColorRef.current) return;
+    scanningRef.current = true;
     setScanning(true);
     setHasScanned(false);
     setScanError(null);
@@ -120,19 +156,22 @@ export function ProjectSettingsDialog({
     } catch {
       setScanError("图标扫描失败，请重试");
     } finally {
+      scanningRef.current = false;
       setScanning(false);
     }
   }, [project]);
 
   const handleRebind = useCallback(async () => {
-    if (!project || rebinding) return;
+    if (!project || rebindingRef.current || pickingColorRef.current || scanningRef.current) return;
+    rebindingRef.current = true;
     setRebinding(true);
     try {
-      if (await onRebind(project.id)) onOpenChange(false);
+      if (await onRebind(project.id)) handleOpenChange(false);
     } finally {
+      rebindingRef.current = false;
       setRebinding(false);
     }
-  }, [project, rebinding, onRebind, onOpenChange]);
+  }, [project, onRebind, handleOpenChange]);
 
   const handleSelectFile = useCallback(async () => {
     try {
@@ -153,13 +192,59 @@ export function ProjectSettingsDialog({
     }
   }, []);
 
+  const handlePickScreenColor = useCallback(async () => {
+    if (
+      !project ||
+      pickingColorRef.current ||
+      rebindingRef.current ||
+      scanningRef.current
+    ) return;
+    pickingColorRef.current = true;
+    cancelRequestedRef.current = false;
+    const requestId = createScreenColorRequestId();
+    activePickRequestIdRef.current = requestId;
+    const projectId = project.id;
+    setPickingColor(true);
+    try {
+      const result = await invoke<string | null>("pick_screen_color", { requestId });
+      if (result === null) return;
+      if (!HEX_COLOR_PATTERN.test(result)) {
+        toast.error("屏幕取色失败，请重试");
+        return;
+      }
+      const color = result.toLowerCase();
+      if (latestProjectIdRef.current === projectId && activePickRequestIdRef.current === requestId) {
+        setSelectedColor(color);
+        setColorInputValue(color);
+      }
+    } catch {
+      toast.error("屏幕取色失败，请重试");
+    } finally {
+      if (activePickRequestIdRef.current === requestId) {
+        activePickRequestIdRef.current = null;
+        pickingColorRef.current = false;
+        cancelRequestedRef.current = false;
+        setPickingColor(false);
+      }
+    }
+  }, [project]);
+
   const PreviewIcon = useMemo(() => getIconByName(selectedIcon), [selectedIcon]);
 
   const iconEntries = useMemo(() => Object.entries(ICON_OPTIONS), []);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[400px]">
+      <DialogContent
+        className="max-w-[400px]"
+        showCloseButton={!pickingColor}
+        onEscapeKeyDown={(event) => {
+          if (pickingColor) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (pickingColor) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             项目设置
@@ -186,7 +271,7 @@ export function ProjectSettingsDialog({
                 variant="outline"
                 size="sm"
                 onClick={handleRebind}
-                disabled={!project || rebinding}
+                disabled={!project || interactionLocked}
                 aria-label="重新绑定项目目录"
               >
                 <FolderOpen className="size-3.5 mr-1" />
@@ -215,6 +300,7 @@ export function ProjectSettingsDialog({
                   role="radio"
                   aria-checked={selectedIcon === iconName}
                   aria-label={iconName}
+                  disabled={interactionLocked}
                   onClick={() => setSelectedIcon(iconName)}
                   className={cn(
                     "flex items-center justify-center size-9 rounded-lg",
@@ -240,7 +326,7 @@ export function ProjectSettingsDialog({
                 variant="outline"
                 size="sm"
                 onClick={handleScanIcons}
-                disabled={scanning}
+                disabled={interactionLocked}
                 aria-label="从项目目录导入图标"
               >
                 {scanning ? (
@@ -254,6 +340,7 @@ export function ProjectSettingsDialog({
                 variant="outline"
                 size="sm"
                 onClick={handleSelectFile}
+                disabled={interactionLocked}
                 aria-label="选择图标文件"
               >
                 <FolderOpen className="size-3.5 mr-1" />
@@ -285,6 +372,7 @@ export function ProjectSettingsDialog({
                       role="radio"
                       aria-checked={isSelected}
                       aria-label={candidate.name}
+                      disabled={interactionLocked}
                       onClick={() => setSelectedIcon(iconValue)}
                       className={cn(
                         "flex min-w-0 flex-col items-center gap-1 rounded-md border p-1.5",
@@ -329,6 +417,7 @@ export function ProjectSettingsDialog({
               <input
                 type="color"
                 value={selectedColor || "#000000"}
+                disabled={interactionLocked}
                 onChange={(event) => {
                   const color = normalizeHexColor(event.target.value);
                   if (!color) return;
@@ -338,6 +427,21 @@ export function ProjectSettingsDialog({
                 aria-label="颜色取色器"
                 className="size-10 cursor-pointer rounded-md border border-white/10 bg-transparent p-0.5"
               />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={pickingColor ? "正在取色" : "屏幕取色"}
+                aria-busy={pickingColor}
+                disabled={!project || interactionLocked}
+                onClick={() => void handlePickScreenColor()}
+              >
+                {pickingColor ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Pipette className="size-4" />
+                )}
+              </Button>
               <input
                 type="text"
                 value={colorInputValue}
@@ -352,6 +456,7 @@ export function ProjectSettingsDialog({
                 placeholder="#RRGGBB"
                 aria-label="颜色编号"
                 aria-invalid={!colorInputIsValid}
+                disabled={interactionLocked}
                 inputMode="text"
                 className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm uppercase outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
@@ -359,6 +464,7 @@ export function ProjectSettingsDialog({
                 type="button"
                 aria-label="无颜色"
                 aria-pressed={selectedColor === DEFAULT_COLOR}
+                disabled={interactionLocked}
                 onClick={() => {
                   setSelectedColor(DEFAULT_COLOR);
                   setColorInputValue(DEFAULT_COLOR);
@@ -421,10 +527,10 @@ export function ProjectSettingsDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
+          <Button variant="outline" disabled={interactionLocked} onClick={() => handleOpenChange(false)}>
             取消
           </Button>
-          <Button disabled={!hasChanges} onClick={handleSubmit}>
+          <Button disabled={interactionLocked || !hasChanges} onClick={handleSubmit}>
             保存设置
           </Button>
         </DialogFooter>
