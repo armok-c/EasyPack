@@ -359,7 +359,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
         {/* Phase 17: Tab switch buttons (D-01) */}
         <div className="pb-2">
           <div
-            className="inline-flex rounded-md overflow-hidden border border-white/10"
+            className="inline-flex rounded-md overflow-hidden border border-border/25"
             role="radiogroup"
             aria-label="编辑模式"
           >
@@ -373,8 +373,8 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
                 "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
                 "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                 activeTab === "single"
-                  ? "bg-white/15 text-foreground border-r border-white/10"
-                  : "bg-transparent text-muted-foreground hover:bg-white/5"
+                  ? "bg-accent text-foreground border-r border-border/25"
+                  : "bg-transparent text-muted-foreground hover:bg-accent"
               )}
             >
               单行
@@ -389,8 +389,8 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
                 "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
                 "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                 activeTab === "multi"
-                  ? "bg-white/15 text-foreground"
-                  : "bg-transparent text-muted-foreground hover:bg-white/5"
+                  ? "bg-accent text-foreground"
+                  : "bg-transparent text-muted-foreground hover:bg-accent"
               )}
             >
               多行
@@ -405,8 +405,8 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
                 "px-3 py-1.5 text-xs transition-all duration-150 ease-out",
                 "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                 activeTab === "folder"
-                  ? "bg-white/15 text-foreground"
-                  : "bg-transparent text-muted-foreground hover:bg-white/5"
+                  ? "bg-accent text-foreground"
+                  : "bg-transparent text-muted-foreground hover:bg-accent"
               )}
             >
               打开目录
@@ -417,7 +417,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
         <div className="py-4 space-y-4">
           {/* Preset selection area per D-03 -- only in single-line tab (D-04) */}
           {activeTab === "single" && (
-          <div className="pb-4 mb-4 border-b border-white/10">
+          <div className="pb-4 mb-4 border-b border-border/25">
             <div className="grid grid-cols-2 gap-2">
               {/* Category Select */}
               <div className="space-y-2">
@@ -483,7 +483,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
               onChange={handleNameChange}
             />
             {nameDirty && name.trim().length === 0 && (
-              <p className="text-red-400 text-xs mt-1">名称不能为空</p>
+              <p className="text-red-700 text-xs mt-1">名称不能为空</p>
             )}
           </div>
 
@@ -508,10 +508,10 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
               />
             )}
             {activeTab === "single" && commandDirty && command.trim().length === 0 && (
-              <p className="text-red-400 text-xs mt-1">命令不能为空</p>
+              <p className="text-red-700 text-xs mt-1">命令不能为空</p>
             )}
             {activeTab === "folder" && commandDirty && command.trim().length === 0 && (
-              <p className="text-red-400 text-xs mt-1">目录不能为空</p>
+              <p className="text-red-700 text-xs mt-1">目录不能为空</p>
             )}
           </div>
 
@@ -526,7 +526,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
                 <>
                   <span className="text-xs text-muted-foreground mr-1">执行模式:</span>
                   <div
-                    className="inline-flex rounded-md overflow-hidden border border-white/10"
+                    className="inline-flex rounded-md overflow-hidden border border-border/25"
                     role="radiogroup"
                     aria-label="执行模式"
                   >
@@ -540,8 +540,8 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
                         "px-2.5 py-1 text-xs transition-all duration-150 ease-out",
                         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                         executionMode === "strict"
-                          ? "bg-white/15 text-foreground border-r border-white/10"
-                          : "bg-transparent text-muted-foreground hover:bg-white/5"
+                          ? "bg-accent text-foreground border-r border-border/25"
+                          : "bg-transparent text-muted-foreground hover:bg-accent"
                       )}
                     >
                       严格
@@ -556,8 +556,8 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
                         "px-2.5 py-1 text-xs transition-all duration-150 ease-out",
                         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                         executionMode === "lenient"
-                          ? "bg-white/15 text-foreground"
-                          : "bg-transparent text-muted-foreground hover:bg-white/5"
+                          ? "bg-accent text-foreground"
+                          : "bg-transparent text-muted-foreground hover:bg-accent"
                       )}
                     >
                       宽松
@@ -585,13 +585,13 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
                   aria-label={iconName}
                   onClick={() => handleIconSelect(iconName)}
                   className={cn(
-                    "flex items-center justify-center size-9 rounded-lg",
-                    "bg-white/5 hover:bg-white/10",
+                    "mbe-icon-choice flex items-center justify-center size-9 rounded-lg",
+                    "bg-accent hover:bg-accent",
                     "transition-all duration-150 ease-out",
                     "cursor-pointer outline-none",
                     "focus-visible:ring-2 focus-visible:ring-ring",
                     selectedIcon === iconName &&
-                      "bg-white/15 border border-primary ring-1 ring-primary/50"
+                      "bg-accent border border-primary ring-1 ring-primary/50"
                   )}
                 >
                   <IconComponent className="size-4" />
@@ -602,12 +602,12 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
         </div>
 
         {/* Preview section */}
-        <div className="border-t border-white/10 pt-4">
+        <div className="border-t border-border/25 pt-4">
           <p className="text-xs text-muted-foreground mb-2">预览</p>
           <div
             className={cn(
               "w-20 flex flex-col items-center justify-center gap-2 p-3 rounded-xl",
-              "bg-white/5 border border-white/10"
+              "bg-accent border border-border/25"
             )}
           >
             {(() => {

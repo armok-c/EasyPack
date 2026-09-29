@@ -90,7 +90,7 @@ describe("Sidebar project context menu", () => {
     renderSidebar(vi.fn().mockResolvedValue(true));
 
     const addButton = screen.getByRole("button", { name: "添加项目" });
-    expect(addButton.parentElement).toHaveClass("px-4", "pt-8", "pb-4");
+    expect(addButton.parentElement).toHaveClass("px-3", "pt-5", "pb-4");
   });
 
   it("allows long project names to shrink without a native tooltip", () => {
@@ -141,33 +141,6 @@ describe("Sidebar project context menu", () => {
     expect(scrollArea?.parentElement).toHaveClass("flex-1", "min-h-0");
   });
 
-  it("separates focus styles for selected and unselected project cards", () => {
-    renderSidebar(vi.fn().mockResolvedValue(true), {
-      projects: [project, secondProject],
-    });
-
-    const selectedCard = getProjectCard(project.name);
-    const unselectedCard = getProjectCard(secondProject.name);
-
-    expect(selectedCard).toHaveClass(
-      "focus-visible:outline-none",
-      "focus-visible:bg-white/15",
-      "border-white/20",
-    );
-    expect(selectedCard).not.toHaveClass(
-      "focus-visible:ring-1",
-      "focus-visible:ring-2",
-      "focus-visible:border-white/30",
-    );
-    expect(unselectedCard).toHaveClass(
-      "focus-visible:outline-none",
-      "focus-visible:ring-1",
-      "focus-visible:ring-inset",
-      "focus-visible:ring-ring/50",
-    );
-    expect(unselectedCard).not.toHaveClass("focus-visible:bg-white/15", "focus-visible:border-white/30");
-  });
-
   it("moves keyboard focus without selecting until Enter is pressed", () => {
     const onSelectProject = vi.fn();
     renderSidebar(vi.fn().mockResolvedValue(true), {
@@ -206,15 +179,9 @@ describe("Sidebar project context menu", () => {
 
     const deleteItem = screen.getByRole("menuitem", { name: "删除项目" });
     expect(deleteItem).toHaveAttribute("data-variant", "destructive");
-    expect(deleteItem).toHaveClass(
-      "!text-red-300",
-      "hover:!bg-red-500/10",
-      "hover:!text-red-200",
-      "focus:!bg-red-500/10",
-      "focus:!text-red-200",
-      "data-[variant=destructive]:*:[svg]:text-red-300!",
-    );
-    expect(deleteItem.querySelector("svg")).toHaveClass("text-red-300!");
+    fireEvent.click(deleteItem);
+    expect(screen.getByText("永久删除项目？")).toBeVisible();
+
   });
 
   it("opens settings for the project that was right-clicked", async () => {

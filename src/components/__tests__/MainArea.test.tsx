@@ -182,7 +182,6 @@ describe("MainArea - Phase 4 edit mode UI", () => {
     const button = screen.getByLabelText("打开项目文件夹");
     expect(button).toBeInTheDocument();
     expect(button.parentElement).toHaveClass("flex", "items-center", "justify-between");
-    expect(button).toHaveClass("bg-white", "text-black", "hover:bg-white/90", "hover:text-black");
 
     fireEvent.click(button);
     expect(onOpenFolder).toHaveBeenCalledTimes(1);

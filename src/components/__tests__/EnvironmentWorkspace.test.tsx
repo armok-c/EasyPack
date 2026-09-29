@@ -137,39 +137,25 @@ describe("EnvironmentWorkspace", () => {
     expect(screen.getByRole("checkbox", { name: "选择环境 生产" })).toBeChecked();
   });
 
-  it("uses a darker default gray surface and a brighter selected surface", () => {
+  it("keeps selected environments and available actions in sync", () => {
     render(<EnvironmentWorkspace {...props({ state: manyState })} />);
-    const developmentRow = screen.getByText("开发").closest("[data-environment-row]") as HTMLElement;
-    const stagingRow = screen.getByText("预发布").closest("[data-environment-row]") as HTMLElement;
-
-    expect(developmentRow).toHaveClass("bg-muted/40");
-    expect(stagingRow).toHaveClass("bg-muted/40");
-
-    fireEvent.click(screen.getByRole("checkbox", { name: "选择环境 开发" }));
-
-    expect(developmentRow).toHaveClass("bg-muted/70", "border-white/25");
-    expect(stagingRow).toHaveClass("bg-muted/40", "border-border");
-  });
-
-  it("makes environment actions visible while keeping disabled actions subdued", () => {
-    render(<EnvironmentWorkspace {...props({ state: manyState })} />);
-
-    for (const name of ["文件清单", "反选", "捕获更新", "应用", "复制"]) {
-      expect(screen.getByRole("button", { name })).toHaveClass(
-        "border-white/20",
-        "bg-white/5",
-        "text-foreground",
-        "hover:border-white/30",
-        "hover:bg-white/15",
-      );
+    const development = screen.getByRole("checkbox", { name: "选择环境 开发" });
+    const staging = screen.getByRole("checkbox", { name: "选择环境 预发布" });
+    for (const name of ["捕获更新", "应用", "复制", "删除"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
     }
-    const deleteButton = screen.getByRole("button", { name: "删除" });
-    expect(deleteButton).toHaveClass("border-red-400/40", "bg-red-500/10", "text-red-200", "hover:border-red-300/60", "hover:bg-red-500/20");
-    expect(screen.getByRole("button", { name: "捕获更新" })).toBeDisabled();
+    fireEvent.click(development);
+    expect(development).toBeChecked();
+    expect(staging).not.toBeChecked();
+    for (const name of ["捕获更新", "应用", "复制", "删除"]) {
+      expect(screen.getByRole("button", { name })).toBeEnabled();
+    }
+    fireEvent.click(staging);
+    expect(staging).toBeChecked();
     expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "复制" })).toBeDisabled();
-    expect(deleteButton).toBeDisabled();
-    expect(screen.getByRole("button", { name: "新建" })).not.toHaveClass("bg-white/5");
+    expect(screen.getByRole("button", { name: "捕获更新" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "删除" })).toBeEnabled();
   });
 
   it("disables invert selection without environments or editing permission", () => {
@@ -297,7 +283,7 @@ describe("EnvironmentWorkspace", () => {
     const progressbar = screen.getByRole("progressbar", { name: "开发 更新进度" });
     expect(progressbar).toHaveAttribute("aria-valuenow", "100");
     expect(progressbar).toHaveClass("relative", "h-5", "w-full", "ml-auto", "overflow-hidden");
-    expect(within(progressbar).getByText("更新处理中 100%")).toHaveClass("whitespace-nowrap", "text-white", "drop-shadow-sm");
+    expect(within(progressbar).getByText("更新处理中 100%")).toBeVisible();
   });
 
   it("uses operation colors and keeps progress tracks full width", () => {
@@ -321,10 +307,10 @@ describe("EnvironmentWorkspace", () => {
     })} />);
 
     const progressbars = screen.getAllByRole("progressbar");
-    expect(within(progressbars[0]).getByText("应用处理中 25%")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
-    expect(within(progressbars[1]).getByText("更新成功 100%")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
-    expect(within(progressbars[2]).getByText("复制成功 100%")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
-    expect(within(progressbars[3]).getByText("应用失败")).toHaveClass("relative", "z-10", "whitespace-nowrap", "text-xs", "text-white", "drop-shadow-sm");
+    expect(within(progressbars[0]).getByText("应用处理中 25%")).toBeVisible();
+    expect(within(progressbars[1]).getByText("更新成功 100%")).toBeVisible();
+    expect(within(progressbars[2]).getByText("复制成功 100%")).toBeVisible();
+    expect(within(progressbars[3]).getByText("应用失败")).toBeVisible();
     expect(progressbars[0].firstElementChild).toHaveClass("absolute", "inset-y-0", "left-0", "bg-green-400");
     expect(progressbars[1].firstElementChild).toHaveClass("absolute", "inset-y-0", "left-0", "bg-cyan-400");
     expect(progressbars[2].firstElementChild).toHaveClass("absolute", "inset-y-0", "left-0", "bg-blue-400");

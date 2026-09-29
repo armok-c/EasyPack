@@ -54,7 +54,7 @@ export function SnapIndicator({ edge }: SnapIndicatorProps) {
 
   return (
     <div
-      className="bg-blue-500/30 pointer-events-none transition-all duration-150 z-[9999]"
+      className="border-2 border-border bg-mint/60 pointer-events-none transition-all duration-150 z-[9999]"
       style={style}
     />
   );

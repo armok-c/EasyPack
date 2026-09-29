@@ -89,16 +89,17 @@ function SortableProjectItem({
         <ContextMenuTrigger asChild>
           <div
             ref={itemRef}
+            data-selected={isSelected}
             tabIndex={isFocused ? 0 : -1}
             onClick={() => onSelect(project.id)}
             onKeyDown={onKeyDown}
             className={cn(
-              "group relative flex items-center px-2 py-2 rounded-lg border cursor-pointer",
+              "mbe-project group relative flex items-center px-2 py-2 rounded-lg border cursor-pointer",
               "transition-all duration-150 overflow-hidden",
               "focus-visible:outline-none",
               isSelected
-                ? "bg-white/10 border-white/20 focus-visible:bg-white/15"
-                : "bg-white/5 border-white/10 hover:bg-white/[0.08] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50"
+                ? "bg-sunshine border-border focus-visible:bg-sunshine"
+                : "bg-accent border-border/25 hover:bg-accent focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50"
             )}
           >
             {/* Phase 5: colored left border (per D-02) */}
@@ -112,7 +113,7 @@ function SortableProjectItem({
             {/* Drag handle (per D-07, D-09): GripVertical, hover-reveal */}
             <div
               ref={handleRef}
-              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/10 transition-opacity duration-150 cursor-grab"
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-accent transition-opacity duration-150 cursor-grab"
               aria-label="拖拽排序"
             >
               <GripVertical className="size-3 text-muted-foreground" />
@@ -176,9 +177,9 @@ function SortableProjectItem({
           <ContextMenuItem
             variant="destructive"
             onSelect={() => onRemove(project.id)}
-            className="h-8 gap-2 px-2 !text-red-300 hover:!bg-red-500/10 hover:!text-red-200 focus:!bg-red-500/10 focus:!text-red-200 data-[variant=destructive]:*:[svg]:text-red-300!"
+            className="h-8 gap-2 px-2 !text-red-700 hover:!bg-red-500/10 hover:!text-red-700 focus:!bg-red-500/10 focus:!text-red-700 data-[variant=destructive]:*:[svg]:text-red-700!"
           >
-            <Trash2 className="size-4 text-red-300!" />
+            <Trash2 className="size-4 text-red-700!" />
             删除项目
           </ContextMenuItem>
         </ContextMenuContent>
@@ -305,9 +306,9 @@ export function Sidebar({
   );
 
   return (
-    <aside className="w-[240px] flex-shrink-0 border-r border-white/10 bg-black/40 backdrop-blur-sm flex flex-col">
+    <aside className="mbe-sidebar w-[200px] flex-shrink-0 border-r border-border/25 bg-card flex flex-col">
       {/* Add project button (per D-15: sidebar top) */}
-      <div className="px-4 pt-8 pb-4">
+      <div className="px-3 pt-5 pb-4">
         <Button
           onClick={onAddProject}
           variant="default"
@@ -320,11 +321,11 @@ export function Sidebar({
       </div>
 
       {/* Project list / empty state (per D-21, UI-SPEC Copywriting) */}
-      <div className="flex-1 min-h-0 min-w-0 px-4 py-2">
+      <div className="flex-1 min-h-0 min-w-0 px-3 py-2">
         {projects.length > 0 ? (
           <ScrollArea className="h-full w-full min-w-0 [&>[data-slot=scroll-area-scrollbar]]:hidden [&>[data-slot=scroll-area-viewport]>div]:block! [&>[data-slot=scroll-area-viewport]>div]:w-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
-              <div className="flex w-full min-w-0 flex-col gap-1">
+              <div className="flex w-full min-w-0 flex-col gap-2 pr-1 pb-1">
                 {projects.map((project, index) => (
                   <SortableProjectItem
                     key={project.id}

@@ -119,6 +119,15 @@ const batchHighlightStyle = HighlightStyle.define([
   { tag: tags.meta, class: "cm-batch-meta" },
 ]);
 
+const batchLightHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#6941a5" },
+  { tag: tags.comment, color: "#626873" },
+  { tag: tags.string, color: "#246b45" },
+  { tag: tags.variableName, color: "#945015" },
+  { tag: tags.labelName, color: "#245f96" },
+  { tag: tags.meta, color: "#984358" },
+], { themeType: "light" });
+
 /**
  * Complete batch language support extension for CodeMirror.
  * Includes the tokenizer and highlight style.
@@ -126,5 +135,6 @@ const batchHighlightStyle = HighlightStyle.define([
 export function batchSupport(): LanguageSupport {
   return new LanguageSupport(batchLanguage, [
     syntaxHighlighting(batchHighlightStyle),
+    syntaxHighlighting(batchLightHighlightStyle),
   ]);
 }

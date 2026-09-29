@@ -74,8 +74,7 @@ export function CommandCard({
       disabled={disabled}
       tabIndex={tabIndex}
       className={cn(
-        "group relative flex h-24 min-w-0 flex-col items-center justify-start gap-2 pt-5 px-3 pb-3 rounded-xl",
-        "bg-white/5 border border-white/10",
+        "mbe-command-card group relative flex h-28 min-w-0 flex-col items-center justify-start gap-2 pt-5 px-3 pb-3 rounded-xl",
         "cursor-pointer select-none",
         "text-xs text-card-foreground",
         // Base transition (only when not flashing)
@@ -84,11 +83,7 @@ export function CommandCard({
         flashing && "animate-card-flash",
         // hover/active states (only when not disabled and not flashing)
         !disabled &&
-          !flashing && [
-            "hover:bg-white/10 hover:border-white/20",
-            "active:bg-white/15 active:scale-[0.98] active:duration-100",
-            "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none",
-          ],
+          !flashing && "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none",
         // Disabled state
         disabled && "opacity-40 cursor-not-allowed",
         // Accessibility: reduced motion support
@@ -114,8 +109,8 @@ export function CommandCard({
       {shortcut ? (
         <span
           className={cn(
-            "absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold",
-            "bg-white/10 border border-white/10 text-muted-foreground/80",
+            "mbe-shortcut-badge absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold",
+            "bg-accent border border-border/25 text-muted-foreground/80",
             "min-w-[24px] text-center"
           )}
           aria-hidden="true"
@@ -124,13 +119,13 @@ export function CommandCard({
         </span>
       ) : !disabled && shortcutNumber != null ? (
         <span
-          className="absolute top-1 left-1 text-[10px] font-semibold text-muted-foreground/70 pointer-events-none"
+          className="mbe-shortcut-badge absolute top-1 left-1 px-1 text-[10px] font-semibold text-muted-foreground/70 pointer-events-none"
           aria-hidden="true"
         >
           {shortcutNumber}
         </span>
       ) : null}
-      <Icon className={cn("size-6 shrink-0", flashing && "animate-spin")} />
+      <span className="mbe-command-icon shrink-0"><Icon className="size-5 shrink-0" /></span>
       <span className="h-8 w-full min-w-0 shrink-0 line-clamp-2 text-center">{name}</span>
     </button>
   );

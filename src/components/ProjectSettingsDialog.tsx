@@ -261,7 +261,7 @@ export function ProjectSettingsDialog({
             <div className="flex items-start gap-2">
               <p
                 className={cn(
-                  "min-w-0 flex-1 break-all rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs",
+                  "min-w-0 flex-1 break-all rounded-md border border-border/25 bg-accent px-2 py-1.5 text-xs",
                   pathUnavailable ? "text-destructive" : "text-muted-foreground",
                 )}
               >
@@ -303,13 +303,13 @@ export function ProjectSettingsDialog({
                   disabled={interactionLocked}
                   onClick={() => setSelectedIcon(iconName)}
                   className={cn(
-                    "flex items-center justify-center size-9 rounded-lg",
-                    "bg-white/5 hover:bg-white/10",
+                    "mbe-icon-choice flex items-center justify-center size-9 rounded-lg",
+                    "bg-accent hover:bg-accent",
                     "transition-all duration-150 ease-out",
                     "cursor-pointer outline-none",
                     "focus-visible:ring-2 focus-visible:ring-ring",
                     selectedIcon === iconName &&
-                      "bg-white/15 border border-primary ring-1 ring-primary/50"
+                      "bg-accent border border-primary ring-1 ring-primary/50"
                   )}
                 >
                   <IconComponent className="size-4" />
@@ -352,13 +352,13 @@ export function ProjectSettingsDialog({
             {scanning && (
               <div className="flex gap-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="size-8 rounded-md bg-white/5 animate-pulse" />
+                  <div key={i} className="size-8 rounded-md bg-accent animate-pulse" />
                 ))}
               </div>
             )}
             {!scanning && candidates.length > 0 && (
               <div
-                className="grid h-[224px] auto-rows-[64px] grid-cols-3 gap-2 overflow-y-auto rounded-md border border-white/10 p-2"
+                className="grid h-[224px] auto-rows-[64px] grid-cols-3 gap-2 overflow-y-auto rounded-md border border-border/25 p-2"
                 role="radiogroup"
                 aria-label="扫描到的图标"
               >
@@ -375,13 +375,13 @@ export function ProjectSettingsDialog({
                       disabled={interactionLocked}
                       onClick={() => setSelectedIcon(iconValue)}
                       className={cn(
-                        "flex min-w-0 flex-col items-center gap-1 rounded-md border p-1.5",
-                        "bg-white/5 border-white/10",
+                        "mbe-icon-choice flex min-w-0 flex-col items-center gap-1 rounded-md border p-1.5",
+                        "bg-accent border-border/25",
                         "transition-all duration-150 ease-out",
                         "cursor-pointer outline-none",
-                        "hover:bg-white/10 hover:border-white/20",
+                        "hover:bg-accent hover:border-border/25",
                         "focus-visible:ring-2 focus-visible:ring-ring",
-                        isSelected && "bg-white/15 border-primary ring-1 ring-primary/50"
+                        isSelected && "bg-accent border-primary ring-1 ring-primary/50"
                       )}
                     >
                       <img
@@ -425,7 +425,7 @@ export function ProjectSettingsDialog({
                   setColorInputValue(color);
                 }}
                 aria-label="颜色取色器"
-                className="size-10 cursor-pointer rounded-md border border-white/10 bg-transparent p-0.5"
+                className="size-10 cursor-pointer rounded-md border border-border/25 bg-transparent p-0.5"
               />
               <Button
                 type="button"
@@ -458,7 +458,7 @@ export function ProjectSettingsDialog({
                 aria-invalid={!colorInputIsValid}
                 disabled={interactionLocked}
                 inputMode="text"
-                className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm uppercase outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="mbe-input h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm uppercase outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
               <button
                 type="button"
@@ -471,12 +471,12 @@ export function ProjectSettingsDialog({
                 }}
                 className={cn(
                   "flex size-9 shrink-0 items-center justify-center rounded-md",
-                  "border-2 border-dashed border-white/20",
+                  "border-2 border-dashed border-border/25",
                   "transition-all duration-150 cursor-pointer outline-none",
-                  "hover:border-white/40",
+                  "hover:border-border/25",
                   "focus-visible:ring-2 focus-visible:ring-ring",
                   selectedColor === DEFAULT_COLOR &&
-                    "ring-2 ring-white/60"
+                    "ring-2 ring-ring/40"
                 )}
               >
                 <X className="size-3 text-muted-foreground" />
@@ -491,12 +491,12 @@ export function ProjectSettingsDialog({
         </div>
 
         {/* Preview section */}
-        <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="mt-4 border-t border-border/25 pt-4">
           <p className="text-xs text-muted-foreground mb-2">预览</p>
           <div
             className={cn(
               "relative flex items-center px-2 py-2 rounded-lg border",
-              "bg-white/5 border-white/10",
+              "bg-accent border-border/25",
               "overflow-hidden"
             )}
           >

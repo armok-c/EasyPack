@@ -587,7 +587,7 @@ function App() {
 
   return (
     <div
-      className="flex flex-col h-screen w-screen overflow-hidden"
+      className="mbe-app flex flex-col h-screen w-screen overflow-hidden"
       onMouseEnter={snapEdge ? handleMouseEnter : undefined}
       onMouseLeave={snapEdge ? handleMouseLeave : undefined}
     >

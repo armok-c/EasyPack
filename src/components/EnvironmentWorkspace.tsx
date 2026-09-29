@@ -37,8 +37,8 @@ const TEXT_EXTENSIONS = new Set([
   "env", "json", "yaml", "yml", "toml", "xml", "conf", "ini", "cfg", "txt", "md",
 ]);
 
-const toolbarActionClass = "border-white/20 bg-white/5 text-foreground hover:border-white/30 hover:bg-white/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-muted-foreground";
-const destructiveToolbarActionClass = "border-red-400/40 bg-red-500/10 text-red-200 hover:border-red-300/60 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-transparent disabled:text-muted-foreground";
+const toolbarActionClass = "border-border/25 bg-accent text-foreground hover:border-border/25 hover:bg-accent disabled:cursor-not-allowed disabled:border-border/25 disabled:bg-accent disabled:text-muted-foreground";
+const destructiveToolbarActionClass = "border-red-400/40 bg-red-500/10 text-red-700 hover:border-red-300/60 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:border-border/25 disabled:bg-transparent disabled:text-muted-foreground";
 
 function relativePath(path: string, projectPath: string): string {
   const absolute = path.replace(/\\/g, "/");
@@ -63,9 +63,9 @@ function actionLabel(action: ApplyPlan["changes"][number]["action"]): string {
 
 function actionClass(action: ApplyPlan["changes"][number]["action"]): string {
   return {
-    create: "text-emerald-300",
-    overwrite: "text-amber-300",
-    delete: "text-red-300",
+    create: "text-emerald-700",
+    overwrite: "text-amber-700",
+    delete: "text-red-700",
     unchanged: "text-muted-foreground",
   }[action];
 }
@@ -301,7 +301,7 @@ function MigrationWizard({ draft, projectPath, busy, onMigrate }: { draft: Legac
         const sourcesForPath = sourceOptionsByKey.get(key) ?? [];
         const environmentName = draft.environments.find((environment) => environment.environmentId === environmentId)?.environmentId ?? environmentId;
         const copyError = copyErrors[key];
-        return <div key={key} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] sm:items-center"><span className="min-w-0 truncate text-sm">{environmentName} / {path}</span><select className="h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-sm" value={choices[key] ?? "absent"} onChange={(event) => setChoice(key, event.target.value as MigrationChoice)}><option value="absent">设为缺失</option><option value="current">从当前文件捕获</option>{sourcesForPath.length > 0 && <option value="copy">复制来源</option>}</select>{(choices[key] ?? "absent") === "copy" && <><Select value={sources[key] ?? ""} onValueChange={(value) => setSources((current) => ({ ...current, [key]: value }))}><SelectTrigger className="min-w-0 w-full" aria-label="选择来源环境"><SelectValue placeholder="选择来源环境" /></SelectTrigger><SelectContent>{sourcesForPath.map((source) => <SelectItem key={source.environmentId} value={source.environmentId}>{source.environmentId}</SelectItem>)}</SelectContent></Select>{copyError && <p role="alert" className="text-xs text-red-300 sm:col-span-3">{copyError}</p>}</>}</div>;
+        return <div key={key} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] sm:items-center"><span className="min-w-0 truncate text-sm">{environmentName} / {path}</span><select className="h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-sm" value={choices[key] ?? "absent"} onChange={(event) => setChoice(key, event.target.value as MigrationChoice)}><option value="absent">设为缺失</option><option value="current">从当前文件捕获</option>{sourcesForPath.length > 0 && <option value="copy">复制来源</option>}</select>{(choices[key] ?? "absent") === "copy" && <><Select value={sources[key] ?? ""} onValueChange={(value) => setSources((current) => ({ ...current, [key]: value }))}><SelectTrigger className="min-w-0 w-full" aria-label="选择来源环境"><SelectValue placeholder="选择来源环境" /></SelectTrigger><SelectContent>{sourcesForPath.map((source) => <SelectItem key={source.environmentId} value={source.environmentId}>{source.environmentId}</SelectItem>)}</SelectContent></Select>{copyError && <p role="alert" className="text-xs text-red-700 sm:col-span-3">{copyError}</p>}</>}</div>;
       })}
     </div>
     <Button onClick={() => void submit()} disabled={busy || Object.keys(copyErrors).length > 0}><FolderSync className="size-4" />完成迁移</Button>
@@ -487,7 +487,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
   };
 
   if (migrationRequired && migrationDraft) return <MigrationWizard draft={migrationDraft} projectPath={projectPath} busy={busy} onMigrate={onMigrate} />;
-  if (recoveryBlocked) return <div className="space-y-4 rounded-lg border border-red-500/30 bg-red-500/5 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 text-red-300" /><div><h3 className="text-sm font-medium">项目恢复未完成</h3><p className="mt-1 text-xs text-muted-foreground">环境操作已暂时停止。可以重试恢复并重新读取项目状态。</p>{recoveryError && <p role="alert" className="mt-2 text-xs text-red-200">恢复提示：{recoveryError}</p>}</div></div><Button variant="outline" onClick={() => void onRefresh()} disabled={busy}><RefreshCw className="size-4" />重试恢复</Button></div>;
+  if (recoveryBlocked) return <div className="space-y-4 rounded-lg border border-red-500/30 bg-red-500/5 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 text-red-700" /><div><h3 className="text-sm font-medium">项目恢复未完成</h3><p className="mt-1 text-xs text-muted-foreground">环境操作已暂时停止。可以重试恢复并重新读取项目状态。</p>{recoveryError && <p role="alert" className="mt-2 text-xs text-red-700">恢复提示：{recoveryError}</p>}</div></div><Button variant="outline" onClick={() => void onRefresh()} disabled={busy}><RefreshCw className="size-4" />重试恢复</Button></div>;
 
   return <div className="flex h-full min-h-0 flex-col">
       <div data-environment-toolbar className="shrink-0 space-y-3">
@@ -509,7 +509,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
        </div>
       </div>
      <div data-environment-list className="mt-5 min-h-0 flex-1 overflow-y-auto scrollbar-none">
-       {(error || operationError) && <div role="alert" className="mb-5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-200">{operationError ?? errorText(error)}</div>}
+       {(error || operationError) && <div role="alert" className="mb-5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-700">{operationError ?? errorText(error)}</div>}
        {!state && busy && <p className="text-sm text-muted-foreground">正在读取项目环境...</p>}
         {state && environments.length === 0 && <div className="rounded-lg border border-dashed border-border p-8 text-center"><p className="text-sm">还没有环境</p><p className="mt-1 text-xs text-muted-foreground">先选择项目内的文本文件，再从当前文件捕获第一个环境。</p><Button className="mt-4" onClick={() => { setCopyStartedFromSelection(false); setNewDialogOpen(true); }} disabled={!canEdit}><FilePlus2 className="size-4" />创建第一个环境</Button></div>}
        <div className="space-y-1.5">{environments.map((environment) => {
@@ -523,18 +523,18 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
             : `${operationLabel}${environmentProgress.status === "success" ? "成功" : "失败"}${environmentProgress.status === "success" ? " 100%" : ""}`
           : waiting ? "等待中" : "就绪";
           const selectionId = `environment-select-${environment.id}`;
-          return <div key={environment.id} data-environment-row={environment.id} className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,10rem)_auto] items-center gap-x-2 rounded-md border px-3 py-2", selectedIds.includes(environment.id) ? "border-white/25 bg-muted/70" : "border-border bg-muted/40")}>
+          return <div key={environment.id} data-environment-row={environment.id} data-selected={selectedIds.includes(environment.id)} className={cn("mbe-environment-row grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,10rem)_auto] items-center gap-x-2 rounded-md border px-3 py-2", selectedIds.includes(environment.id) ? "border-border bg-accent" : "border-border bg-card")}>
             <label htmlFor={selectionId} className={cn("-ml-3 -my-2 flex min-w-0 self-stretch items-center gap-2 py-2 pl-3", canEdit ? "cursor-pointer" : "cursor-not-allowed")}>
               <Checkbox id={selectionId} className="size-4 shrink-0" aria-label={`选择环境 ${environment.name}`} checked={selectedIds.includes(environment.id)} onCheckedChange={(checked) => setSelectedIds((current) => checked ? [...current, environment.id] : current.filter((id) => id !== environment.id))} disabled={!canEdit} />
               <p className="min-w-0 truncate text-sm font-medium">{environment.name}</p>
             </label>
             <div className="flex min-w-0 flex-col gap-1" data-progress-status={environmentProgress?.status ?? (waiting ? "waiting" : "idle")}>
-              {environmentProgress ? <div role="progressbar" aria-label={`${environment.name} ${operationLabel}进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={environmentProgress.percent} className="relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-muted text-center text-xs text-foreground">
+              {environmentProgress ? <div role="progressbar" aria-label={`${environment.name} ${operationLabel}进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={environmentProgress.percent} className="mbe-progress relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-muted text-center text-xs text-foreground">
                 <div aria-hidden="true" className={cn("absolute inset-y-0 left-0 transition-[width]", progressColor)} style={{ width: `${environmentProgress.percent}%` }} />
-                <span className="relative z-10 whitespace-nowrap text-xs text-white drop-shadow-sm">{statusText}</span>
-              </div> : waiting ? <div data-waiting-progress className="relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-muted/70 text-center text-xs text-muted-foreground">
+                <span className="relative z-10 whitespace-nowrap text-xs font-semibold text-foreground">{statusText}</span>
+              </div> : waiting ? <div data-waiting-progress className="mbe-progress relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-muted/70 text-center text-xs text-muted-foreground">
                 <span className="relative z-10 whitespace-nowrap text-xs">{statusText}</span>
-              </div> : <div data-ready-progress className="relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-white text-center text-xs text-slate-900">
+              </div> : <div data-ready-progress className="mbe-progress relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-white text-center text-xs text-slate-900">
                 <span className="relative z-10 whitespace-nowrap text-xs">{statusText}</span>
               </div>}
             </div>

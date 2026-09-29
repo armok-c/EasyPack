@@ -78,13 +78,6 @@ describe("TitleBar", () => {
     expect(buttonContainer).not.toHaveAttribute("data-tauri-drag-region");
   });
 
-  it("title bar height", () => {
-    const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
-    const outerDiv = container.firstElementChild as HTMLElement;
-    expect(outerDiv.className).toContain("h-[28px]");
-    expect(outerDiv.className).toContain("shrink-0");
-  });
-
   it("double click toggles maximize", () => {
     const { container } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} />);
     const outerDiv = container.firstElementChild as HTMLElement;

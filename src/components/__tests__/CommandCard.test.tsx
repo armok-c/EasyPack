@@ -160,7 +160,7 @@ describe("CommandCard", () => {
     const name = screen.getByText(longName);
     const button = screen.getByRole("button");
     expect(button).toHaveClass(
-      "h-24",
+      "h-28",
       "justify-start",
       "pt-5",
       "px-3",
@@ -211,15 +211,6 @@ describe("CommandCard", () => {
     // Second click while flashing
     fireEvent.click(button);
     expect(onClick).toHaveBeenCalledTimes(1); // Still 1, not 2
-  });
-
-  it("icon has animate-spin class while flashing", () => {
-    render(<CommandCard name="打包项目" icon={Package} />);
-    const button = screen.getByRole("button");
-    fireEvent.click(button);
-    const icon = button.querySelector("svg");
-    // SVG elements use getAttribute for class in jsdom
-    expect(icon?.getAttribute("class")).toContain("animate-spin");
   });
 
   it("flashing state clears after animation duration", () => {

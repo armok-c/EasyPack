@@ -606,13 +606,13 @@ export function EnvironmentDiffDialog({ open, environmentName, environmentId, pa
               </div>
               <p data-testid="environment-diff-live" aria-live="polite" className="sr-only">{liveMessage}</p>
               {!onDetail || !selectedPath ? <p className="p-6 text-center text-sm text-muted-foreground">无法读取文件详情</p> : loading ? <p className="p-6 text-center text-sm text-muted-foreground">正在读取文件...</p> : detailError ? (
-                <div className="flex w-full min-h-0 min-w-0 max-w-full flex-1 flex-col items-center gap-3 px-3 py-8 text-center text-sm text-red-300">
+                <div className="flex w-full min-h-0 min-w-0 max-w-full flex-1 flex-col items-center gap-3 px-3 py-8 text-center text-sm text-red-700">
                   <p data-testid="environment-diff-error" role="alert" className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto break-all">读取失败：{detailError}</p>
                   <Button type="button" variant="outline" className="shrink-0" onClick={() => loadDetail()}>重试</Button>
                 </div>
-              ) : !detail ? <p className="p-6 text-center text-sm text-red-300">无法读取文件详情</p> : largeFile && !largeFileConfirmed ? (
+              ) : !detail ? <p className="p-6 text-center text-sm text-red-700">无法读取文件详情</p> : largeFile && !largeFileConfirmed ? (
                 <LargeFileWarning onConfirm={() => setConfirmedLargeDetail(detail)} />
-              ) : !model ? <p className="p-6 text-center text-sm text-red-300">无法读取文件详情</p> : (
+              ) : !model ? <p className="p-6 text-center text-sm text-red-700">无法读取文件详情</p> : (
                 <DiffContent key={`${detail.environmentId}:${detail.path}`} model={model} gapExpansion={gapExpansion} onExpandGap={expandGap} tableWrapperRef={diffTableWrapperRef} />
               )}
             </div>

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, Square, Copy, X, Settings, PanelTop } from "lucide-react";
-import iconUrl from "../assets/icon.png";
 
 const appWindow = getCurrentWindow();
 
@@ -93,7 +92,7 @@ export function TitleBar({
   return (
     <div
       data-tauri-drag-region
-      className="flex items-center h-[28px] select-none shrink-0"
+      className="mbe-titlebar flex items-center h-10 pr-1 select-none shrink-0"
       onMouseDown={handleDragStart}
       onDoubleClick={handleMaximize}
     >
@@ -101,8 +100,8 @@ export function TitleBar({
         data-tauri-drag-region
         className="flex items-center gap-[6px] pl-[10px]"
       >
-        <img src={iconUrl} alt="" className="w-[14px] h-[14px]" />
-        <span className="text-[13px] font-medium text-foreground">
+        <img src="/icon.svg" alt="" className="size-6" />
+        <span className="text-[13px] font-bold text-foreground">
           EasyPack
         </span>
       </div>

@@ -252,7 +252,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
     // per D-19: first launch guide page
     return (
       <main className="flex-1 flex flex-col items-center justify-center p-8">
-        <FolderOpen className="size-12 text-muted-foreground mb-4" />
+        <img src="/icon.svg" alt="" className="mbe-empty-icon" />
         <h2 className="text-lg font-semibold text-foreground mb-2">选择一个项目开始</h2>
         <p className="text-sm text-muted-foreground text-center">
           从左侧添加或选择项目，然后点击指令卡片执行
@@ -262,10 +262,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
   }
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-8">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-5">
       {/* Project info area */}
-      <div className="mb-4">
-        <h2 className="min-w-0 truncate text-sm font-medium text-foreground">
+      <div className="mbe-project-info mb-5">
+        <h2 className="min-w-0 truncate text-base font-bold text-foreground">
           当前项目: {currentProject.name}
         </h2>
         <div className="mt-1 flex min-w-0 items-center justify-between gap-4">
@@ -293,7 +293,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
           <Button
             variant="outline"
             size="sm"
-            className="shrink-0 bg-white text-black hover:bg-white/90 hover:text-black"
+            className="shrink-0"
             onClick={onOpenFolder}
             aria-label="打开项目文件夹"
           >
@@ -331,7 +331,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
                 "ml-auto p-1.5 rounded-md transition-all duration-150 ease-out",
                 "text-muted-foreground hover:text-foreground",
                 "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                editMode && "text-foreground bg-white/10 ring-1 ring-white/20"
+                editMode && "text-foreground bg-accent ring-1 ring-ring/40"
               )}
             >
               <Settings className="size-4" />
@@ -342,7 +342,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
         <TabsContent value="commands" className="mt-4 min-h-0 flex-1 overflow-y-auto scrollbar-none">
           <div
             ref={gridRef}
-            className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3"
+            className="grid grid-cols-[repeat(auto-fill,_minmax(124px,_1fr))] gap-3 p-1 pb-2"
             onKeyDown={handleGridKeyDown}
           >
             <CommandCard
@@ -385,12 +385,12 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
                   setDialogOpen(true);
                 }}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-2 p-4 rounded-xl",
-                  "border-2 border-dashed border-white/20 bg-transparent",
+                  "mbe-add-command flex flex-col items-center justify-center gap-2 p-4 rounded-xl",
+                  "border-2 border-dashed border-border/25 bg-transparent",
                   "cursor-pointer select-none text-xs text-muted-foreground",
                   "transition-all duration-150 ease-out",
-                  "hover:border-white/30 hover:bg-white/5",
-                  "active:border-white/40 active:bg-white/10 active:scale-[0.98]"
+                  "hover:border-border/25 hover:bg-accent",
+                  "active:border-border/25 active:bg-accent active:scale-[0.98]"
                 )}
               >
                 <Plus className="size-5 text-muted-foreground" />

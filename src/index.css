@@ -1,115 +1,149 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* shadcn/ui OKLCH color variables (Zinc dark theme) */
-  --color-background: oklch(0.145 0.014 285.823);
-  --color-foreground: oklch(0.985 0.002 247.858);
-  --color-card: oklch(0.178 0.020 285.823);
-  --color-card-foreground: oklch(0.985 0.002 247.858);
-  --color-primary: oklch(0.985 0.002 247.858);
-  --color-primary-foreground: oklch(0.205 0.006 285.885);
-  --color-secondary: oklch(0.269 0.008 285.877);
-  --color-secondary-foreground: oklch(0.985 0.002 247.858);
-  --color-muted: oklch(0.269 0.008 285.877);
-  --color-muted-foreground: oklch(0.62 0.019 285.938);
-  --color-accent: oklch(0.269 0.008 285.877);
-  --color-accent-foreground: oklch(0.985 0.002 247.858);
-  --color-border: oklch(0.269 0.008 285.877);
-  --color-ring: oklch(0.556 0.019 285.938);
-  --color-input: oklch(0.269 0.008 285.877);
-  --color-destructive: oklch(0.704 0.191 22.216);
-  --color-destructive-foreground: oklch(0.985 0.002 247.858);
-  --color-popover: oklch(0.205 0.015 285.823);
-  --color-popover-foreground: oklch(0.985 0.002 247.858);
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-background: #fffaf0;
+  --color-foreground: #303648;
+  --color-card: #ffffff;
+  --color-card-foreground: #303648;
+  --color-primary: #9be3c5;
+  --color-primary-foreground: #263d37;
+  --color-secondary: #ffe49a;
+  --color-secondary-foreground: #303648;
+  --color-muted: #eeeadd;
+  --color-muted-foreground: #666a76;
+  --color-accent: #e1f4ed;
+  --color-accent-foreground: #263d37;
+  --color-border: #303648;
+  --color-ring: #367c6c;
+  --color-input: #8c9099;
+  --color-destructive: #b43b42;
+  --color-destructive-foreground: #ffffff;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #303648;
+  --color-mint: #9be3c5;
+  --color-sunshine: #ffe49a;
+  --color-coral: #ffc3b3;
+  --color-sky: #bfdef5;
+  --color-lilac: #d9cff5;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --font-sans: "Segoe UI", "Microsoft YaHei", sans-serif;
   --animate-card-flash: card-flash 400ms ease-out;
 }
 
-/* Raycast-inspired gradient background */
-body {
-  background: linear-gradient(180deg, oklch(0.145 0.014 285.823), oklch(0.11 0.015 285.823));
-  color: var(--color-foreground);
-  font-family: var(--font-sans);
+@layer base {
+  :root { color-scheme: light; }
+  body { margin: 0; background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
+  * { scrollbar-width: thin; scrollbar-color: #a5b4af transparent; }
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-thumb { background: #a5b4af; border-radius: 6px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  ::selection { background: #bfdef5; color: #303648; }
+  button:focus-visible, [role="button"]:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 3px; }
+  input[type="radio"], input[type="checkbox"] { accent-color: #367c6c; }
+  .lucide { stroke-width: 2.3; }
 }
 
-/* Ensure root element inherits dark theme */
-:root {
-  color-scheme: dark;
-}
-
-/* Utility: hide scrollbar but keep scroll functionality */
 @utility scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  &::-webkit-scrollbar { display: none; }
 }
 
-/* Thin, subtle scrollbar */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
-}
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.22);
+/* MBE surfaces share a compact outline and a small, solid offset shadow. */
+
+.mbe-app { border: 2px solid var(--color-border); background: var(--color-background); }
+.mbe-titlebar { background: #fff; border-bottom: 2px solid var(--color-border); }
+.titlebar-button { display: flex; align-items: center; justify-content: center; width: 32px; height: 26px; border: 1.5px solid transparent; border-radius: 8px; color: var(--color-foreground); cursor: pointer; transition: background-color 120ms; }
+.titlebar-button:hover, .titlebar-button[aria-pressed="true"] { border-color: var(--color-border); background: var(--color-sunshine); }
+.titlebar-button.close-button:hover { background: var(--color-coral); }
+.mbe-sidebar { width: 200px; background: #f2f7f1; border-right: 2px solid var(--color-border); }
+.mbe-project { border: 2px solid var(--color-border); background: #fff; min-height: 44px; }
+.mbe-project[data-selected="true"] { background: var(--color-sunshine); box-shadow: 2px 2px 0 var(--color-border); }
+.mbe-project:hover { background: #fff0c9; }
+.mbe-project-info { border: 2px solid var(--color-border); border-radius: 16px; background: #fff; padding: 14px; box-shadow: 3px 3px 0 #e4cfa0; }
+.mbe-command-card { border: 2px solid var(--color-border); background: #fff; box-shadow: 3px 3px 0 var(--color-border); }
+.mbe-command-card:hover:not(:disabled) { background: #fff9e8; transform: translateY(-2px); box-shadow: 3px 5px 0 var(--color-border); }
+.mbe-command-card:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--color-border); }
+.mbe-command-icon { position: relative; display: flex; align-items: center; justify-content: center; width: 38px; height: 34px; border: 2px solid var(--color-border); border-radius: 11px; background: var(--color-mint); color: var(--color-foreground); }
+.mbe-command-icon::after { content: ""; position: absolute; top: 3px; left: 5px; height: 3px; width: 9px; border-radius: 3px; background: #fff; }
+.mbe-command-card:nth-child(5n + 2) .mbe-command-icon { background: var(--color-sunshine); }
+.mbe-command-card:nth-child(5n + 3) .mbe-command-icon { background: var(--color-sky); }
+.mbe-command-card:nth-child(5n + 4) .mbe-command-icon { background: var(--color-coral); }
+.mbe-command-card:nth-child(5n + 5) .mbe-command-icon { background: var(--color-lilac); }
+.mbe-shortcut-badge { border: 1px solid #ccc8be; background: #fffaf0; color: #666a76; border-radius: 5px; }
+.mbe-add-command { border: 2px dashed #858a91; background: #fff8e2; }
+.mbe-add-command:hover { border-color: var(--color-border); background: var(--color-sunshine); }
+.mbe-empty-icon { width: 96px; height: 96px; margin-bottom: 20px; }
+.mbe-button { border: 2px solid var(--color-border); box-shadow: 2px 2px 0 var(--color-border); font-weight: 600; }
+.mbe-button:hover:not(:disabled) { translate: 0 -1px; }
+.mbe-button:active:not(:disabled) { translate: 1px 1px; box-shadow: 1px 1px 0 var(--color-border); }
+.mbe-button-ghost, .mbe-button-link { border-color: transparent; box-shadow: none; }
+.mbe-button-ghost:hover:not(:disabled) { border-color: #d2d4cc; translate: none; }
+.mbe-button-link { color: #286a58; }
+.mbe-dialog { border: 2px solid var(--color-border); border-radius: 20px; box-shadow: 6px 6px 0 var(--color-border); }
+.mbe-dialog [data-slot="dialog-header"], .mbe-dialog [data-slot="alert-dialog-header"] { padding-right: 24px; }
+.mbe-dialog [data-slot="dialog-title"]::before, .mbe-dialog [data-slot="alert-dialog-title"]::before { content: ""; display: inline-block; width: 10px; height: 16px; margin-right: 9px; border: 2px solid var(--color-border); border-radius: 5px; background: var(--color-sunshine); vertical-align: -2px; }
+.mbe-dialog-close { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 2px solid var(--color-border); border-radius: 9px; background: var(--color-coral); }
+.mbe-menu { border: 2px solid var(--color-border); box-shadow: 3px 3px 0 var(--color-border); }
+.mbe-input { border: 2px solid #92958f; background: #fff; box-shadow: inset 0 2px 0 #f0efe9; }
+.mbe-input:focus { border-color: var(--color-ring); }
+.mbe-input[aria-invalid="true"] { border-color: var(--color-destructive); }
+.mbe-tabs-list { border: 2px solid var(--color-border); background: #eeeadd; padding: 3px; height: 38px; gap: 3px; }
+.mbe-tabs-trigger { border: 1.5px solid transparent; font-size: 12px; line-height: 18px; padding: 3px 11px; }
+.mbe-tabs-trigger[data-state="active"] { border-color: var(--color-border); background: var(--color-sunshine); box-shadow: 1px 1px 0 var(--color-border); color: var(--color-foreground); }
+.mbe-switch { border: 2px solid var(--color-border); background: #e0e2dc; box-shadow: none; }
+.mbe-switch[data-size="default"] { width: 36px; height: 22px; }
+.mbe-switch[data-size="sm"] { width: 28px; height: 18px; }
+.mbe-switch[data-state="checked"] { background: var(--color-mint); }
+.mbe-switch-thumb { border: 1.5px solid var(--color-border); background: #fff; }
+.mbe-switch-thumb[data-state="checked"] { transform: translateX(14px); }
+.mbe-switch[data-size="sm"] .mbe-switch-thumb[data-state="checked"] { transform: translateX(10px); }
+.mbe-checkbox { border: 2px solid var(--color-border); background: #fff; }
+.mbe-checkbox[data-state="checked"], .mbe-checkbox[data-state="indeterminate"] { border-color: var(--color-border); background: var(--color-mint); color: var(--color-foreground); }
+.mbe-icon-choice { border: 2px solid #d2d4cc; background: #fff; }
+.mbe-icon-choice:hover { background: #fff0c9; border-color: var(--color-border); }
+.mbe-icon-choice[aria-checked="true"] { border-color: var(--color-border); background: var(--color-sunshine); box-shadow: 2px 2px 0 var(--color-border); }
+.mbe-settings-section { padding: 14px; border: 2px solid #d2d4cc; border-radius: 14px; background: #fff; }
+.mbe-settings-section label { gap: 16px; }
+.mbe-settings-section label > div { min-width: 0; }
+.mbe-environment-row { border: 2px solid var(--color-border); background: #fff; box-shadow: 2px 2px 0 #d6dacd; }
+.mbe-environment-row[data-selected="true"] { background: #e1f4ed; box-shadow: 2px 2px 0 var(--color-border); }
+.mbe-progress { border: 1px solid #858a91; }
+.mbe-float { border: 2px solid var(--color-border); background: #fffaf0; }
+.mbe-float-header { background: var(--color-sunshine); border-bottom: 2px solid var(--color-border); }
+.mbe-float-row:hover { background: var(--color-accent); }
+.mbe-float-row svg { color: #367c6c; }
+.mbe-shortcut-row { border-bottom: 1px solid #deded3; }
+.mbe-shortcut-row:hover { background: #f3f6ed; }
+.mbe-toast { border: 2px solid var(--color-border); border-radius: 14px; box-shadow: 3px 3px 0 var(--color-border); }
+.cm-editor-wrapper { border: 2px solid var(--color-border); background: #fff; }
+.cm-editor-wrapper .cm-editor { background: #fff; color: var(--color-foreground); }
+.cm-editor-wrapper .cm-gutters { background: #f2f3ea; color: #666a76; border-right: 1px solid #d2d4cc; }
+.cm-editor-wrapper .cm-activeLine, .cm-editor-wrapper .cm-activeLineGutter { background: #eef7f1; }
+.cm-editor-wrapper .cm-cursor { border-left-color: #303648; }
+.cm-editor-wrapper .cm-focused { outline: 2px solid var(--color-ring); outline-offset: -2px; }
+
+/* Keep keyboard focus independent of decorative shadows and utility layers. */
+.mbe-button:focus-visible,
+.mbe-command-card:focus-visible,
+.mbe-project:focus-visible,
+.mbe-tabs-trigger:focus-visible,
+.mbe-switch:focus-visible,
+.mbe-checkbox:focus-visible,
+.mbe-input:focus-visible,
+.mbe-icon-choice:focus-visible {
+  outline-style: solid;
+  outline-width: 2px;
+  outline-color: var(--color-ring);
+  outline-offset: -2px;
 }
 
-/* Window control buttons — custom classes for precise control */
-.titlebar-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 100%;
-  border: none;
-  background: transparent;
-  color: var(--color-muted-foreground);
-  cursor: default;
-  transition: background-color 100ms ease;
-}
-
-.titlebar-button:hover {
-  background: var(--color-accent);
-  color: var(--color-foreground);
-}
-
-.titlebar-button.close-button:hover {
-  background: oklch(0.5 0.15 25);
-  color: white;
-}
-
-/* Execution feedback flash animation (per D-05, D-06, D-07) */
-@keyframes card-flash {
-  0% {
-    border-color: rgba(255, 255, 255, 0.3);
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
-    transform: scale(0.97);
-  }
-  50% {
-    border-color: rgba(255, 255, 255, 0.5);
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
-  }
-  100% {
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: none;
-    transform: scale(1);
-  }
+body.mbe-float-window { background: transparent; }
+@keyframes card-flash { 0%, 100% { background: #fff; } 40% { background: #c8efdc; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }

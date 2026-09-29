@@ -79,6 +79,37 @@ beforeEach(() => {
 });
 
 describe("EnvironmentDiffDialog", () => {
+  it("keeps added and removed text readable on distinct light backgrounds", async () => {
+    const style = document.createElement("style");
+    style.textContent = environmentDiffStyles;
+    document.head.append(style);
+    try {
+      renderDialog(vi.fn().mockResolvedValue(response(".env")));
+      await waitFor(() => expect(screen.getByTestId("environment-diff-view")).toBeInTheDocument());
+      const table = document.querySelector<HTMLElement>(".environment-diff-table")!;
+      const added = document.querySelector<HTMLElement>(".environment-diff-line-addition .environment-diff-line-content")!;
+      const removed = document.querySelector<HTMLElement>(".environment-diff-line-deletion .environment-diff-line-content")!;
+      expect(added).toHaveTextContent("A=1");
+      expect(removed).toHaveTextContent("A=2");
+      const addedBackground = getComputedStyle(added).backgroundColor;
+      const removedBackground = getComputedStyle(removed).backgroundColor;
+      expect(addedBackground).not.toBe(removedBackground);
+      const luminance = (color: string) => {
+        const channels = color.match(/\d+/g)!.slice(0, 3).map(Number).map((value) => {
+          const channel = value / 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      };
+      const foreground = luminance(getComputedStyle(table).color);
+      for (const background of [addedBackground, removedBackground]) {
+        expect((luminance(background) + 0.05) / (foreground + 0.05)).toBeGreaterThanOrEqual(4.5);
+      }
+    } finally {
+      style.remove();
+    }
+  });
+
   it("sets the dialog height to 40px less than the viewport", () => {
     renderDialog(undefined);
 
@@ -540,7 +571,6 @@ describe("EnvironmentDiffDialog", () => {
     expect(environmentDiffStyles).toMatch(/\.environment-diff-hunk-header-controls\s*\{[\s\S]*position:\s*sticky;/);
     expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-controls\s*\{[\s\S]*position:\s*sticky;/);
     expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-controls\s*\{[\s\S]*left:\s*0;/);
-    expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-cell\s*\{[\s\S]*background:\s*#1f2937;/);
   });
 
   it("keeps diff columns compact and tail gap rows on the hunk-header background", () => {
@@ -555,11 +585,8 @@ describe("EnvironmentDiffDialog", () => {
     expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-marker\s*\{[\s\S]*display:\s*grid;[\s\S]*width:\s*100%;[\s\S]*height:\s*1\.25rem;[\s\S]*min-height:\s*1\.25rem;[\s\S]*grid-template-columns:\s*var\(--environment-diff-old-line-number-column-width\) var\(--environment-diff-new-line-number-column-width\);[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*center;[\s\S]*gap:\s*0;[\s\S]*margin:\s*0;[\s\S]*background:\s*transparent;[\s\S]*border-right:\s*0;/);
     expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-marker\s*>\s*button\[data-gap-direction="up"\]\s*\{[\s\S]*grid-column:\s*1;/);
     expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-marker\s*>\s*button\[data-gap-direction="down"\]\s*\{[\s\S]*grid-column:\s*2;/);
-    expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-cell\s*\{[\s\S]*background:\s*#1f2937;/);
-    expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-controls\s*\{[\s\S]*background:\s*#1f2937;/);
     expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-marker\s*>\s*button\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*height:\s*1\.25rem;[\s\S]*min-height:\s*1\.25rem;[\s\S]*border-radius:\s*0\.25rem;/);
     expect(environmentDiffStyles).toMatch(/\.environment-diff-gap-marker\s*>\s*button:hover\s*\{[\s\S]*background:/);
-    expect(environmentDiffStyles).toMatch(/\.environment-diff-hunk-header\s*\{[\s\S]*background:\s*#1f2937;/);
   });
 
   it("enlarges diff operators and gives them symmetric centered spacing", () => {

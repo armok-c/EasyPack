@@ -65,7 +65,7 @@ export function ScriptEditor({
   return (
     <div
       ref={parentRef}
-      className="cm-editor-wrapper rounded-md overflow-hidden border border-white/10"
+      className="cm-editor-wrapper rounded-md overflow-hidden border border-border/25"
       style={{ height }}
     />
   );

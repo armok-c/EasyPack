@@ -39,7 +39,7 @@
   width: max-content;
   border-collapse: collapse;
   border-spacing: 0;
-  color: #e5e7eb;
+  color: #303648;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -55,8 +55,8 @@
   position: sticky;
   z-index: 2;
   padding: 0 2px;
-  background: #111827;
-  color: #9ca3af;
+  background: #fffdf7;
+  color: #666a76;
   text-align: right;
   user-select: none;
 }
@@ -85,17 +85,17 @@
 .environment-diff-line-context .environment-diff-old-line-num,
 .environment-diff-line-context .environment-diff-new-line-num,
 .environment-diff-line-context .environment-diff-line-content {
-  background: #111827;
+  background: #fffdf7;
 }
 
 .environment-diff-line-deletion .environment-diff-old-line-num,
 .environment-diff-line-deletion .environment-diff-line-content {
-  background: #3b171a;
+  background: #ffe6de;
 }
 
 .environment-diff-line-addition .environment-diff-new-line-num,
 .environment-diff-line-addition .environment-diff-line-content {
-  background: #17351f;
+  background: #ddf3e6;
 }
 
 .environment-diff-operator {
@@ -105,27 +105,27 @@
   font-size: 20px;
   line-height: 1;
   text-align: center;
-  color: #9ca3af;
+  color: #666a76;
 }
 
 .environment-diff-inline-change {
   border-radius: 2px;
-  background: #713431;
+  background: #f5b6a6;
 }
 
 .environment-diff-line-addition .environment-diff-inline-change {
-  background: #2f5732;
+  background: #a5dec0;
 }
 
 .environment-diff-no-newline {
   margin-left: 0.5rem;
-  color: #fbbf24;
+  color: #8b5b17;
 }
 
 .environment-diff-hunk-header {
   padding: 0;
-  background: #1f2937;
-  color: #93c5fd;
+  background: #e5edf4;
+  color: #345d79;
   text-align: left;
   overflow: hidden;
   white-space: normal;
@@ -147,14 +147,14 @@
   align-items: center;
   box-sizing: border-box;
   overflow: hidden;
-  background: #1f2937;
+  background: #e5edf4;
   padding: 5px 10px;
 }
 
 .environment-diff-gap-cell {
   padding: 0;
   border: 0;
-  background: #1f2937;
+  background: #e5edf4;
 }
 
 .environment-diff-gap-controls {
@@ -164,7 +164,7 @@
   width: var(--environment-diff-controls-width);
   min-width: var(--environment-diff-controls-width);
   max-width: var(--environment-diff-controls-width);
-  background: #1f2937;
+  background: #e5edf4;
 }
 
 .environment-diff-gap-controls .environment-diff-gap-marker {
@@ -177,7 +177,7 @@
   align-items: center;
   justify-content: center;
   min-height: 0;
-  color: #9ca3af;
+  color: #666a76;
 }
 
 .environment-diff-gap-marker {
@@ -214,8 +214,8 @@
 }
 
 .environment-diff-gap-marker > button:hover {
-  background: rgba(147, 197, 253, 0.12);
-  color: #dbeafe;
+  background: #bfdef5;
+  color: #303648;
 }
 
 .environment-diff-gap-marker > button svg {

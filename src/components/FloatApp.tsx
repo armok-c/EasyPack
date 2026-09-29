@@ -132,7 +132,7 @@ function FloatApp() {
       <div
         role="dialog"
         aria-label="EasyPack 悬浮窗（折叠）"
-        className="w-[180px] h-[32px] flex items-center justify-between px-1.5 bg-background border border-white/10 rounded-full select-none cursor-pointer"
+        className="mbe-float w-[180px] h-[32px] flex items-center justify-between px-1.5 bg-background border border-border/25 rounded-full select-none cursor-pointer"
         onMouseDown={handleDragStart}
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -157,7 +157,7 @@ function FloatApp() {
             </>
           ) : (
             <>
-              <FolderOpen className="size-3 text-muted-foreground shrink-0" />
+              <img src="/icon.svg" alt="" className="size-4 shrink-0" />
               <span className="text-xs font-semibold text-foreground/80">EasyPack</span>
             </>
           )}
@@ -177,10 +177,10 @@ function FloatApp() {
     <div
       role="dialog"
       aria-label="EasyPack 悬浮窗"
-      className="w-[180px] h-auto max-h-[400px] flex flex-col bg-background border border-white/10 rounded-lg overflow-hidden"
+      className="mbe-float w-[180px] h-auto max-h-[400px] flex flex-col bg-background border border-border/25 rounded-lg overflow-hidden"
     >
       <div
-        className="h-[32px] flex items-center justify-between px-1.5 border-b border-white/5 shrink-0 cursor-pointer"
+        className="mbe-float-header h-[32px] flex items-center justify-between px-1.5 border-b border-border/25 shrink-0 cursor-pointer"
         onMouseDown={handleDragStart}
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -240,10 +240,10 @@ function FloatApp() {
             return (
               <button
                 key={cmd.id}
-                className={`h-7 flex items-center gap-2 px-1.5 w-full rounded-md cursor-pointer select-none transition-all duration-150 ease-out ${
+                className={`mbe-float-row h-7 flex items-center gap-2 px-1.5 w-full rounded-md cursor-pointer select-none transition-all duration-150 ease-out ${
                   isFlashing
                     ? "bg-green-500/20 border border-green-500/40"
-                    : "hover:bg-white/5 active:bg-white/10 border border-transparent"
+                    : "hover:bg-accent active:bg-accent border border-transparent"
                 }`}
                 aria-label={`${cmd.name}: ${cmd.command}`}
                 onClick={() => handleRowClick(index, cmd.command)}

@@ -225,7 +225,7 @@ export function ShortcutPanel({
 
     return (
       <div key={action.id}>
-        <div className="flex items-center justify-between py-1.5 px-1 group">
+        <div className="mbe-shortcut-row flex items-center justify-between py-2 px-2 group">
           <span className="text-sm truncate mr-2">{action.label}</span>
 
           {/* Shortcut badge area */}
@@ -233,14 +233,14 @@ export function ShortcutPanel({
             {isRecordingThis ? (
               // Recording state: dashed border + pulse animation
               <span
-                className="inline-flex items-center px-2 py-0.5 text-xs rounded border border-dashed border-accent animate-pulse text-accent-foreground"
+                className="inline-flex items-center px-2 py-0.5 text-xs rounded border-2 border-dashed border-ring animate-pulse text-accent-foreground"
               >
                 按下快捷键...
               </span>
             ) : binding ? (
               // Bound state: show shortcut display + clear button on hover
               <>
-                <span className="inline-flex items-center px-2 py-0.5 text-xs rounded bg-muted text-muted-foreground font-mono">
+                <span className="mbe-shortcut-badge inline-flex items-center px-2 py-0.5 text-xs rounded font-mono">
                   {shortcutToDisplay(binding)}
                 </span>
                 <button
@@ -280,14 +280,14 @@ export function ShortcutPanel({
         {/* Conflict warning bar */}
         {hasConflictForThis && conflictInfo && (
           <div className="mx-1 mb-1 px-3 py-2 rounded bg-amber-500/15 border border-amber-500/30">
-            <p className="text-xs text-amber-200 mb-2">
+            <p className="text-xs text-amber-700 mb-2">
               此快捷键已分配给「{conflictInfo.label}」，继续将覆盖
             </p>
             <div className="flex gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                className="h-6 text-xs border-amber-500/40 text-amber-200 hover:bg-amber-500/20"
+                className="h-6 text-xs border-amber-500/40 text-amber-700 hover:bg-amber-500/20"
                 onClick={confirmConflict}
               >
                 确认覆盖
@@ -361,7 +361,7 @@ export function ShortcutPanel({
 
                   {/* Expanded action list */}
                   {isExpanded && (
-                    <div className="ml-1 border-l border-white/10 pl-2">
+                    <div className="ml-1 border-l border-border/25 pl-2">
                       {groupActions.map(renderActionRow)}
                     </div>
                   )}

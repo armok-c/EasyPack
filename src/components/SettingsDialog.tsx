@@ -165,7 +165,7 @@ export function SettingsDialog({
         <div className="space-y-6 pb-4">
           {/* Section: 配置管理 */}
           <div>
-            <div className="border-b border-white/10 pb-2 mb-4">
+            <div className="border-b border-border/25 pb-2 mb-4">
               <Label>配置管理</Label>
             </div>
 
@@ -189,7 +189,7 @@ export function SettingsDialog({
               </Select>
               <button
                 onClick={() => setManageExpanded(!manageExpanded)}
-                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                className="p-1.5 rounded-md hover:bg-accent transition-colors"
                 aria-label="管理配置"
               >
                 <Settings className="size-4" />
@@ -304,11 +304,11 @@ export function SettingsDialog({
 
           {/* Section: 系统托盘 */}
           <div>
-            <div className="border-b border-white/10 pb-2 mb-4">
+            <div className="border-b border-border/25 pb-2 mb-4">
               <Label>系统托盘</Label>
             </div>
 
-            <div className="space-y-4">
+            <div className="mbe-settings-section space-y-4">
               {/* Switch: 启用系统托盘 */}
               <label htmlFor="settings-tray-enabled" className="flex items-center justify-between">
                 <div>
@@ -375,10 +375,10 @@ export function SettingsDialog({
 
           {/* Section: 边缘抽屉 */}
           <div>
-            <div className="border-b border-white/10 pb-2 mb-4">
+            <div className="border-b border-border/25 pb-2 mb-4">
               <Label>边缘抽屉</Label>
             </div>
-            <div className="space-y-4">
+            <div className="mbe-settings-section space-y-4">
               <label htmlFor="settings-drawer-enabled" className="flex items-center justify-between">
                 <div>
                   <p className="text-sm">启用边缘抽屉</p>
@@ -403,13 +403,13 @@ export function SettingsDialog({
             onOpenShortcutPanel();
             onOpenChange(false);
           }}
-          className="w-full text-left px-3 py-2 mb-2 rounded-md border-l-2 border-blue-400 bg-blue-400/10 text-sm text-blue-300 hover:bg-blue-400/20 transition-colors cursor-pointer"
+          className="w-full text-left px-3 py-2 mb-2 rounded-md border-l-2 border-blue-400 bg-blue-400/10 text-sm text-blue-700 hover:bg-blue-400/20 transition-colors cursor-pointer"
         >
           快捷键设置...
         </button>
 
         {/* 版本号 */}
-        <div className="border-t border-white/10 pt-3 mt-2">
+        <div className="border-t border-border/25 pt-3 mt-2">
           <p className="text-xs text-muted-foreground text-center">
             v{currentVersion || "..."}
           </p>
