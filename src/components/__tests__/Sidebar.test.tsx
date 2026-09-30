@@ -90,7 +90,7 @@ describe("Sidebar project context menu", () => {
     renderSidebar(vi.fn().mockResolvedValue(true));
 
     const addButton = screen.getByRole("button", { name: "添加项目" });
-    expect(addButton.parentElement).toHaveClass("px-3", "pt-5", "pb-4");
+    expect(addButton.parentElement?.parentElement).toHaveClass("px-3", "pt-5", "pb-4");
   });
 
   it("allows long project names to shrink without a native tooltip", () => {

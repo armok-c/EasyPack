@@ -147,7 +147,9 @@ export function useFloatWindow({
       height: 300,
       minHeight: 32,
       decorations: false,
-      shadow: true,
+      transparent: true,
+      // Windows 无边框窗口的系统阴影会附带白边，圆角由页面绘制。
+      shadow: false,
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,

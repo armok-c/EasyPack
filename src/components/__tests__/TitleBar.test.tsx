@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 const { mockMinimize, mockToggleMaximize, mockClose, mockHide, mockStartDragging, mockIsMaximized, mockOnResized } = vi.hoisted(() => ({
@@ -31,6 +31,8 @@ import { TitleBar } from "@/components/TitleBar";
 describe("TitleBar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsMaximized.mockResolvedValue(false);
+    mockOnResized.mockResolvedValue(vi.fn());
   });
 
   it("renders EasyPack title", () => {
@@ -83,6 +85,57 @@ describe("TitleBar", () => {
     const outerDiv = container.firstElementChild as HTMLElement;
     fireEvent.doubleClick(outerDiv);
     expect(mockToggleMaximize).toHaveBeenCalled();
+  });
+
+  it("does not maximize when a titlebar button or its icon is double-clicked", () => {
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onFloatToggle={vi.fn()} floatVisible={false} />);
+    for (const button of screen.getAllByRole("button")) {
+      fireEvent.doubleClick(button);
+      const icon = button.querySelector("svg");
+      if (icon) fireEvent.doubleClick(icon);
+    }
+    expect(mockToggleMaximize).not.toHaveBeenCalled();
+  });
+
+  it("reports initial, maximized, and restored states to the app shell", async () => {
+    const onMaximizedChange = vi.fn();
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onFloatToggle={vi.fn()} floatVisible={false} onMaximizedChange={onMaximizedChange} />);
+    await waitFor(() => expect(onMaximizedChange).toHaveBeenLastCalledWith(false));
+    const onResized = mockOnResized.mock.calls[0][0] as () => Promise<void>;
+    mockIsMaximized.mockResolvedValue(true);
+    await act(onResized);
+    expect(screen.getByLabelText("还原")).toBeInTheDocument();
+    expect(onMaximizedChange).toHaveBeenLastCalledWith(true);
+    mockIsMaximized.mockResolvedValue(false);
+    await act(onResized);
+    expect(screen.getByLabelText("最大化")).toBeInTheDocument();
+    expect(onMaximizedChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("ignores an older state response after a newer resize response", async () => {
+    let resolveInitial!: (value: boolean) => void;
+    mockIsMaximized.mockReturnValueOnce(new Promise<boolean>((resolve) => { resolveInitial = resolve; }));
+    const onMaximizedChange = vi.fn();
+    render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onFloatToggle={vi.fn()} floatVisible={false} onMaximizedChange={onMaximizedChange} />);
+    const onResized = mockOnResized.mock.calls[0][0] as () => Promise<void>;
+    mockIsMaximized.mockResolvedValue(true);
+    await act(onResized);
+    await act(async () => { resolveInitial(false); });
+    expect(screen.getByLabelText("还原")).toBeInTheDocument();
+    expect(onMaximizedChange.mock.calls).toEqual([[true]]);
+  });
+
+  it("ignores state responses after unmount and removes the listener", async () => {
+    let resolveState!: (value: boolean) => void;
+    mockIsMaximized.mockReturnValueOnce(new Promise<boolean>((resolve) => { resolveState = resolve; }));
+    const removeListener = vi.fn();
+    mockOnResized.mockResolvedValue(removeListener);
+    const onMaximizedChange = vi.fn();
+    const { unmount } = render(<TitleBar onSettingsOpen={mockOnSettingsOpen} onFloatToggle={vi.fn()} floatVisible={false} onMaximizedChange={onMaximizedChange} />);
+    unmount();
+    await act(async () => { resolveState(true); });
+    expect(onMaximizedChange).not.toHaveBeenCalled();
+    expect(removeListener).toHaveBeenCalledOnce();
   });
 
   it("mouse down on drag region starts dragging", () => {

@@ -503,7 +503,7 @@ export function ProjectSettingsDialog({
             {/* Color bar preview */}
             {selectedColor && (
               <div
-                className="absolute left-0 top-1 bottom-1 w-[3px] rounded-l-lg"
+                className="mbe-project-color"
                 style={{ backgroundColor: selectedColor }}
                 data-testid="project-color-preview"
               />

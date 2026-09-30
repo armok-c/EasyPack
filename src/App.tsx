@@ -84,6 +84,7 @@ function App() {
 
   // Phase 5 Plan 03: keyboard navigation zone management (per D-15, D-16)
   const [activeZone, setActiveZone] = useState<"sidebar" | "main">("sidebar");
+  const [isMaximized, setIsMaximized] = useState(false);
   const mainAreaRef = useRef<MainAreaHandle | null>(null);
   const pendingProjectSwitchRef = useRef<Promise<void> | null>(null);
   const restoreFromDrawerRef = useRef<(() => Promise<void>) | null>(null);
@@ -588,6 +589,7 @@ function App() {
   return (
     <div
       className="mbe-app flex flex-col h-screen w-screen overflow-hidden"
+      data-maximized={isMaximized}
       onMouseEnter={snapEdge ? handleMouseEnter : undefined}
       onMouseLeave={snapEdge ? handleMouseLeave : undefined}
     >
@@ -600,6 +602,7 @@ function App() {
         </div>
       )}
       <TitleBar
+        onMaximizedChange={setIsMaximized}
         onSettingsOpen={() => setSettingsOpen(true)}
         onFloatToggle={toggleFloat}
         floatVisible={floatVisible}

@@ -132,7 +132,7 @@ function FloatApp() {
       <div
         role="dialog"
         aria-label="EasyPack 悬浮窗（折叠）"
-        className="mbe-float w-[180px] h-[32px] flex items-center justify-between px-1.5 bg-background border border-border/25 rounded-full select-none cursor-pointer"
+        className="mbe-float w-[180px] h-[32px] flex items-center justify-between px-1.5 rounded-full select-none cursor-pointer"
         onMouseDown={handleDragStart}
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -177,7 +177,7 @@ function FloatApp() {
     <div
       role="dialog"
       aria-label="EasyPack 悬浮窗"
-      className="mbe-float w-[180px] h-auto max-h-[400px] flex flex-col bg-background border border-border/25 rounded-lg overflow-hidden"
+      className="mbe-float w-full h-screen flex flex-col rounded-lg overflow-hidden"
     >
       <div
         className="mbe-float-header h-[32px] flex items-center justify-between px-1.5 border-b border-border/25 shrink-0 cursor-pointer"
@@ -225,7 +225,7 @@ function FloatApp() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-1.5 py-1">
+      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
         {!project ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <FolderOpen className="size-6 text-muted-foreground" />

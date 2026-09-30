@@ -55,13 +55,15 @@
 
 /* MBE surfaces share a compact outline and a small, solid offset shadow. */
 
-.mbe-app { border: 2px solid var(--color-border); background: var(--color-background); }
+.mbe-app { border: 2px solid var(--color-border); border-radius: 6px; background: var(--color-background); }
+.mbe-app[data-maximized="true"] { border-radius: 0; }
 .mbe-titlebar { background: #fff; border-bottom: 2px solid var(--color-border); }
 .titlebar-button { display: flex; align-items: center; justify-content: center; width: 32px; height: 26px; border: 1.5px solid transparent; border-radius: 8px; color: var(--color-foreground); cursor: pointer; transition: background-color 120ms; }
 .titlebar-button:hover, .titlebar-button[aria-pressed="true"] { border-color: var(--color-border); background: var(--color-sunshine); }
 .titlebar-button.close-button:hover { background: var(--color-coral); }
 .mbe-sidebar { width: 200px; background: #f2f7f1; border-right: 2px solid var(--color-border); }
 .mbe-project { border: 2px solid var(--color-border); background: #fff; min-height: 44px; }
+.mbe-project-color { position: absolute; left: 6px; top: 50%; width: 3px; height: 18px; transform: translateY(-50%); border-radius: 999px; pointer-events: none; }
 .mbe-project[data-selected="true"] { background: var(--color-sunshine); box-shadow: 2px 2px 0 var(--color-border); }
 .mbe-project:hover { background: #fff0c9; }
 .mbe-project-info { border: 2px solid var(--color-border); border-radius: 16px; background: #fff; padding: 14px; box-shadow: 3px 3px 0 #e4cfa0; }
@@ -113,7 +115,7 @@
 .mbe-environment-row { border: 2px solid var(--color-border); background: #fff; box-shadow: 2px 2px 0 #d6dacd; }
 .mbe-environment-row[data-selected="true"] { background: #e1f4ed; box-shadow: 2px 2px 0 var(--color-border); }
 .mbe-progress { border: 1px solid #858a91; }
-.mbe-float { border: 2px solid var(--color-border); background: #fffaf0; }
+.mbe-float { border: 2px solid var(--color-border); background: #fffaf0; overflow: hidden; }
 .mbe-float-header { background: var(--color-sunshine); border-bottom: 2px solid var(--color-border); }
 .mbe-float-row:hover { background: var(--color-accent); }
 .mbe-float-row svg { color: #367c6c; }

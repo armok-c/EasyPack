@@ -105,7 +105,7 @@ function SortableProjectItem({
             {/* Phase 5: colored left border (per D-02) */}
             {project.color && (
               <div
-                className="absolute left-0 top-1 bottom-1 w-[3px] rounded-l-lg transition-colors duration-150"
+                className="mbe-project-color transition-colors duration-150"
                 style={{ backgroundColor: project.color }}
               />
             )}
@@ -309,15 +309,17 @@ export function Sidebar({
     <aside className="mbe-sidebar w-[200px] flex-shrink-0 border-r border-border/25 bg-card flex flex-col">
       {/* Add project button (per D-15: sidebar top) */}
       <div className="px-3 pt-5 pb-4">
-        <Button
-          onClick={onAddProject}
-          variant="default"
-          size="sm"
-          className="w-full gap-1"
-        >
-          <Plus className="size-4" />
-          添加项目
-        </Button>
+        <div className="pr-1">
+          <Button
+            onClick={onAddProject}
+            variant="default"
+            size="sm"
+            className="w-full gap-1"
+          >
+            <Plus className="size-4" />
+            添加项目
+          </Button>
+        </div>
       </div>
 
       {/* Project list / empty state (per D-21, UI-SPEC Copywriting) */}

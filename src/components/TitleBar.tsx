@@ -8,6 +8,7 @@ interface TitleBarProps {
   onSettingsOpen: () => void;
   onFloatToggle: () => void;
   floatVisible: boolean;
+  onMaximizedChange?: (maximized: boolean) => void;
   // Phase 14: 边缘抽屉
   onDragWhileSnapped?: ((deltaX: number, deltaY: number) => void) | null;
   drawerSnapEdge?: string | null;
@@ -17,6 +18,7 @@ export function TitleBar({
   onSettingsOpen,
   onFloatToggle,
   floatVisible,
+  onMaximizedChange,
   onDragWhileSnapped,
   drawerSnapEdge,
 }: TitleBarProps) {
@@ -24,17 +26,27 @@ export function TitleBar({
 
   useEffect(() => {
     let mounted = true;
-    appWindow.isMaximized().then((maximized) => {
-      if (mounted) setIsMaximized(maximized);
-    });
-    const unlisten = appWindow.onResized(async () => {
-      if (mounted) setIsMaximized(await appWindow.isMaximized());
-    });
+    let requestId = 0;
+    const refreshMaximized = async () => {
+      const currentRequest = ++requestId;
+      try {
+        const maximized = await appWindow.isMaximized();
+        if (!mounted || currentRequest !== requestId) return;
+        setIsMaximized(maximized);
+        onMaximizedChange?.(maximized);
+      } catch (error) {
+        if (import.meta.env.DEV) console.error("读取窗口状态失败：", error);
+      }
+    };
+    const unlisten = appWindow.onResized(refreshMaximized);
+    void refreshMaximized();
     return () => {
       mounted = false;
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch((error) => {
+        if (import.meta.env.DEV) console.error("清理窗口监听失败：", error);
+      });
     };
-  }, []);
+  }, [onMaximizedChange]);
 
   const handleMinimize = useCallback(async () => {
     await appWindow.minimize();
@@ -94,7 +106,10 @@ export function TitleBar({
       data-tauri-drag-region
       className="mbe-titlebar flex items-center h-10 pr-1 select-none shrink-0"
       onMouseDown={handleDragStart}
-      onDoubleClick={handleMaximize}
+      onDoubleClick={(event) => {
+        if ((event.target as HTMLElement).closest("button")) return;
+        void handleMaximize();
+      }}
     >
       <div
         data-tauri-drag-region

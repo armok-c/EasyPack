@@ -75,4 +75,12 @@ describe("theme styles", () => {
     });
     expect(new Set(colors).size).toBe(expected.length);
   });
+
+  it("clips floating window content to its rounded corners", () => {
+    const { container } = render(<div className="mbe-float rounded-full" />);
+    const float = container.firstElementChild as HTMLElement;
+    const styles = getComputedStyle(float);
+
+    expect(styles.overflow).toBe("hidden");
+  });
 });

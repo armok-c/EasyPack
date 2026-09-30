@@ -512,7 +512,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
        {(error || operationError) && <div role="alert" className="mb-5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-700">{operationError ?? errorText(error)}</div>}
        {!state && busy && <p className="text-sm text-muted-foreground">正在读取项目环境...</p>}
         {state && environments.length === 0 && <div className="rounded-lg border border-dashed border-border p-8 text-center"><p className="text-sm">还没有环境</p><p className="mt-1 text-xs text-muted-foreground">先选择项目内的文本文件，再从当前文件捕获第一个环境。</p><Button className="mt-4" onClick={() => { setCopyStartedFromSelection(false); setNewDialogOpen(true); }} disabled={!canEdit}><FilePlus2 className="size-4" />创建第一个环境</Button></div>}
-       <div className="space-y-1.5">{environments.map((environment) => {
+       <div className="space-y-1.5 pr-1 pb-1">{environments.map((environment) => {
         const pending = activeBatch?.pendingIds.includes(environment.id) ?? false;
         const environmentProgress = pending || progress[environment.id]?.kind === "undo" ? undefined : progress[environment.id];
         const waiting = pending && activeBatch?.environmentIds.includes(environment.id);
