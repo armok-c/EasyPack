@@ -79,9 +79,17 @@ beforeEach(() => {
 });
 
 describe("EnvironmentDiffDialog", () => {
-  it("keeps added and removed text readable on distinct light backgrounds", async () => {
+  it.each(["light", "dark"])("%s 模式的新增和删除行背景不同，且文字清晰可读", async (theme) => {
     const style = document.createElement("style");
-    style.textContent = environmentDiffStyles;
+    // jsdom 不支持 CSS 变量计算，在此使用实际主题定义展开颜色后检查结果。
+    const themeStyles = readFileSync(resolve("src/index.css"), "utf8");
+    const blocks = [
+      themeStyles.match(/@theme\s*\{([^}]+)\}/)![1],
+      themeStyles.match(/:root\s*\{([^}]+)\}/)![1],
+      theme === "dark" ? themeStyles.match(/:root\.dark\s*\{([^}]+)\}/)![1] : "",
+    ];
+    const colors = Object.fromEntries(blocks.flatMap((block) => [...block.matchAll(/(--[\w-]+):\s*(#[\da-f]+);/gi)].map((match) => [match[1], match[2]])));
+    style.textContent = environmentDiffStyles.replace(/var\((--[\w-]+)\)/g, (value, name) => colors[name] ?? value);
     document.head.append(style);
     try {
       renderDialog(vi.fn().mockResolvedValue(response(".env")));
@@ -103,7 +111,8 @@ describe("EnvironmentDiffDialog", () => {
       };
       const foreground = luminance(getComputedStyle(table).color);
       for (const background of [addedBackground, removedBackground]) {
-        expect((luminance(background) + 0.05) / (foreground + 0.05)).toBeGreaterThanOrEqual(4.5);
+        const backgroundLuminance = luminance(background);
+        expect((Math.max(backgroundLuminance, foreground) + 0.05) / (Math.min(backgroundLuminance, foreground) + 0.05)).toBeGreaterThanOrEqual(4.5);
       }
     } finally {
       style.remove();

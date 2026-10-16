@@ -11,7 +11,7 @@
  * ref prevents infinite loops between external value sync and user input.
  */
 import { useRef, useEffect } from "react";
-import { EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -43,6 +43,7 @@ export function useCodeMirror(
   const { value, onChange, darkMode = false, height, extensions = [] } = options;
   const viewRef = useRef<EditorView | null>(null);
   const isSyncUpdate = useRef(false);
+  const themeCompartment = useRef(new Compartment());
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -70,7 +71,7 @@ export function useCodeMirror(
           }
         }),
         theme,
-        darkMode ? oneDark : [],
+        themeCompartment.current.of(darkMode ? oneDark : []),
         ...extensions,
       ],
     });
@@ -87,6 +88,13 @@ export function useCodeMirror(
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [height]);
+
+  // 仅更换配色，保留正在编辑的内容、光标和撤销记录。
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: themeCompartment.current.reconfigure(darkMode ? oneDark : []),
+    });
   }, [darkMode, height]);
 
   // Sync external value changes into the editor without cursor reflow

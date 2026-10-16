@@ -527,7 +527,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
               onChange={handleNameChange}
             />
             {nameDirty && name.trim().length === 0 && (
-              <p className="text-red-700 text-xs mt-1">名称不能为空</p>
+              <p className="text-destructive text-xs mt-1">名称不能为空</p>
             )}
           </div>
 
@@ -573,13 +573,13 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
               />
             )}
             {activeTab === "single" && commandDirty && command.trim().length === 0 && (
-              <p className="text-red-700 text-xs mt-1">命令不能为空</p>
+              <p className="text-destructive text-xs mt-1">命令不能为空</p>
             )}
             {activeTab === "folder" && commandDirty && command.trim().length === 0 && (
-              <p className="text-red-700 text-xs mt-1">目录不能为空</p>
+              <p className="text-destructive text-xs mt-1">目录不能为空</p>
             )}
             {activeTab === "folder" && folderError && (
-              <p role="alert" className="text-red-700 text-xs mt-1">{folderError}</p>
+              <p role="alert" className="text-destructive text-xs mt-1">{folderError}</p>
             )}
           </div>
 

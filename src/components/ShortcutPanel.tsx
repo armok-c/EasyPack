@@ -280,14 +280,14 @@ export function ShortcutPanel({
         {/* Conflict warning bar */}
         {hasConflictForThis && conflictInfo && (
           <div className="mx-1 mb-1 px-3 py-2 rounded bg-amber-500/15 border border-amber-500/30">
-            <p className="text-xs text-amber-700 mb-2">
+            <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
               此快捷键已分配给「{conflictInfo.label}」，继续将覆盖
             </p>
             <div className="flex gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                className="h-6 text-xs border-amber-500/40 text-amber-700 hover:bg-amber-500/20"
+                className="h-6 text-xs border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
                 onClick={confirmConflict}
               >
                 确认覆盖

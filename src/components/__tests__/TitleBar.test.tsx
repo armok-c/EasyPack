@@ -27,8 +27,28 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 import { TitleBar } from "@/components/TitleBar";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 describe("TitleBar", () => {
+  it("在悬浮窗按钮左侧切换主题，点击不会拖动或最大化窗口", () => {
+    localStorage.removeItem("easypack-theme");
+    const { container, unmount } = render(<ThemeProvider><TitleBar onSettingsOpen={mockOnSettingsOpen} onFloatToggle={vi.fn()} floatVisible={false} /></ThemeProvider>);
+    const toggle = screen.getByRole("button", { name: "切换到深色模式" });
+    expect(toggle.nextElementSibling).toBe(screen.getByLabelText("切换悬浮窗"));
+    expect(toggle.querySelector(".lucide-moon")).not.toBeNull();
+    fireEvent.mouseDown(toggle, { button: 0 });
+    fireEvent.click(toggle);
+    fireEvent.doubleClick(toggle);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(screen.getByLabelText("切换到浅色模式").querySelector(".lucide-sun")).not.toBeNull();
+    expect(mockStartDragging).not.toHaveBeenCalled();
+    expect(mockToggleMaximize).not.toHaveBeenCalled();
+    expect(container.querySelectorAll(".titlebar-button")).toHaveLength(6);
+    unmount();
+    localStorage.removeItem("easypack-theme");
+    document.documentElement.classList.remove("dark");
+    document.documentElement.style.colorScheme = "";
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsMaximized.mockResolvedValue(false);

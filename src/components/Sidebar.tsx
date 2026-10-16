@@ -177,9 +177,9 @@ function SortableProjectItem({
           <ContextMenuItem
             variant="destructive"
             onSelect={() => onRemove(project.id)}
-            className="h-8 gap-2 px-2 !text-red-700 hover:!bg-red-500/10 hover:!text-red-700 focus:!bg-red-500/10 focus:!text-red-700 data-[variant=destructive]:*:[svg]:text-red-700!"
+            className="h-8 gap-2 px-2 !text-destructive hover:!bg-red-500/10 hover:!text-destructive focus:!bg-red-500/10 focus:!text-destructive data-[variant=destructive]:*:[svg]:text-destructive!"
           >
-            <Trash2 className="size-4 text-red-700!" />
+            <Trash2 className="size-4 text-destructive!" />
             删除项目
           </ContextMenuItem>
         </ContextMenuContent>

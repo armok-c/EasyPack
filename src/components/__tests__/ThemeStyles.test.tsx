@@ -25,6 +25,7 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup();
   style.remove();
+  document.documentElement.classList.remove("dark");
 });
 
 describe("theme styles", () => {
@@ -51,10 +52,12 @@ describe("theme styles", () => {
       expect(parseFloat(focused.outlineOffset)).toBeLessThanOrEqual(-2);
   });
 
-  it("colors batch tokens distinctly and readably in the light editor", () => {
+  it.each([false, true])("脚本语法颜色可区分且有足够对比度（深色：%s）", (darkMode) => {
+    document.documentElement.classList.toggle("dark", darkMode);
     const { container } = render(<ScriptEditor
       value={'@echo "hello" %PATH%\nREM comment\n:done'}
       onChange={vi.fn()}
+      darkMode={darkMode}
     />);
     const expected = ["@", "echo", '"hello"', "%PATH%", "REM comment", ":done"];
     const tokens = [...container.querySelectorAll<HTMLElement>(".cm-line span")];
@@ -70,7 +73,15 @@ describe("theme styles", () => {
         return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
       });
       const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-      expect(1.05 / (luminance + 0.05), text).toBeGreaterThanOrEqual(4.5);
+      // jsdom 尚不能计算 CSS 变量背景；从当前配色读取深色底色计算对比度。
+      const background = darkMode ? getComputedStyle(document.documentElement).getPropertyValue("--color-card").trim() : "#ffffff";
+      const backgroundChannels = background.slice(1).match(/.{2}/g)!.map((hex) => {
+        const channel = parseInt(hex, 16) / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      const backgroundLuminance = backgroundChannels[0] * 0.2126 + backgroundChannels[1] * 0.7152 + backgroundChannels[2] * 0.0722;
+      const contrast = (Math.max(luminance, backgroundLuminance) + 0.05) / (Math.min(luminance, backgroundLuminance) + 0.05);
+      expect(contrast, text).toBeGreaterThanOrEqual(4.5);
       return color;
     });
     expect(new Set(colors).size).toBe(expected.length);

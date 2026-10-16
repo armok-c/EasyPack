@@ -38,7 +38,7 @@ const TEXT_EXTENSIONS = new Set([
 ]);
 
 const toolbarActionClass = "border-border/25 bg-accent text-foreground hover:border-border/25 hover:bg-accent disabled:cursor-not-allowed disabled:border-border/25 disabled:bg-accent disabled:text-muted-foreground";
-const destructiveToolbarActionClass = "border-red-400/40 bg-red-500/10 text-red-700 hover:border-red-300/60 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:border-border/25 disabled:bg-transparent disabled:text-muted-foreground";
+const destructiveToolbarActionClass = "border-red-400/40 bg-red-500/10 text-destructive hover:border-red-300/60 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:border-border/25 disabled:bg-transparent disabled:text-muted-foreground";
 
 function relativePath(path: string, projectPath: string): string {
   const absolute = path.replace(/\\/g, "/");
@@ -63,9 +63,9 @@ function actionLabel(action: ApplyPlan["changes"][number]["action"]): string {
 
 function actionClass(action: ApplyPlan["changes"][number]["action"]): string {
   return {
-    create: "text-emerald-700",
-    overwrite: "text-amber-700",
-    delete: "text-red-700",
+    create: "text-emerald-700 dark:text-emerald-300",
+    overwrite: "text-amber-700 dark:text-amber-300",
+    delete: "text-destructive",
     unchanged: "text-muted-foreground",
   }[action];
 }
@@ -301,7 +301,7 @@ function MigrationWizard({ draft, projectPath, busy, onMigrate }: { draft: Legac
         const sourcesForPath = sourceOptionsByKey.get(key) ?? [];
         const environmentName = draft.environments.find((environment) => environment.environmentId === environmentId)?.environmentId ?? environmentId;
         const copyError = copyErrors[key];
-        return <div key={key} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] sm:items-center"><span className="min-w-0 truncate text-sm">{environmentName} / {path}</span><select className="h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-sm" value={choices[key] ?? "absent"} onChange={(event) => setChoice(key, event.target.value as MigrationChoice)}><option value="absent">设为缺失</option><option value="current">从当前文件捕获</option>{sourcesForPath.length > 0 && <option value="copy">复制来源</option>}</select>{(choices[key] ?? "absent") === "copy" && <><Select value={sources[key] ?? ""} onValueChange={(value) => setSources((current) => ({ ...current, [key]: value }))}><SelectTrigger className="min-w-0 w-full" aria-label="选择来源环境"><SelectValue placeholder="选择来源环境" /></SelectTrigger><SelectContent>{sourcesForPath.map((source) => <SelectItem key={source.environmentId} value={source.environmentId}>{source.environmentId}</SelectItem>)}</SelectContent></Select>{copyError && <p role="alert" className="text-xs text-red-700 sm:col-span-3">{copyError}</p>}</>}</div>;
+        return <div key={key} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] sm:items-center"><span className="min-w-0 truncate text-sm">{environmentName} / {path}</span><select className="h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-sm" value={choices[key] ?? "absent"} onChange={(event) => setChoice(key, event.target.value as MigrationChoice)}><option value="absent">设为缺失</option><option value="current">从当前文件捕获</option>{sourcesForPath.length > 0 && <option value="copy">复制来源</option>}</select>{(choices[key] ?? "absent") === "copy" && <><Select value={sources[key] ?? ""} onValueChange={(value) => setSources((current) => ({ ...current, [key]: value }))}><SelectTrigger className="min-w-0 w-full" aria-label="选择来源环境"><SelectValue placeholder="选择来源环境" /></SelectTrigger><SelectContent>{sourcesForPath.map((source) => <SelectItem key={source.environmentId} value={source.environmentId}>{source.environmentId}</SelectItem>)}</SelectContent></Select>{copyError && <p role="alert" className="text-xs text-destructive sm:col-span-3">{copyError}</p>}</>}</div>;
       })}
     </div>
     <Button onClick={() => void submit()} disabled={busy || Object.keys(copyErrors).length > 0}><FolderSync className="size-4" />完成迁移</Button>
@@ -487,7 +487,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
   };
 
   if (migrationRequired && migrationDraft) return <MigrationWizard draft={migrationDraft} projectPath={projectPath} busy={busy} onMigrate={onMigrate} />;
-  if (recoveryBlocked) return <div className="space-y-4 rounded-lg border border-red-500/30 bg-red-500/5 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 text-red-700" /><div><h3 className="text-sm font-medium">项目恢复未完成</h3><p className="mt-1 text-xs text-muted-foreground">环境操作已暂时停止。可以重试恢复并重新读取项目状态。</p>{recoveryError && <p role="alert" className="mt-2 text-xs text-red-700">恢复提示：{recoveryError}</p>}</div></div><Button variant="outline" onClick={() => void onRefresh()} disabled={busy}><RefreshCw className="size-4" />重试恢复</Button></div>;
+  if (recoveryBlocked) return <div className="space-y-4 rounded-lg border border-red-500/30 bg-red-500/5 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 text-destructive" /><div><h3 className="text-sm font-medium">项目恢复未完成</h3><p className="mt-1 text-xs text-muted-foreground">环境操作已暂时停止。可以重试恢复并重新读取项目状态。</p>{recoveryError && <p role="alert" className="mt-2 text-xs text-destructive">恢复提示：{recoveryError}</p>}</div></div><Button variant="outline" onClick={() => void onRefresh()} disabled={busy}><RefreshCw className="size-4" />重试恢复</Button></div>;
 
   return <div className="flex h-full min-h-0 flex-col">
       <div data-environment-toolbar className="shrink-0 space-y-3">
@@ -509,7 +509,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
        </div>
       </div>
      <div data-environment-list className="mt-5 min-h-0 flex-1 overflow-y-auto scrollbar-none">
-       {(error || operationError) && <div role="alert" className="mb-5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-700">{operationError ?? errorText(error)}</div>}
+       {(error || operationError) && <div role="alert" className="mb-5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-destructive">{operationError ?? errorText(error)}</div>}
        {!state && busy && <p className="text-sm text-muted-foreground">正在读取项目环境...</p>}
         {state && environments.length === 0 && <div className="rounded-lg border border-dashed border-border p-8 text-center"><p className="text-sm">还没有环境</p><p className="mt-1 text-xs text-muted-foreground">先选择项目内的文本文件，再从当前文件捕获第一个环境。</p><Button className="mt-4" onClick={() => { setCopyStartedFromSelection(false); setNewDialogOpen(true); }} disabled={!canEdit}><FilePlus2 className="size-4" />创建第一个环境</Button></div>}
        <div className="space-y-1.5 pr-1 pb-1">{environments.map((environment) => {
@@ -517,7 +517,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
         const environmentProgress = pending || progress[environment.id]?.kind === "undo" ? undefined : progress[environment.id];
         const waiting = pending && activeBatch?.environmentIds.includes(environment.id);
         const operationLabel = environmentProgress?.kind === "capture" ? "更新" : environmentProgress?.kind === "copy" ? "复制" : "应用";
-        const progressColor = environmentProgress?.status === "failed" ? "bg-red-400" : environmentProgress?.kind === "apply" ? "bg-green-400" : environmentProgress?.kind === "capture" ? "bg-cyan-400" : environmentProgress?.kind === "copy" ? "bg-blue-400" : "bg-primary";
+        const progressColor = environmentProgress?.status === "failed" ? "bg-red-400 dark:bg-red-800" : environmentProgress?.kind === "apply" ? "bg-green-400 dark:bg-green-800" : environmentProgress?.kind === "capture" ? "bg-cyan-400 dark:bg-cyan-800" : environmentProgress?.kind === "copy" ? "bg-blue-400 dark:bg-blue-800" : "bg-primary dark:bg-mint";
         const statusText = environmentProgress
           ? environmentProgress.status === "running" ? `${operationLabel}处理中 ${environmentProgress.percent}%`
             : `${operationLabel}${environmentProgress.status === "success" ? "成功" : "失败"}${environmentProgress.status === "success" ? " 100%" : ""}`
@@ -534,7 +534,7 @@ export function EnvironmentWorkspace({ projectPath, state, busy, error, recovery
                 <span className="relative z-10 whitespace-nowrap text-xs font-semibold text-foreground">{statusText}</span>
               </div> : waiting ? <div data-waiting-progress className="mbe-progress relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-muted/70 text-center text-xs text-muted-foreground">
                 <span className="relative z-10 whitespace-nowrap text-xs">{statusText}</span>
-              </div> : <div data-ready-progress className="mbe-progress relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-white text-center text-xs text-slate-900">
+              </div> : <div data-ready-progress className="mbe-progress relative ml-auto flex h-5 w-full items-center justify-center overflow-hidden rounded-full bg-card text-center text-xs text-foreground">
                 <span className="relative z-10 whitespace-nowrap text-xs">{statusText}</span>
               </div>}
             </div>

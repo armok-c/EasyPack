@@ -403,7 +403,7 @@ export function SettingsDialog({
             onOpenShortcutPanel();
             onOpenChange(false);
           }}
-          className="w-full text-left px-3 py-2 mb-2 rounded-md border-l-2 border-blue-400 bg-blue-400/10 text-sm text-blue-700 hover:bg-blue-400/20 transition-colors cursor-pointer"
+          className="w-full text-left px-3 py-2 mb-2 rounded-md border-l-2 border-blue-400 bg-blue-400/10 text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-400/20 transition-colors cursor-pointer"
         >
           快捷键设置...
         </button>

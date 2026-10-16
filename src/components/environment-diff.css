@@ -39,7 +39,7 @@
   width: max-content;
   border-collapse: collapse;
   border-spacing: 0;
-  color: #303648;
+  color: var(--color-foreground);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -55,8 +55,8 @@
   position: sticky;
   z-index: 2;
   padding: 0 2px;
-  background: #fffdf7;
-  color: #666a76;
+  background: var(--diff-context);
+  color: var(--color-muted-foreground);
   text-align: right;
   user-select: none;
 }
@@ -85,17 +85,17 @@
 .environment-diff-line-context .environment-diff-old-line-num,
 .environment-diff-line-context .environment-diff-new-line-num,
 .environment-diff-line-context .environment-diff-line-content {
-  background: #fffdf7;
+  background: var(--diff-context);
 }
 
 .environment-diff-line-deletion .environment-diff-old-line-num,
 .environment-diff-line-deletion .environment-diff-line-content {
-  background: #ffe6de;
+  background: var(--diff-deletion);
 }
 
 .environment-diff-line-addition .environment-diff-new-line-num,
 .environment-diff-line-addition .environment-diff-line-content {
-  background: #ddf3e6;
+  background: var(--diff-addition);
 }
 
 .environment-diff-operator {
@@ -105,27 +105,27 @@
   font-size: 20px;
   line-height: 1;
   text-align: center;
-  color: #666a76;
+  color: var(--color-muted-foreground);
 }
 
 .environment-diff-inline-change {
   border-radius: 2px;
-  background: #f5b6a6;
+  background: var(--diff-inline-deletion);
 }
 
 .environment-diff-line-addition .environment-diff-inline-change {
-  background: #a5dec0;
+  background: var(--diff-inline-addition);
 }
 
 .environment-diff-no-newline {
   margin-left: 0.5rem;
-  color: #8b5b17;
+  color: var(--diff-note);
 }
 
 .environment-diff-hunk-header {
   padding: 0;
-  background: #e5edf4;
-  color: #345d79;
+  background: var(--diff-header);
+  color: var(--diff-header-text);
   text-align: left;
   overflow: hidden;
   white-space: normal;
@@ -147,14 +147,14 @@
   align-items: center;
   box-sizing: border-box;
   overflow: hidden;
-  background: #e5edf4;
+  background: var(--diff-header);
   padding: 5px 10px;
 }
 
 .environment-diff-gap-cell {
   padding: 0;
   border: 0;
-  background: #e5edf4;
+  background: var(--diff-header);
 }
 
 .environment-diff-gap-controls {
@@ -164,7 +164,7 @@
   width: var(--environment-diff-controls-width);
   min-width: var(--environment-diff-controls-width);
   max-width: var(--environment-diff-controls-width);
-  background: #e5edf4;
+  background: var(--diff-header);
 }
 
 .environment-diff-gap-controls .environment-diff-gap-marker {
@@ -177,7 +177,7 @@
   align-items: center;
   justify-content: center;
   min-height: 0;
-  color: #666a76;
+  color: var(--color-muted-foreground);
 }
 
 .environment-diff-gap-marker {
@@ -214,8 +214,8 @@
 }
 
 .environment-diff-gap-marker > button:hover {
-  background: #bfdef5;
-  color: #303648;
+  background: var(--mbe-selection);
+  color: var(--color-foreground);
 }
 
 .environment-diff-gap-marker > button svg {

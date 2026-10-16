@@ -11,6 +11,7 @@
 import { useRef, useEffect } from "react";
 import { useCodeMirror } from "@/hooks/useCodeMirror";
 import { batchSupport } from "@/lib/batch-lang";
+import { useTheme } from "./ThemeProvider";
 
 interface ScriptEditorProps {
   value: string;
@@ -32,14 +33,15 @@ export function ScriptEditor({
   value,
   onChange,
   height = "270px",
-  darkMode = false,
+  darkMode,
 }: ScriptEditorProps) {
+  const { theme } = useTheme();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const isSyncUpdate = useRef(false);
   const { viewRef } = useCodeMirror(parentRef, {
     value,
     onChange,
-    darkMode,
+    darkMode: darkMode ?? theme === "dark",
     extensions: [batchSupport()],
   });
 

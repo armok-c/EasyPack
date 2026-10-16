@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { buildMigrationEnvironments, EnvironmentWorkspace, type EnvironmentWorkspaceProps } from "@/components/EnvironmentWorkspace";
 import type { EnvironmentProjectState, LegacyMigrationDraft } from "@/lib/environment-types";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { compile, optimize } from "@tailwindcss/node";
+import { convert } from "@asamuzakjp/css-color";
+import postcss from "postcss";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(async () => "A=1") }));
@@ -69,6 +74,62 @@ function migrationDraft(sourceEntries: LegacyMigrationDraft["environments"][numb
 }
 
 describe("EnvironmentWorkspace", () => {
+  it.each(["apply", "capture", "copy"] as const)("深色模式的 %s 进度文字在填充区和未填充区均清晰可读", async (kind) => {
+    const compiler = await compile(readFileSync(resolve("src/index.css"), "utf8"), {
+      base: resolve("src"),
+      onDependency() {},
+    });
+    const style = document.createElement("style");
+    document.documentElement.classList.add("dark");
+    document.head.append(style);
+    const { container, rerender, unmount } = render(<EnvironmentWorkspace {...props()} />);
+    const luminance = (color: string) => {
+      const channels = convert.colorToRgb(color).slice(0, 3).map((value) => {
+        const channel = value / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    try {
+      for (const [status, percent] of [["running", 25], ["running", 75], ["success", 100], ["failed", 50], ["failed", 100]] as const) {
+        rerender(<EnvironmentWorkspace {...props({ progress: {
+          dev: { operationId: "contrast-check", kind, completedFiles: percent, totalFiles: 100, percent, status },
+        } })} />);
+        const classes = [...container.querySelectorAll<HTMLElement>("[class]")].flatMap((element) => [...element.classList]);
+        const stylesheet = postcss.parse(optimize(compiler.build(classes)).code);
+        // jsdom 不应用级联层；展开生成样式中的层，保留规则和选择器。
+        stylesheet.walkAtRules("layer", (rule) => { rule.replaceWith(...(rule.nodes ?? [])); });
+        const css = stylesheet.toString();
+        style.textContent = css;
+        // jsdom 不计算 CSS 变量颜色，使用当前主题的真实变量值展开后读取样式。
+        const rootStyle = getComputedStyle(document.documentElement);
+        style.textContent = css.replace(/var\((--[\w-]+)\)/g, (value, name) => {
+          const resolved = rootStyle.getPropertyValue(name).trim();
+          return name.startsWith("--color-") ? convert.colorToHex(resolved) ?? value : resolved || value;
+        });
+        const bar = screen.getByRole("progressbar");
+        const fill = bar.querySelector<HTMLElement>('[aria-hidden="true"]')!;
+        const label = bar.querySelector("span")!;
+        const operation = kind === "capture" ? "更新" : kind === "copy" ? "复制" : "应用";
+        expect(label).toHaveTextContent(status === "running" ? `${operation}处理中 ${percent}%` : status === "success" ? `${operation}成功 100%` : `${operation}失败`);
+        expect(bar).toHaveAttribute("aria-valuenow", String(percent));
+        expect(fill.style.width).toBe(`${percent}%`);
+        const foreground = luminance(getComputedStyle(label).color);
+        for (const surface of [bar, fill]) {
+          const backgroundColor = getComputedStyle(surface).backgroundColor;
+          expect(backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+          const background = luminance(backgroundColor);
+          const contrast = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+          expect(contrast, `${kind} ${status} ${percent}% / ${backgroundColor}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    } finally {
+      unmount();
+      style.remove();
+      document.documentElement.classList.remove("dark");
+    }
+  });
+
   const manyState: EnvironmentProjectState = {
     ...state,
     environments: [
@@ -340,7 +401,7 @@ describe("EnvironmentWorkspace", () => {
     expect(within(columns as HTMLElement).getByText("开发")).toHaveClass("min-w-0", "truncate");
     expect(within(columns as HTMLElement).getByText("就绪")).toHaveClass("text-xs");
     const readyProgress = columns?.querySelector("[data-ready-progress]");
-    expect(readyProgress).toHaveClass("relative", "h-5", "w-full", "ml-auto", "rounded-full", "bg-white");
+    expect(readyProgress).toHaveClass("relative", "h-5", "w-full", "ml-auto", "rounded-full", "bg-card", "text-foreground");
     expect(readyProgress).toHaveTextContent("就绪");
     expect(readyProgress).not.toHaveAttribute("role");
     expect(readyProgress).not.toHaveAttribute("aria-valuenow");

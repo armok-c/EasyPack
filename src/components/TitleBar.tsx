@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, Copy, X, Settings, PanelTop } from "lucide-react";
+import { Minus, Square, Copy, X, Settings, PanelTop, Moon, Sun } from "lucide-react";
+import { useTheme } from "./ThemeProvider";
 
 const appWindow = getCurrentWindow();
 
@@ -23,6 +24,8 @@ export function TitleBar({
   drawerSnapEdge,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const themeLabel = theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
 
   useEffect(() => {
     let mounted = true;
@@ -122,6 +125,14 @@ export function TitleBar({
       </div>
       <div data-tauri-drag-region className="flex-1" />
       <div className="flex items-center h-full">
+        <button
+          className="titlebar-button"
+          onClick={toggleTheme}
+          aria-label={themeLabel}
+          title={themeLabel}
+        >
+          {theme === "dark" ? <Sun className="w-[14px] h-[14px]" /> : <Moon className="w-[14px] h-[14px]" />}
+        </button>
         <button
           className={`titlebar-button ${floatVisible ? 'text-foreground' : ''}`}
           onClick={onFloatToggle}
