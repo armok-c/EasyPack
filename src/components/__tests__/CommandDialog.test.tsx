@@ -3,6 +3,9 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import "@testing-library/jest-dom";
 import { createRef } from "react";
 import { CommandDialog, type CommandDialogHandle } from "@/components/CommandDialog";
+import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
 // Mock @tauri-apps/plugin-store to prevent import errors
 vi.mock("@tauri-apps/plugin-store", () => ({}));
@@ -10,6 +13,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({}));
 function renderDialog(overrides: Record<string, unknown> = {}) {
   const props = {
     open: true,
+    projectPath: "E:\\git\\EasyPack",
     onOpenChange: vi.fn(),
     onSubmit: vi.fn(),
     ...overrides,
@@ -21,6 +25,65 @@ function renderDialog(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CommandDialog", () => {
+  describe("选择文件夹", () => {
+    const initialData = {
+      id: "folder-existing", name: "日志", command: "logs", icon: "FolderOpen",
+      type: "custom", scope: "project", addedAt: 1000, action: "open-folder",
+    };
+
+    it.each([
+      ["e:/GIT/easypack/输出 文件/", "输出 文件"],
+      ["E:\\git\\EasyPack", "."],
+    ])("将所选目录 %s 保存为相对路径 %s", async (selected, expected) => {
+      const { props } = renderDialog({ initialData });
+      vi.mocked(openFolderDialog).mockResolvedValueOnce(selected);
+      fireEvent.click(screen.getByRole("button", { name: "选择文件夹" }));
+      await waitFor(() => expect(screen.getByLabelText("项目相对目录")).toHaveValue(expected));
+      fireEvent.click(screen.getByRole("button", { name: "保存" }));
+      expect(props.onSubmit).toHaveBeenCalledWith({ name: "日志", command: expected, icon: "FolderOpen", action: "open-folder" });
+    });
+
+    it.each(["E:\\git\\EasyPack-other\\logs", "D:\\logs", "E:\\git\\EasyPack\\..\\other"])("拒绝项目外目录 %s 并保留原路径", async (selected) => {
+      renderDialog({ initialData });
+      vi.mocked(openFolderDialog).mockResolvedValueOnce(selected);
+      fireEvent.click(screen.getByRole("button", { name: "选择文件夹" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("请选择当前项目内的文件夹");
+      expect(screen.getByLabelText("项目相对目录")).toHaveValue("logs");
+    });
+
+    it("取消选择时保留原路径", async () => {
+      renderDialog({ initialData });
+      vi.mocked(openFolderDialog).mockResolvedValueOnce(null);
+      fireEvent.click(screen.getByRole("button", { name: "选择文件夹" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "选择文件夹" })).toBeEnabled());
+      expect(screen.getByLabelText("项目相对目录")).toHaveValue("logs");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("选择失败时提示重试并保留原路径", async () => {
+      renderDialog({ initialData });
+      vi.mocked(openFolderDialog).mockRejectedValueOnce(new Error("dialog failed"));
+      fireEvent.click(screen.getByRole("button", { name: "选择文件夹" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("打开文件夹选择窗口失败，请重试");
+      expect(screen.getByLabelText("项目相对目录")).toHaveValue("logs");
+      expect(screen.getByRole("button", { name: "选择文件夹" })).toBeEnabled();
+    });
+
+    it("切换模式后忽略尚未返回的目录选择", async () => {
+      renderDialog({ initialData });
+      let resolveSelection!: (value: string) => void;
+      vi.mocked(openFolderDialog).mockReturnValueOnce(new Promise((resolve) => { resolveSelection = resolve; }));
+      fireEvent.click(screen.getByRole("button", { name: "选择文件夹" }));
+      expect(screen.getByRole("button", { name: "选择中…" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("radio", { name: "单行命令" }));
+      fireEvent.change(screen.getByLabelText("Shell 命令"), { target: { value: "npm test" } });
+      resolveSelection("E:\\git\\EasyPack\\dist");
+      await waitFor(() => expect(screen.getByLabelText("Shell 命令")).toHaveValue("npm test"));
+      fireEvent.click(screen.getByRole("radio", { name: "打开目录" }));
+      expect(screen.getByLabelText("项目相对目录")).toHaveValue("npm test");
+    });
+  });
+
   describe("add mode", () => {
     it('displays "添加指令" as title and "添加" as save button text', () => {
       renderDialog();
@@ -188,36 +251,38 @@ describe("CommandDialog", () => {
   });
 
   describe("onSubmit callback", () => {
-    it("saves a named folder action with the selected icon and no script fields", () => {
+    it("saves a named folder action with the selected icon and no script fields", async () => {
       const { props } = renderDialog();
+      vi.mocked(openFolderDialog).mockResolvedValueOnce("E:\\git\\EasyPack\\src-tauri\\target\\release\\bundle");
 
       fireEvent.click(screen.getByRole("radio", { name: "打开目录" }));
       fireEvent.change(screen.getByPlaceholderText("例如: 运行测试"), {
         target: { value: "打开安装包目录" },
       });
-      fireEvent.change(screen.getByPlaceholderText("例如: src-tauri\\target\\release\\bundle"), {
-        target: { value: "src-tauri\\target\\release\\bundle" },
-      });
+      fireEvent.click(screen.getByRole("button", { name: "选择文件夹" }));
+      await waitFor(() => expect(screen.getByLabelText("项目相对目录")).toHaveValue("src-tauri/target/release/bundle"));
+      expect(screen.getByLabelText("项目相对目录")).toHaveAttribute("readonly");
+      expect(openFolderDialog).toHaveBeenLastCalledWith({ directory: true, multiple: false, title: "选择项目内的文件夹", defaultPath: props.projectPath });
       fireEvent.click(screen.getByRole("button", { name: "添加" }));
 
       expect(props.onSubmit).toHaveBeenCalledWith({
         name: "打开安装包目录",
-        command: "src-tauri\\target\\release\\bundle",
+        command: "src-tauri/target/release/bundle",
         icon: "FolderOpen",
         action: "open-folder",
       });
     });
 
-    it("restores the default icon when a new folder action switches to single-line", () => {
+    it("restores the default icon when a new folder action switches to single-line", async () => {
       const { props } = renderDialog();
+      vi.mocked(openFolderDialog).mockResolvedValueOnce("E:\\git\\EasyPack\\logs");
 
       fireEvent.click(screen.getByRole("radio", { name: "打开目录" }));
       fireEvent.change(screen.getByPlaceholderText("例如: 运行测试"), {
         target: { value: "打开目录" },
       });
-      fireEvent.change(screen.getByPlaceholderText("例如: src-tauri\\target\\release\\bundle"), {
-        target: { value: "logs" },
-      });
+      fireEvent.click(screen.getByRole("button", { name: "选择文件夹" }));
+      await waitFor(() => expect(screen.getByLabelText("项目相对目录")).toHaveValue("logs"));
       fireEvent.click(screen.getByRole("radio", { name: "单行命令" }));
 
       expect(screen.getByRole("radio", { name: "Terminal" })).toHaveAttribute("aria-checked", "true");
@@ -245,7 +310,7 @@ describe("CommandDialog", () => {
       });
 
       expect(screen.getByRole("radio", { name: "打开目录" })).toHaveAttribute("aria-checked", "true");
-      expect((screen.getByPlaceholderText("例如: src-tauri\\target\\release\\bundle") as HTMLInputElement).value).toBe("logs");
+      expect(screen.getByLabelText("项目相对目录")).toHaveValue("logs");
       expect(screen.getByRole("radio", { name: "Code" })).toHaveAttribute("aria-checked", "true");
     });
 
@@ -351,6 +416,7 @@ describe("CommandDialog", () => {
       const ref = createRef<CommandDialogHandle>();
       render(
         <CommandDialog
+          projectPath="E:\\git\\EasyPack"
           ref={ref}
           open={true}
           onOpenChange={onOpenChange}

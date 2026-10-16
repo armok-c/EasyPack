@@ -33,6 +33,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScriptEditor } from "@/components/ScriptEditor";
 import { useBatchDetect } from "@/hooks/useBatchDetect";
+import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
+import { FolderOpen } from "lucide-react";
 
 type ExecutionMode = "strict" | "lenient" | "batch";
 type CommandMode = "single" | "multi" | "folder";
@@ -45,6 +47,7 @@ export interface CommandDialogHandle {
 
 interface CommandDialogProps {
   open: boolean;
+  projectPath: string;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: {
     name: string;
@@ -59,6 +62,7 @@ interface CommandDialogProps {
 
 export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>(function CommandDialog({
   open,
+  projectPath,
   onOpenChange,
   onSubmit,
   initialData = null,
@@ -101,6 +105,14 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
   const [iconTouched, setIconTouched] = useState(() => !!initialData?.icon);
   const [nameDirty, setNameDirty] = useState(false);
   const [commandDirty, setCommandDirty] = useState(false);
+  const [folderError, setFolderError] = useState("");
+  const [pickingFolder, setPickingFolder] = useState(false);
+  const folderRequestRef = useRef(0);
+  useEffect(() => {
+    setPickingFolder(false);
+    setFolderError("");
+    return () => { folderRequestRef.current += 1; };
+  }, [open, projectPath, activeTab]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
@@ -151,6 +163,38 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
     },
     []
   );
+
+  const handleSelectFolder = useCallback(async () => {
+    if (pickingFolder || !projectPath) return;
+    const request = ++folderRequestRef.current;
+    setPickingFolder(true);
+    setFolderError("");
+    try {
+      const selected = await openFolderDialog({
+        directory: true,
+        multiple: false,
+        title: "选择项目内的文件夹",
+        defaultPath: projectPath,
+      });
+      if (request !== folderRequestRef.current || typeof selected !== "string") return;
+      const root = projectPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const path = selected.replace(/\\/g, "/").replace(/\/+$/, "");
+      const isWindowsPath = /^[a-z]:/i.test(root) || root.startsWith("//");
+      const comparedRoot = isWindowsPath ? root.toLowerCase() : root;
+      const comparedPath = isWindowsPath ? path.toLowerCase() : path;
+      if ((comparedPath !== comparedRoot && !comparedPath.startsWith(`${comparedRoot}/`))
+        || path.split("/").includes("..")) {
+        setFolderError("请选择当前项目内的文件夹");
+        return;
+      }
+      setCommand(path.slice(root.length + 1) || ".");
+      setCommandDirty(true);
+    } catch {
+      if (request === folderRequestRef.current) setFolderError("打开文件夹选择窗口失败，请重试");
+    } finally {
+      if (request === folderRequestRef.current) setPickingFolder(false);
+    }
+  }, [pickingFolder, projectPath]);
 
   const handleIconSelect = useCallback((iconName: string) => {
     setSelectedIcon(iconName);
@@ -492,10 +536,31 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
             <Label htmlFor="cmd-command">
               {activeTab === "multi" ? "脚本内容" : activeTab === "folder" ? "项目相对目录" : "Shell 命令"}
             </Label>
-            {activeTab !== "multi" ? (
+            {activeTab === "folder" ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  id="cmd-command"
+                  className="min-w-0 flex-1"
+                  placeholder="请选择文件夹"
+                  value={command}
+                  readOnly
+                  title={command}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={handleSelectFolder}
+                  disabled={pickingFolder || !projectPath}
+                >
+                  <FolderOpen className="size-4" aria-hidden="true" />
+                  {pickingFolder ? "选择中…" : "选择文件夹"}
+                </Button>
+              </div>
+            ) : activeTab === "single" ? (
               <Input
                 id="cmd-command"
-                placeholder={activeTab === "folder" ? "例如: src-tauri\\target\\release\\bundle" : "例如: npm test"}
+                placeholder="例如: npm test"
                 value={command}
                 onChange={handleCommandChange}
               />
@@ -512,6 +577,9 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
             )}
             {activeTab === "folder" && commandDirty && command.trim().length === 0 && (
               <p className="text-red-700 text-xs mt-1">目录不能为空</p>
+            )}
+            {activeTab === "folder" && folderError && (
+              <p role="alert" className="text-red-700 text-xs mt-1">{folderError}</p>
             )}
           </div>
 

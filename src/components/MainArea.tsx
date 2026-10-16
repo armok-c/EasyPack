@@ -403,6 +403,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(function MainA
             ref={commandDialogRef}
             key={editingCommand?.id ?? "add"}
             open={dialogOpen}
+            projectPath={currentProject.path}
             onOpenChange={handleDialogOpenChange}
             onSubmit={handleDialogSubmit}
             initialData={editingCommand}
