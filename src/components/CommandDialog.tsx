@@ -392,6 +392,7 @@ export const CommandDialog = forwardRef<CommandDialogHandle, CommandDialogProps>
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className={cn(
+        "[&>[data-slot=dialog-body]]:pr-3 [&>[data-slot=dialog-body]]:pb-1 [&>[data-slot=dialog-body]]:[scrollbar-gutter:stable]",
         activeTab === "multi" ? "max-w-[560px]" : "max-w-[480px]"
       )}>
         <DialogHeader>

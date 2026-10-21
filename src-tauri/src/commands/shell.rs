@@ -228,11 +228,11 @@ fn spawn_detached(args: &str) -> Result<std::process::Child, std::io::Error> {
 
 /// 构建 cmd.exe 启动参数字符串
 /// 使用 start 命令在新窗口中运行 cmd /K，/d 指定工作目录
-/// start 的第一个 "" 作为空标题（避免路径被误解析为标题）
+/// 使用非空标题，避免部分 Node.js/libuv 在读取空控制台标题时崩溃。
 /// shell_command 用引号包裹以正确处理含空格的命令（如 "npm run build"）
 fn build_cmd_start_args(project_path: &str, shell_command: &str) -> String {
     format!(
-        r#"/C start "" /d "{}" cmd /K "{}""#,
+        r#"/C start "EasyPack" /d "{}" cmd /K "{}""#,
         project_path, shell_command
     )
 }
@@ -503,11 +503,8 @@ pub async fn execute_script(
 
     let bat_path_str = temp_path.to_string_lossy().to_string();
 
-    // Execute: cmd /C start "" /d "{project_path}" cmd /K "{bat_path}"
-    let args = format!(
-        r#"/C start "" /d "{}" cmd /K "{}""#,
-        project_path, bat_path_str
-    );
+    // Execute: cmd /C start "EasyPack" /d "{project_path}" cmd /K "{bat_path}"
+    let args = build_cmd_start_args(&project_path, &bat_path_str);
 
     spawn_detached(&args).map_err(|e| format!("Failed to execute script: {}", e))?;
 
@@ -828,32 +825,38 @@ mod tests {
         let result = build_cmd_start_args("E:\\git\\EasyPack", "claude");
         assert_eq!(
             result,
-            r##"/C start "" /d "E:\git\EasyPack" cmd /K "claude""##
+            r##"/C start "EasyPack" /d "E:\git\EasyPack" cmd /K "claude""##
         );
     }
 
     #[test]
     fn test_build_cmd_start_args_path_with_spaces() {
         let result = build_cmd_start_args("D:\\My Projects\\app", "npm run build");
-        assert!(result.contains(r#"start "" /d "D:\My Projects\app""#));
+        assert!(result.contains(r#"start "EasyPack" /d "D:\My Projects\app""#));
         assert!(result.contains(r#"cmd /K "npm run build""#));
     }
 
     #[test]
     fn test_build_cmd_start_args_path_with_cjk() {
         let result = build_cmd_start_args("D:\\用户\\项目\\EasyPack", "git pull");
-        assert!(result.contains(r#"start "" /d "D:\用户\项目\EasyPack""#));
+        assert!(result.contains(r#"start "EasyPack" /d "D:\用户\项目\EasyPack""#));
         assert!(result.contains(r#"cmd /K "git pull""#));
     }
 
     #[test]
     fn test_build_cmd_start_args_all_preset_commands() {
         let path = "D:\\Projects\\EasyPack";
-        let commands = ["npm run build", "npm run dev", "git pull", "claude"];
+        let commands = [
+            "npm run build",
+            "npm run dev",
+            "git pull",
+            "claude",
+            "pnpm package",
+        ];
         for cmd in &commands {
             let result = build_cmd_start_args(path, cmd);
             assert!(
-                result.starts_with(r#"/C start "" /d"#),
+                result.starts_with(r#"/C start "EasyPack" /d"#),
                 "Should start with /C start, got: {}",
                 result
             );
@@ -867,9 +870,17 @@ mod tests {
     }
 
     #[test]
+    fn test_build_cmd_start_args_batch_path_with_spaces() {
+        let result = build_cmd_start_args(r"D:\项目 目录", r"C:\Temp Dir\easypack-script.bat");
+        assert!(result.starts_with(r#"/C start "EasyPack" /d "#));
+        assert!(result.contains(r#"/d "D:\项目 目录""#));
+        assert!(result.ends_with(r#"cmd /K "C:\Temp Dir\easypack-script.bat""#));
+    }
+
+    #[test]
     fn test_build_cmd_start_args_simple_command() {
         let result = build_cmd_start_args("E:\\git\\EasyPack", "claude");
-        assert!(result.contains("start \"\""));
+        assert!(result.contains("start \"EasyPack\""));
         assert!(result.contains(r#"/d "E:\git\EasyPack""#));
         assert!(result.contains(r#"cmd /K "claude""#));
     }

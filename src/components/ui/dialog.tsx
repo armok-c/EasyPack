@@ -98,7 +98,7 @@ function DialogContent({
         {/* DialogHeader: fixed at top, does not scroll */}
         {headers}
         {/* Middle content: scrollable area (per D-10) */}
-        <div className="flex-1 min-h-0 overflow-y-auto pt-4">
+        <div data-slot="dialog-body" className="flex-1 min-h-0 overflow-y-auto pt-4">
           {content}
         </div>
         {/* DialogFooter: fixed at bottom, does not scroll */}
